@@ -8,7 +8,7 @@ This repository is an **installable Composer package**, not a Laravel applicatio
 
 - Legal-entity scoped double-entry journal (`LedgerEngine`)
 - Customers, suppliers, catalog, sales and purchase invoices, open items
-- Canonical bank statement lines and split reconciliation
+- Canonical bank statement lines with direct assignment, partial settlement, and true multi-target splits
 - Versioned posting rules (“Steuerfall”) and tax rule versions
 - German and generic compliance profiles (Germany is a registered profile, not a hard-coded `if ($country === 'DE')`)
 - German and English UI translations

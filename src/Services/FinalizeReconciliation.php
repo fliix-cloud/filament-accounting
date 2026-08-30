@@ -16,12 +16,16 @@ use FilamentAccounting\Ledger\JournalLineDraft;
 use FilamentAccounting\Ledger\PostJournalCommand;
 use FilamentAccounting\Models\AccountRoleAssignment;
 use FilamentAccounting\Models\BankStatementLine;
+use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\OpenItem;
+use FilamentAccounting\Models\PostingRuleVersion;
 use FilamentAccounting\Models\Reconciliation;
 use FilamentAccounting\Models\ReconciliationSplit;
 use FilamentAccounting\Models\Settlement;
+use FilamentAccounting\Models\TaxCode;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Support\LineMoneyCalculator;
 use Illuminate\Support\Facades\DB;
 
 final class FinalizeReconciliation
@@ -46,15 +50,19 @@ final class FinalizeReconciliation
             $line = BankStatementLine::query()->lockForUpdate()->with('bankAccount')->findOrFail($line->getKey());
             $this->scope->assertSame((int) $line->legal_entity_id);
 
-            $key = $idempotencyKey ?: 'reconciliation:'.$line->getKey();
-            $existing = Reconciliation::query()
-                ->where('legal_entity_id', $line->legal_entity_id)
-                ->where('idempotency_key', $key)
-                ->where('status', ReconciliationStatus::Posted)
-                ->first();
+            if ($idempotencyKey !== null) {
+                $existing = Reconciliation::query()
+                    ->where('legal_entity_id', $line->legal_entity_id)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
 
-            if ($existing instanceof Reconciliation) {
-                return $existing;
+                if ($existing?->status === ReconciliationStatus::Posted) {
+                    return $existing;
+                }
+
+                if ($existing instanceof Reconciliation) {
+                    throw new ReconciliationException(__('filament-accounting::errors.idempotency_key_reused'));
+                }
             }
 
             $posted = Reconciliation::query()
@@ -64,6 +72,10 @@ final class FinalizeReconciliation
                 ->first();
 
             if ($posted instanceof Reconciliation) {
+                if ($idempotencyKey === null) {
+                    return $posted;
+                }
+
                 throw new ReconciliationException(__('filament-accounting::errors.already_reconciled'));
             }
 
@@ -71,10 +83,8 @@ final class FinalizeReconciliation
                 throw new ReconciliationException(__('filament-accounting::errors.pending_cannot_finalize'));
             }
 
-            $sum = 0;
-            foreach ($splits as $split) {
-                $sum += (int) ($split['amount_minor'] ?? 0);
-            }
+            $allocations = $this->normalizeAndValidateAllocations($line, $splits);
+            $sum = array_sum(array_column($allocations, 'amount_minor'));
 
             if ($sum !== (int) $line->amount_minor) {
                 throw new ReconciliationException(__('filament-accounting::errors.reconciliation_imbalance'));
@@ -82,26 +92,34 @@ final class FinalizeReconciliation
 
             $actor = $this->actors->resolve();
             $entity = LegalEntity::query()->findOrFail($line->legal_entity_id);
+            $version = ((int) Reconciliation::query()
+                ->where('statement_line_id', $line->getKey())
+                ->max('version')) + 1;
+            $key = $idempotencyKey ?: 'reconciliation:'.$line->getKey().':v'.$version;
 
             $reconciliation = new Reconciliation;
             $reconciliation->fill([
                 'legal_entity_id' => $line->legal_entity_id,
                 'statement_line_id' => $line->getKey(),
                 'status' => ReconciliationStatus::Ready,
-                'version' => 1,
+                'version' => $version,
                 'idempotency_key' => $key,
                 'actor_type' => $actor?->getMorphClass(),
                 'actor_id' => $actor ? (string) $actor->getKey() : null,
                 'reason' => $reason,
+                'match_meta' => [
+                    'mode' => count($allocations) === 1 ? 'direct' : 'split',
+                    'allocation_count' => count($allocations),
+                ],
             ]);
             $reconciliation->save();
 
-            foreach ($splits as $input) {
+            foreach ($allocations as $input) {
                 $split = new ReconciliationSplit;
                 $split->fill([
                     'reconciliation_id' => $reconciliation->getKey(),
-                    'purpose' => SplitPurpose::from((string) $input['purpose']),
-                    'amount_minor' => (int) $input['amount_minor'],
+                    'purpose' => $input['purpose'],
+                    'amount_minor' => $input['amount_minor'],
                     'currency' => $line->currency,
                     'open_item_id' => $input['open_item_id'] ?? null,
                     'posting_rule_version_id' => $input['posting_rule_version_id'] ?? null,
@@ -111,7 +129,11 @@ final class FinalizeReconciliation
                 $split->save();
             }
 
-            $journalLines = $this->buildJournalLines($entity, $line, $reconciliation->fresh(['splits.openItem']) ?? $reconciliation);
+            $journalLines = $this->buildJournalLines($entity, $line, $reconciliation->fresh([
+                'splits.openItem',
+                'splits.postingRuleVersion',
+                'splits.ledgerAccount',
+            ]) ?? $reconciliation);
             $entry = $this->ledger->post(new PostJournalCommand(
                 legalEntityId: (int) $entity->getKey(),
                 postedOn: ($line->booking_date ?? now())->toDateString(),
@@ -121,6 +143,7 @@ final class FinalizeReconciliation
                 baseCurrency: (string) $entity->base_currency,
                 lines: $journalLines,
                 description: $line->purpose,
+                postingRuleVersionId: $this->singlePostingRuleVersionId($reconciliation),
                 idempotencyKey: 'journal:'.$key,
                 postedByType: $actor?->getMorphClass(),
                 postedById: $actor ? (string) $actor->getKey() : null,
@@ -171,6 +194,179 @@ final class FinalizeReconciliation
         });
     }
 
+    private function singlePostingRuleVersionId(Reconciliation $reconciliation): ?int
+    {
+        if ($reconciliation->splits->count() !== 1) {
+            return null;
+        }
+
+        $split = $reconciliation->splits->first();
+
+        return $split?->purpose === SplitPurpose::PostingRule && $split->posting_rule_version_id
+            ? (int) $split->posting_rule_version_id
+            : null;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $allocations
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeAndValidateAllocations(BankStatementLine $line, array $allocations): array
+    {
+        if ($allocations === []) {
+            throw new ReconciliationException(__('filament-accounting::errors.reconciliation_needs_allocation'));
+        }
+
+        $normalized = [];
+
+        foreach ($allocations as $input) {
+            $purpose = SplitPurpose::tryFrom((string) ($input['purpose'] ?? ''));
+            if (! $purpose instanceof SplitPurpose) {
+                throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_purpose'));
+            }
+
+            $rawAmount = $input['amount_minor'] ?? null;
+            if (! is_int($rawAmount) && (! is_string($rawAmount) || preg_match('/^-?\d+$/', $rawAmount) !== 1)) {
+                throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_amount'));
+            }
+
+            $amount = (int) $rawAmount;
+            if ($amount === 0) {
+                throw new ReconciliationException(__('filament-accounting::errors.zero_allocation'));
+            }
+
+            $openItemId = $this->targetId($input['open_item_id'] ?? null);
+            $postingRuleVersionId = $this->targetId($input['posting_rule_version_id'] ?? null);
+            $ledgerAccountId = $this->targetId($input['ledger_account_id'] ?? null);
+            $reason = filled($input['reason'] ?? null) ? trim((string) $input['reason']) : null;
+
+            $this->validateTargetShape($purpose, $openItemId, $postingRuleVersionId, $ledgerAccountId, $reason);
+            $this->validateTargetRecords(
+                $line,
+                $purpose,
+                $amount,
+                $openItemId,
+                $postingRuleVersionId,
+                $ledgerAccountId,
+            );
+
+            $normalized[] = [
+                'purpose' => $purpose,
+                'amount_minor' => $amount,
+                'open_item_id' => $openItemId,
+                'posting_rule_version_id' => $postingRuleVersionId,
+                'ledger_account_id' => $ledgerAccountId,
+                'reason' => $reason,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function targetId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ((! is_int($value) && (! is_string($value) || preg_match('/^\d+$/', $value) !== 1)) || (int) $value < 1) {
+            throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_target'));
+        }
+
+        return (int) $value;
+    }
+
+    private function validateTargetShape(
+        SplitPurpose $purpose,
+        ?int $openItemId,
+        ?int $postingRuleVersionId,
+        ?int $ledgerAccountId,
+        ?string $reason,
+    ): void {
+        $valid = match ($purpose) {
+            SplitPurpose::SettleOpenItem => $openItemId !== null
+                && $postingRuleVersionId === null
+                && $ledgerAccountId === null,
+            SplitPurpose::PostingRule => $openItemId === null
+                && $postingRuleVersionId !== null
+                && $ledgerAccountId === null,
+            SplitPurpose::LedgerAccount, SplitPurpose::Transfer => $openItemId === null
+                && $postingRuleVersionId === null
+                && $ledgerAccountId !== null,
+            SplitPurpose::BankFee, SplitPurpose::Rounding, SplitPurpose::Suspense => $openItemId === null
+                && $postingRuleVersionId === null
+                && $ledgerAccountId === null,
+        };
+
+        if (! $valid) {
+            throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_target'));
+        }
+
+        if ($purpose === SplitPurpose::Suspense && $reason === null) {
+            throw new ReconciliationException(__('filament-accounting::errors.suspense_reason_required'));
+        }
+    }
+
+    private function validateTargetRecords(
+        BankStatementLine $line,
+        SplitPurpose $purpose,
+        int $amount,
+        ?int $openItemId,
+        ?int $postingRuleVersionId,
+        ?int $ledgerAccountId,
+    ): void {
+        if ($purpose === SplitPurpose::SettleOpenItem && $openItemId !== null) {
+            $item = OpenItem::query()
+                ->where('legal_entity_id', $line->legal_entity_id)
+                ->where('is_reversed', false)
+                ->lockForUpdate()
+                ->find($openItemId);
+
+            if (! $item instanceof OpenItem) {
+                throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_target'));
+            }
+
+            if (strtoupper($item->currency) !== strtoupper($line->currency)) {
+                throw new ReconciliationException(__('filament-accounting::errors.allocation_currency_mismatch'));
+            }
+
+            if (abs($amount) > abs($item->remainingMinor())) {
+                throw new ReconciliationException(__('filament-accounting::errors.settlement_exceeds_remaining'));
+            }
+        }
+
+        if ($purpose === SplitPurpose::PostingRule && $postingRuleVersionId !== null) {
+            $date = ($line->booking_date ?? now())->toDateString();
+            $version = PostingRuleVersion::query()
+                ->whereKey($postingRuleVersionId)
+                ->whereDate('valid_from', '<=', $date)
+                ->where(function ($query) use ($date): void {
+                    $query->whereNull('valid_to')->orWhereDate('valid_to', '>=', $date);
+                })
+                ->whereHas('postingRule', function ($query) use ($line): void {
+                    $query->where('legal_entity_id', $line->legal_entity_id)->where('is_active', true);
+                })
+                ->lockForUpdate()
+                ->first();
+
+            if (! $version instanceof PostingRuleVersion) {
+                throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_target'));
+            }
+        }
+
+        if (in_array($purpose, [SplitPurpose::LedgerAccount, SplitPurpose::Transfer], true) && $ledgerAccountId !== null) {
+            $account = LedgerAccount::query()
+                ->where('legal_entity_id', $line->legal_entity_id)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->find($ledgerAccountId);
+
+            if (! $account instanceof LedgerAccount) {
+                throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_target'));
+            }
+        }
+    }
+
     /**
      * @return list<JournalLineDraft>
      */
@@ -193,6 +389,12 @@ final class FinalizeReconciliation
                 continue;
             }
 
+            if ($split->purpose === SplitPurpose::PostingRule) {
+                array_push($drafts, ...$this->postingRuleJournalLines($entity, $line, $split));
+
+                continue;
+            }
+
             $accountId = $this->counterpartAccount($entity, $line, $split);
             $incoming = (int) $split->amount_minor > 0;
 
@@ -204,6 +406,60 @@ final class FinalizeReconciliation
         }
 
         return $drafts;
+    }
+
+    /** @return list<JournalLineDraft> */
+    private function postingRuleJournalLines(
+        LegalEntity $entity,
+        BankStatementLine $line,
+        ReconciliationSplit $split,
+    ): array {
+        $version = $split->postingRuleVersion;
+        if (! $version instanceof PostingRuleVersion) {
+            throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_target'));
+        }
+
+        $currency = (string) $line->currency;
+        $gross = abs((int) $split->amount_minor);
+        $incoming = (int) $split->amount_minor > 0;
+        $counterpartAccountId = $this->counterpartAccount($entity, $line, $split);
+        $taxCodeValue = filled($version->tax_code) ? (string) $version->tax_code : null;
+
+        if ($taxCodeValue === null) {
+            return [$incoming
+                ? JournalLineDraft::credit($counterpartAccountId, $gross, $currency, $split->reason)
+                : JournalLineDraft::debit($counterpartAccountId, $gross, $currency, $split->reason)];
+        }
+
+        $date = ($line->booking_date ?? now())->toDateString();
+        $taxCode = TaxCode::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('code', $taxCodeValue)
+            ->where('is_active', true)
+            ->first();
+        $taxRule = $taxCode?->versionOn($date);
+
+        if ($taxRule === null) {
+            throw new ReconciliationException(__('filament-accounting::errors.invalid_tax_rule'));
+        }
+
+        $net = LineMoneyCalculator::netMinorFromGross($gross, (int) $taxRule->rate_bp);
+        $tax = $gross - $net;
+        $lines = [$incoming
+            ? JournalLineDraft::credit($counterpartAccountId, $net, $currency, $split->reason, $taxCodeValue, (int) $taxRule->getKey())
+            : JournalLineDraft::debit($counterpartAccountId, $net, $currency, $split->reason, $taxCodeValue, (int) $taxRule->getKey())];
+
+        if ($tax !== 0) {
+            $taxAccountId = $this->roleAccount(
+                $entity,
+                $incoming ? AccountRole::OutputTax : AccountRole::InputTax,
+            );
+            $lines[] = $incoming
+                ? JournalLineDraft::credit($taxAccountId, $tax, $currency, $split->reason, $taxCodeValue, (int) $taxRule->getKey())
+                : JournalLineDraft::debit($taxAccountId, $tax, $currency, $split->reason, $taxCodeValue, (int) $taxRule->getKey());
+        }
+
+        return $lines;
     }
 
     private function counterpartAccount(LegalEntity $entity, BankStatementLine $line, ReconciliationSplit $split): int

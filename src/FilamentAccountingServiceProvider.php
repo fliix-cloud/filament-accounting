@@ -20,6 +20,7 @@ use FilamentAccounting\Ledger\FirstPartyLedgerEngine;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Reconciliation\DeterministicReconciliationMatcher;
 use FilamentAccounting\Support\BankFeedRegistry;
+use FilamentAccounting\Support\BankSourceLinkRegistry;
 use Illuminate\Support\Facades\Gate;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -64,6 +65,7 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
         $this->app->singleton(LegalEntityScope::class);
         $this->app->singleton(LedgerEngine::class, FirstPartyLedgerEngine::class);
         $this->app->singleton(BankFeedDriverRegistry::class, BankFeedRegistry::class);
+        $this->app->singleton(BankSourceLinkRegistry::class);
         $this->app->singleton(ReconciliationMatcher::class, DeterministicReconciliationMatcher::class);
         $this->app->singleton(EInvoiceAdapter::class, ZugferdEInvoiceAdapter::class);
         $this->app->singleton(AccountingExporter::class, GenericJournalCsvExporter::class);

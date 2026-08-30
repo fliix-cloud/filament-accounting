@@ -15,6 +15,9 @@ use FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages\ListBa
 use FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages\ViewBankStatementLine;
 use FilamentAccounting\Models\AccountingBankAccount;
 use FilamentAccounting\Models\BankStatementLine;
+use FilamentAccounting\Models\Reconciliation;
+use FilamentAccounting\Models\ReconciliationSplit;
+use FilamentAccounting\Support\BankSourceLinkRegistry;
 use FilamentAccounting\Support\MoneyFormatter;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -53,7 +56,12 @@ class BankStatementLineResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['bankAccount', 'reconciliations.splits'])
+            ->with([
+                'bankAccount',
+                'reconciliations.splits.openItem.document.party',
+                'reconciliations.splits.postingRuleVersion.postingRule',
+                'reconciliations.splits.ledgerAccount',
+            ])
             ->orderByDesc('booking_date');
     }
 
@@ -74,6 +82,13 @@ class BankStatementLineResource extends Resource
                     ->label(__('filament-accounting::fields.reconciliation'))
                     ->badge()
                     ->state(fn (BankStatementLine $record): string => __('filament-accounting::statuses.reconciliation.'.$record->derivedBadge()->value)),
+                TextColumn::make('linked_targets')
+                    ->label(__('filament-accounting::fields.target'))
+                    ->state(fn (BankStatementLine $record): string => static::linkedTargetsSummary($record))
+                    ->wrap()
+                    ->url(fn (BankStatementLine $record): ?string => $record->activePostedReconciliation() instanceof Reconciliation
+                        ? ReconciliationPage::getUrl(['line' => $record->uuid])
+                        : null),
             ])
             ->filters([
                 SelectFilter::make('bank_account_id')
@@ -86,6 +101,34 @@ class BankStatementLineResource extends Resource
                         'booked' => __('filament-accounting::statuses.statement.booked'),
                         'storno' => __('filament-accounting::statuses.statement.storno'),
                     ]),
+                SelectFilter::make('direction')
+                    ->label(__('filament-accounting::fields.direction'))
+                    ->options([
+                        'incoming' => __('filament-accounting::fields.incoming'),
+                        'outgoing' => __('filament-accounting::fields.outgoing'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'incoming' => $query->where('amount_minor', '>', 0),
+                            'outgoing' => $query->where('amount_minor', '<', 0),
+                            default => $query,
+                        };
+                    }),
+                SelectFilter::make('reconciliation_state')
+                    ->label(__('filament-accounting::fields.reconciliation'))
+                    ->options([
+                        'unassigned' => __('filament-accounting::statuses.reconciliation.unassigned'),
+                        'assigned' => __('filament-accounting::statuses.reconciliation.assigned'),
+                        'review' => __('filament-accounting::statuses.reconciliation.review'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'unassigned' => $query->whereDoesntHave('reconciliations', fn (Builder $inner): Builder => $inner->where('status', 'posted')),
+                            'assigned' => $query->whereHas('reconciliations', fn (Builder $inner): Builder => $inner->where('status', 'posted')),
+                            'review' => $query->where('needs_review', true),
+                            default => $query,
+                        };
+                    }),
                 Filter::make('dates')
                     ->schema([
                         DatePicker::make('from')->label(__('filament-accounting::fields.from')),
@@ -98,10 +141,62 @@ class BankStatementLineResource extends Resource
                     }),
             ])
             ->recordActions([
-                Action::make('reconcile')
-                    ->label(__('filament-accounting::actions.reconcile'))
+                Action::make('assign')
+                    ->label(__('filament-accounting::actions.assign_directly'))
+                    ->icon('heroicon-o-link')
+                    ->visible(fn (BankStatementLine $record): bool => ! ($record->activePostedReconciliation() instanceof Reconciliation))
+                    ->url(fn (BankStatementLine $record): string => ReconciliationPage::getUrl([
+                        'line' => $record->uuid,
+                        'mode' => 'direct',
+                    ])),
+                Action::make('split')
+                    ->label(__('filament-accounting::actions.split_transaction'))
+                    ->icon('heroicon-o-arrows-pointing-out')
+                    ->color('gray')
+                    ->visible(fn (BankStatementLine $record): bool => ! ($record->activePostedReconciliation() instanceof Reconciliation))
+                    ->url(fn (BankStatementLine $record): string => ReconciliationPage::getUrl([
+                        'line' => $record->uuid,
+                        'mode' => 'split',
+                    ])),
+                Action::make('viewAssignment')
+                    ->label(__('filament-accounting::actions.view_assignment'))
+                    ->visible(fn (BankStatementLine $record): bool => $record->activePostedReconciliation() instanceof Reconciliation)
                     ->url(fn (BankStatementLine $record): string => ReconciliationPage::getUrl(['line' => $record->uuid])),
+                Action::make('openSource')
+                    ->label(__('filament-accounting::actions.open_source'))
+                    ->icon('heroicon-o-arrow-top-right-on-square')
+                    ->visible(fn (BankStatementLine $record): bool => app(BankSourceLinkRegistry::class)->url($record) !== null)
+                    ->url(fn (BankStatementLine $record): ?string => app(BankSourceLinkRegistry::class)->url($record))
+                    ->openUrlInNewTab(),
             ]);
+    }
+
+    private static function linkedTargetsSummary(BankStatementLine $record): string
+    {
+        $reconciliation = $record->activePostedReconciliation();
+        if (! $reconciliation instanceof Reconciliation) {
+            return '—';
+        }
+
+        return $reconciliation->splits
+            ->map(function (ReconciliationSplit $split): string {
+                if ($split->openItem?->document) {
+                    return (string) ($split->openItem->document->number
+                        ?: $split->openItem->document->supplier_invoice_number
+                        ?: $split->openItem->document->uuid);
+                }
+
+                if ($split->postingRuleVersion?->postingRule) {
+                    return $split->postingRuleVersion->postingRule->label;
+                }
+
+                if ($split->ledgerAccount) {
+                    return $split->ledgerAccount->code.' · '.$split->ledgerAccount->name;
+                }
+
+                return __('filament-accounting::fields.'.$split->purpose->value);
+            })
+            ->implode(', ');
     }
 
     public static function getPages(): array

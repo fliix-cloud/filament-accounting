@@ -17,7 +17,10 @@ class LocalizationTest extends TestCase
             'filament-accounting::fields.amount',
             'filament-accounting::statuses.payment.unpaid',
             'filament-accounting::actions.finalize',
+            'filament-accounting::actions.assign_and_post',
+            'filament-accounting::actions.split_transaction',
             'filament-accounting::errors.unbalanced_journal',
+            'filament-accounting::errors.split_requires_multiple_allocations',
             'filament-accounting::notifications.reconciliation_finalized',
             'filament-accounting::validation.splits_must_balance',
         ];

@@ -9,16 +9,155 @@ use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Enums\StatementLineStatus;
 use FilamentAccounting\Exceptions\ReconciliationException;
 use FilamentAccounting\Models\BankStatementLine;
+use FilamentAccounting\Models\PostingRule;
+use FilamentAccounting\Services\AssignStatementLine;
 use FilamentAccounting\Services\FinalizeReconciliation;
 use FilamentAccounting\Services\ImportBankStatementLines;
 use FilamentAccounting\Services\IssueSalesInvoice;
 use FilamentAccounting\Services\RegisterPurchaseInvoice;
+use FilamentAccounting\Services\ReverseReconciliation;
+use FilamentAccounting\Services\SplitStatementLine;
 use FilamentAccounting\Services\SuggestReconciliationMatches;
 use FilamentAccounting\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 class ReconciliationTest extends TestCase
 {
+    #[Test]
+    public function direct_assignment_settles_one_target_and_a_smaller_payment_is_not_a_split(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+        $bank = $this->makeBankAccount($entity);
+        $invoice = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-01',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'Partial', 'quantity' => '1', 'unit_price_minor' => 100000, 'tax_code' => 'DE-19']],
+        ]);
+
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('direct-partial', 50000, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked', 'Acme GmbH', null, null, $invoice->number),
+        ]);
+        $line = BankStatementLine::query()->where('external_id', 'direct-partial')->firstOrFail();
+
+        $reconciliation = app(AssignStatementLine::class)->handle($line, [
+            'purpose' => SplitPurpose::SettleOpenItem->value,
+            'open_item_id' => $invoice->openItem->getKey(),
+        ]);
+
+        $this->assertSame('direct', $reconciliation->match_meta['mode']);
+        $this->assertCount(1, $reconciliation->splits);
+        $this->assertSame(50000, $reconciliation->splits->sole()->amount_minor);
+        $this->assertSame(PaymentStatus::PartiallyPaid, $invoice->fresh('openItem.settlements')->paymentStatus());
+        $settlement = $invoice->fresh('settlements.reconciliation.statementLine')->settlements->sole();
+        $this->assertTrue($settlement->reconciliation->statementLine->is($line));
+    }
+
+    #[Test]
+    public function split_operation_requires_at_least_two_allocations(): void
+    {
+        $this->expectException(ReconciliationException::class);
+
+        app(SplitStatementLine::class)->handle(new BankStatementLine, [[
+            'purpose' => SplitPurpose::Suspense->value,
+            'amount_minor' => 100,
+            'reason' => 'single target',
+        ]]);
+    }
+
+    #[Test]
+    public function a_posting_rule_separates_gross_expense_and_input_tax(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $bank = $this->makeBankAccount($entity);
+        $rule = PostingRule::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('code', 'operating_expense')
+            ->firstOrFail();
+        $version = $rule->versionOn('2026-03-10');
+        $this->assertNotNull($version);
+
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('expense-tax', -11900, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked', 'Vendor GmbH'),
+        ]);
+        $line = BankStatementLine::query()->where('external_id', 'expense-tax')->firstOrFail();
+
+        $reconciliation = app(AssignStatementLine::class)->handle($line, [
+            'purpose' => SplitPurpose::PostingRule->value,
+            'posting_rule_version_id' => $version->getKey(),
+        ]);
+        $journal = $reconciliation->journalEntry->fresh('lines.ledgerAccount');
+        $amounts = $journal->lines->mapWithKeys(fn ($line): array => [
+            $line->ledgerAccount->code => [$line->debit_minor, $line->credit_minor, $line->tax_code],
+        ])->all();
+
+        $this->assertSame([0, 11900, null], $amounts['1200']);
+        $this->assertSame([10000, 0, 'DE-19'], $amounts['4900']);
+        $this->assertSame([1900, 0, 'DE-19'], $amounts['1576']);
+    }
+
+    #[Test]
+    public function direct_assignment_rejects_an_open_item_in_another_currency(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+        $bank = $this->makeBankAccount($entity);
+        $invoice = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-01',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'EUR invoice', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+        ]);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('usd-payment', 1190, 'USD', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
+        ]);
+        $line = BankStatementLine::query()->where('external_id', 'usd-payment')->firstOrFail();
+
+        $this->expectException(ReconciliationException::class);
+        $this->expectExceptionMessage(__('filament-accounting::errors.allocation_currency_mismatch'));
+
+        app(AssignStatementLine::class)->handle($line, [
+            'purpose' => SplitPurpose::SettleOpenItem->value,
+            'open_item_id' => $invoice->openItem->getKey(),
+        ]);
+    }
+
+    #[Test]
+    public function a_reversed_line_can_be_assigned_again_with_a_new_version(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+        $bank = $this->makeBankAccount($entity);
+        $invoice = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-01',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'A', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+        ]);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('reassign-1', 1190, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
+        ]);
+        $line = BankStatementLine::query()->where('external_id', 'reassign-1')->firstOrFail();
+        $assignment = [
+            'purpose' => SplitPurpose::SettleOpenItem->value,
+            'open_item_id' => $invoice->openItem->getKey(),
+        ];
+
+        $first = app(AssignStatementLine::class)->handle($line, $assignment);
+        app(ReverseReconciliation::class)->handle($first, '2026-03-11', 'Wrong assignment');
+        $freshLine = BankStatementLine::query()->findOrFail($line->getKey());
+        $second = app(AssignStatementLine::class)->handle($freshLine, $assignment);
+
+        $this->assertSame(ReconciliationStatus::Posted, $second->status);
+        $this->assertSame(3, $second->version);
+        $this->assertNotSame($first->idempotency_key, $second->idempotency_key);
+    }
+
     #[Test]
     public function it_finalizes_exact_partial_many_to_many_and_fee_splits(): void
     {

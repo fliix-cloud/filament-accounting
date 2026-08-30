@@ -23,3 +23,14 @@ Import is idempotent. Posted reconciliations are not silently rewritten when the
 Suggestions (`SuggestReconciliationMatches`) are assistive: end-to-end ID, document number in purpose, amount, IBAN, name, date proximity, direction. They never auto-post and never cross legal entities.
 
 Ambiguous equal top scores are marked `ambiguous`.
+
+## Direct assignment versus split
+
+The database stores one or more allocation rows for every reconciliation, but the UI deliberately distinguishes two user operations:
+
+- **Direct assignment** assigns the complete statement line to one invoice, bill, posting rule, or ledger target. A payment smaller than an invoice's open amount is a partial settlement and remains a direct assignment.
+- **Split transaction** requires at least two allocations. Use it when one transfer pays several invoices or combines an invoice settlement with a fee, discount, transfer, or other explicit posting purpose.
+
+Several independent payments settling the same invoice are several direct assignments over time, not a split. Allocation amounts are signed and must sum exactly to the signed statement amount.
+
+Open-item targets must belong to the current Legal Entity and use the statement currency. Posting-rule versions and ledger accounts are validated against the same Legal Entity before any journal is posted.
