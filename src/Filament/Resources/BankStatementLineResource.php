@@ -84,7 +84,7 @@ class BankStatementLineResource extends Resource
                     ->state(fn (BankStatementLine $record): string => __('filament-accounting::statuses.reconciliation.'.$record->derivedBadge()->value)),
                 TextColumn::make('linked_targets')
                     ->label(__('filament-accounting::fields.target'))
-                    ->state(fn (BankStatementLine $record): string => static::linkedTargetsSummary($record))
+                    ->state(fn (BankStatementLine $record): string => self::linkedTargetsSummary($record))
                     ->wrap()
                     ->url(fn (BankStatementLine $record): ?string => $record->activePostedReconciliation() instanceof Reconciliation
                         ? ReconciliationPage::getUrl(['line' => $record->uuid])
