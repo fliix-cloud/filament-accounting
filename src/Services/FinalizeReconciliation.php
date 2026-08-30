@@ -495,7 +495,7 @@ final class FinalizeReconciliation
                 return $this->roleAccount($entity, AccountRole::from($role));
             }
             if (isset($mappings['ledger_account_id'])) {
-                return (int) $mappings['ledger_account_id'];
+                return $this->validatedLedgerAccountId($entity, (int) $mappings['ledger_account_id']);
             }
         }
 
@@ -513,6 +513,21 @@ final class FinalizeReconciliation
             throw new ReconciliationException(__('filament-accounting::errors.missing_account_role', ['role' => $role->value]));
         }
 
-        return (int) $assignment->ledger_account_id;
+        return $this->validatedLedgerAccountId($entity, (int) $assignment->ledger_account_id);
+    }
+
+    private function validatedLedgerAccountId(LegalEntity $entity, int $ledgerAccountId): int
+    {
+        $exists = LedgerAccount::query()
+            ->whereKey($ledgerAccountId)
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('is_active', true)
+            ->exists();
+
+        if (! $exists) {
+            throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_target'));
+        }
+
+        return $ledgerAccountId;
     }
 }
