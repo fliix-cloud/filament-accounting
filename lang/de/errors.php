@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'entity_required' => 'Für den aktuellen Kontext ist kein Mandant verfügbar.',
+    'entity_mismatch' => 'Der Datensatz gehört nicht zum aktuellen Mandanten.',
+    'unauthorized' => 'Keine Berechtigung für [:ability].',
+    'journal_immutable' => 'Gebuchte Buchungssätze dürfen nicht geändert werden.',
+    'journal_line_immutable' => 'Gebuchte Buchungszeilen dürfen nicht geändert werden.',
+    'document_immutable' => 'Ausgestellte Belege dürfen nicht geändert werden. Legen Sie eine verknüpfte Korrektur an.',
+    'document_line_immutable' => 'Positionen eines ausgestellten Belegs dürfen nicht geändert werden.',
+    'period_closed' => 'Die Buchungsperiode ist festgeschrieben.',
+    'unbalanced_journal' => 'Der Buchungssatz ist in der Hauswährung nicht ausgeglichen.',
+    'journal_min_lines' => 'Ein Buchungssatz benötigt mindestens zwei Zeilen.',
+    'journal_debit_and_credit' => 'Eine Buchungszeile darf nicht gleichzeitig Soll und Haben enthalten.',
+    'journal_zero_line' => 'Buchungszeilen mit Betrag null sind nicht zulässig.',
+    'journal_negative_line' => 'Soll- und Habenbeträge dürfen nicht negativ sein.',
+    'party_not_found' => 'Der Geschäftspartner gehört nicht zu diesem Mandanten.',
+    'document_needs_lines' => 'Ein Beleg benötigt mindestens eine Position.',
+    'duplicate_supplier_invoice' => 'Diese Lieferantenrechnungsnummer existiert bereits für den Partner.',
+    'missing_account_role' => 'Für die Rolle [:role] ist kein Konto zugeordnet.',
+    'already_reconciled' => 'Dieser Umsatz ist bereits zugeordnet und gebucht.',
+    'pending_cannot_finalize' => 'Vorgemerkte Umsätze können ohne dokumentierte Ausnahme nicht abgeschlossen werden.',
+    'reconciliation_imbalance' => 'Die Splittbeträge müssen dem unterzeichneten Umsatzbetrag entsprechen.',
+    'settlement_exceeds_remaining' => 'Der Ausgleich übersteigt den offenen Restbetrag.',
+    'reconciliation_not_posted' => 'Nur gebuchte Zuordnungen können storniert werden.',
+    'public_disk_forbidden' => 'Buchhaltungsanhänge dürfen nicht auf einem öffentlichen Datenträger gespeichert werden.',
+];

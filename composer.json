@@ -1,0 +1,75 @@
+{
+    "name": "fliix-cloud/filament-accounting",
+    "version": "dev-main",
+    "description": "Laravel 13 / Filament v5 double-entry accounting package with German-first compliance profiles",
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://github.com/fliix-cloud/filament-accounting",
+    "keywords": [
+        "laravel",
+        "filament",
+        "accounting",
+        "ledger",
+        "invoicing",
+        "gobd"
+    ],
+    "require": {
+        "php": "^8.3",
+        "ext-dom": "*",
+        "ext-fileinfo": "*",
+        "ext-mbstring": "*",
+        "brick/money": "^0.10",
+        "filament/filament": "^5.0",
+        "horstoeko/zugferd": "^1.0",
+        "illuminate/contracts": "^13.0",
+        "illuminate/support": "^13.0",
+        "spatie/laravel-package-tools": "^1.92"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.24",
+        "orchestra/testbench": "^11.0",
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "FilamentAccounting\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "FilamentAccounting\\Tests\\": "tests/",
+            "Workbench\\App\\": "workbench/app/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "FilamentAccounting\\FilamentAccountingServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "@php vendor/bin/testbench package:discover --ansi"
+        ],
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "format": "pint --test",
+        "format:fix": "pint",
+        "check": [
+            "composer validate --strict --no-check-publish",
+            "@test",
+            "@analyse",
+            "@format"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

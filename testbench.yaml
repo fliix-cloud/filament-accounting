@@ -1,0 +1,14 @@
+providers:
+    - FilamentAccounting\FilamentAccountingServiceProvider
+    - Workbench\App\Providers\Filament\AdminPanelProvider
+
+migrations: true
+
+workbench:
+    start: /admin
+    install: true
+    discovers:
+        web: true
+        api: false
+        commands: true
+        views: true

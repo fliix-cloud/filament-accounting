@@ -1,0 +1,189 @@
+<?php
+
+namespace FilamentAccounting\Services;
+
+use FilamentAccounting\Contracts\AccountingActorResolver;
+use FilamentAccounting\Contracts\AccountingAuthorizer;
+use FilamentAccounting\Enums\DocumentDirection;
+use FilamentAccounting\Enums\DocumentStatus;
+use FilamentAccounting\Enums\DocumentType;
+use FilamentAccounting\Enums\PostingStatus;
+use FilamentAccounting\Exceptions\DocumentException;
+use FilamentAccounting\Models\Document;
+use FilamentAccounting\Models\DocumentLine;
+use FilamentAccounting\Models\LegalEntity;
+use FilamentAccounting\Models\Party;
+use FilamentAccounting\Models\TaxCode;
+use FilamentAccounting\Models\TaxRuleVersion;
+use FilamentAccounting\Support\LineMoneyCalculator;
+use Illuminate\Support\Facades\DB;
+
+final class RegisterPurchaseInvoice
+{
+    public function __construct(
+        private readonly AccountingAuthorizer $authorizer,
+        private readonly AccountingActorResolver $actors,
+        private readonly AllocateDocumentNumber $numbers,
+        private readonly PostDocument $poster,
+        private readonly AuditLogger $audit,
+    ) {}
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function handle(LegalEntity $entity, array $payload, bool $post = true): Document
+    {
+        $this->authorizer->authorize('register_purchase_invoices', $entity);
+
+        return DB::transaction(function () use ($entity, $payload, $post): Document {
+            $party = Party::query()
+                ->where('legal_entity_id', $entity->getKey())
+                ->whereKey($payload['party_id'] ?? 0)
+                ->first();
+
+            if (! $party instanceof Party) {
+                throw new DocumentException(__('filament-accounting::errors.party_not_found'));
+            }
+
+            $supplierNumber = $payload['supplier_invoice_number'] ?? null;
+            if (filled($supplierNumber)) {
+                $duplicate = Document::query()
+                    ->where('legal_entity_id', $entity->getKey())
+                    ->where('party_id', $party->getKey())
+                    ->where('supplier_invoice_number', $supplierNumber)
+                    ->exists();
+
+                if ($duplicate) {
+                    throw new DocumentException(__('filament-accounting::errors.duplicate_supplier_invoice'));
+                }
+            }
+
+            if (filled($payload['idempotency_key'] ?? null)) {
+                $existing = Document::query()
+                    ->where('legal_entity_id', $entity->getKey())
+                    ->where('idempotency_key', $payload['idempotency_key'])
+                    ->first();
+
+                if ($existing instanceof Document) {
+                    return $existing;
+                }
+            }
+
+            $currency = strtoupper((string) ($payload['currency'] ?? $entity->base_currency));
+            $issueDate = (string) ($payload['issue_date'] ?? now()->toDateString());
+            $receiptDate = (string) ($payload['receipt_date'] ?? $issueDate);
+            $actor = $this->actors->resolve();
+
+            $document = new Document;
+            $document->fill([
+                'legal_entity_id' => $entity->getKey(),
+                'type' => DocumentType::PurchaseInvoice,
+                'direction' => DocumentDirection::Incoming,
+                'supplier_invoice_number' => $supplierNumber,
+                'document_status' => DocumentStatus::Draft,
+                'posting_status' => PostingStatus::Unposted,
+                'party_id' => $party->getKey(),
+                'party_snapshot' => $party->snapshot(),
+                'issue_date' => $issueDate,
+                'receipt_date' => $receiptDate,
+                'supply_date' => $payload['supply_date'] ?? $issueDate,
+                'due_date' => $payload['due_date'] ?? null,
+                'payment_terms_days' => $payload['payment_terms_days'] ?? $party->payment_terms_days,
+                'currency' => $currency,
+                'exchange_rate' => $payload['exchange_rate'] ?? '1',
+                'idempotency_key' => $payload['idempotency_key'] ?? null,
+                'created_by_type' => $actor?->getMorphClass(),
+                'created_by_id' => $actor ? (string) $actor->getKey() : null,
+            ]);
+            $document->save();
+
+            $totals = $this->writeLines($entity, $document, $payload['lines'] ?? [], $issueDate);
+            $document->fill($totals);
+            $document->number = $this->numbers->next($entity, DocumentType::PurchaseInvoice, $issueDate);
+            $document->document_status = DocumentStatus::Received;
+            $document->issued_by_type = $actor?->getMorphClass();
+            $document->issued_by_id = $actor ? (string) $actor->getKey() : null;
+            $document->issued_at = now();
+            $document->save();
+
+            $this->audit->log($entity, 'document.received', $document, [
+                'number' => $document->number,
+                'supplier_invoice_number' => $document->supplier_invoice_number,
+            ]);
+
+            if ($post) {
+                return $this->poster->handle($document);
+            }
+
+            return $document->fresh(['lines', 'openItem']) ?? $document;
+        });
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lines
+     * @return array{net_minor: int, tax_minor: int, gross_minor: int}
+     */
+    private function writeLines(LegalEntity $entity, Document $document, array $lines, string $date): array
+    {
+        if ($lines === []) {
+            throw new DocumentException(__('filament-accounting::errors.document_needs_lines'));
+        }
+
+        $net = 0;
+        $tax = 0;
+        $position = 1;
+
+        foreach ($lines as $input) {
+            $quantity = (string) ($input['quantity'] ?? '1');
+            $unitPrice = (int) ($input['unit_price_minor'] ?? 0);
+            $lineNet = LineMoneyCalculator::netMinor($quantity, $unitPrice);
+            $taxCodeValue = $input['tax_code'] ?? null;
+            $rateBp = 0;
+            $taxVersionId = null;
+
+            if (filled($taxCodeValue)) {
+                $taxCode = TaxCode::query()
+                    ->where('legal_entity_id', $entity->getKey())
+                    ->where('code', $taxCodeValue)
+                    ->first();
+                $version = $taxCode instanceof TaxCode ? $taxCode->versionOn($date) : null;
+                $rateBp = $version instanceof TaxRuleVersion ? (int) $version->rate_bp : 0;
+                $taxVersionId = $version?->getKey();
+            }
+
+            $lineTax = LineMoneyCalculator::taxMinor($lineNet, $rateBp);
+
+            $line = new DocumentLine;
+            $line->fill([
+                'document_id' => $document->getKey(),
+                'position' => $position++,
+                'description' => (string) ($input['description'] ?? ''),
+                'quantity' => $quantity,
+                'unit' => $input['unit'] ?? null,
+                'unit_price_minor' => $unitPrice,
+                'discount' => $input['discount'] ?? null,
+                'net_minor' => $lineNet,
+                'tax_code' => $taxCodeValue,
+                'tax_rule_version_id' => $taxVersionId,
+                'tax_rate_bp' => $rateBp,
+                'tax_minor' => $lineTax,
+                'gross_minor' => $lineNet + $lineTax,
+                'account_role' => $input['account_role'] ?? null,
+                'ledger_account_id' => $input['ledger_account_id'] ?? null,
+                'catalog_item_id' => $input['catalog_item_id'] ?? null,
+                'service_from' => $input['service_from'] ?? null,
+                'service_to' => $input['service_to'] ?? null,
+            ]);
+            $line->save();
+
+            $net += $lineNet;
+            $tax += $lineTax;
+        }
+
+        return [
+            'net_minor' => $net,
+            'tax_minor' => $tax,
+            'gross_minor' => $net + $tax,
+        ];
+    }
+}

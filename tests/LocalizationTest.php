@@ -1,0 +1,37 @@
+<?php
+
+namespace FilamentAccounting\Tests;
+
+use PHPUnit\Framework\Attributes\Test;
+
+class LocalizationTest extends TestCase
+{
+    #[Test]
+    public function critical_keys_exist_in_english_and_german(): void
+    {
+        $keys = [
+            'filament-accounting::navigation.group',
+            'filament-accounting::navigation.overview',
+            'filament-accounting::navigation.sales_invoices',
+            'filament-accounting::navigation.bank_transactions',
+            'filament-accounting::fields.amount',
+            'filament-accounting::statuses.payment.unpaid',
+            'filament-accounting::actions.finalize',
+            'filament-accounting::errors.unbalanced_journal',
+            'filament-accounting::notifications.reconciliation_finalized',
+            'filament-accounting::validation.splits_must_balance',
+        ];
+
+        foreach ($keys as $key) {
+            $english = __($key, [], 'en');
+            $german = __($key, [], 'de');
+            $this->assertNotSame($key, $english, "Missing English translation for {$key}");
+            $this->assertNotSame($key, $german, "Missing German translation for {$key}");
+            $this->assertNotSame('', $english);
+            $this->assertNotSame('', $german);
+        }
+
+        $this->assertSame('Accounting', __('filament-accounting::navigation.group', [], 'en'));
+        $this->assertSame('Buchhaltung', __('filament-accounting::navigation.group', [], 'de'));
+    }
+}

@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'entity_required' => 'No legal entity is available for the current context.',
+    'entity_mismatch' => 'The record does not belong to the current legal entity.',
+    'unauthorized' => 'Not authorized to perform [:ability].',
+    'journal_immutable' => 'Posted journal entries cannot be changed.',
+    'journal_line_immutable' => 'Posted journal lines cannot be changed.',
+    'document_immutable' => 'Issued documents cannot be changed. Create a linked correction.',
+    'document_line_immutable' => 'Lines of an issued document cannot be changed.',
+    'period_closed' => 'The accounting period is hard-closed.',
+    'unbalanced_journal' => 'Journal entry is not balanced in base currency.',
+    'journal_min_lines' => 'A journal entry requires at least two lines.',
+    'journal_debit_and_credit' => 'A journal line cannot have both debit and credit amounts.',
+    'journal_zero_line' => 'Zero-value journal lines are not allowed.',
+    'journal_negative_line' => 'Debit and credit amounts must be non-negative.',
+    'party_not_found' => 'The party does not belong to this legal entity.',
+    'document_needs_lines' => 'A document requires at least one line.',
+    'duplicate_supplier_invoice' => 'This supplier invoice number already exists for the party.',
+    'missing_account_role' => 'No ledger account is assigned for role [:role].',
+    'already_reconciled' => 'This statement line already has a posted reconciliation.',
+    'pending_cannot_finalize' => 'Pending statement lines cannot be finalized without a documented exception.',
+    'reconciliation_imbalance' => 'Split amounts must equal the signed statement amount.',
+    'settlement_exceeds_remaining' => 'Settlement exceeds the remaining open-item amount.',
+    'reconciliation_not_posted' => 'Only posted reconciliations can be reversed.',
+    'public_disk_forbidden' => 'Accounting attachments cannot be stored on a public disk.',
+];
