@@ -53,7 +53,7 @@
             "@php vendor/bin/testbench package:discover --ansi"
         ],
         "test": "phpunit",
-        "analyse": "phpstan analyse --memory-limit=1G",
+        "analyse": "phpstan analyse --autoload-file=vendor/larastan/larastan/bootstrap.php --memory-limit=1G",
         "format": "pint --test",
         "format:fix": "pint",
         "check": [

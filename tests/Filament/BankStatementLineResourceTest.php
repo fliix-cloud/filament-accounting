@@ -65,5 +65,9 @@ class BankStatementLineResourceTest extends TestCase
             ReconciliationPage::getUrl(['line' => $line->uuid]),
             $content->getData()['fallbackUrl'],
         );
+
+        $this->get(ReconciliationPage::getUrl(['line' => $line->uuid]))
+            ->assertOk()
+            ->assertSeeLivewire('filament-accounting.reconciliation-assistant');
     }
 }

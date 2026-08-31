@@ -55,7 +55,10 @@ final class ReconciliationAssistantQuery
         bool $onlyOpen = true,
         bool $amountNear = false,
     ): array {
-        $suggestions = collect($this->matcher->handle($line))->keyBy('targetId');
+        $suggestions = [];
+        foreach ($this->matcher->handle($line) as $suggestion) {
+            $suggestions[$suggestion->targetId] = $suggestion;
+        }
         $needle = Str::lower(trim($search));
         $tolerance = max(100, (int) round(abs((int) $line->amount_minor) * 0.05));
 
@@ -71,27 +74,27 @@ final class ReconciliationAssistantQuery
                     ->where('is_reversed', false)
                     ->sum('amount_minor');
                 $remaining = (int) $item->original_minor - $settled;
-                $suggestion = $suggestions->get((int) $item->getKey());
+                $suggestion = $suggestions[(int) $item->getKey()] ?? null;
                 $document = $item->document;
 
                 return [
                     'id' => (int) $item->getKey(),
                     'uuid' => (string) $item->uuid,
-                    'number' => $document?->number,
-                    'supplier_invoice_number' => $document?->supplier_invoice_number,
+                    'number' => $document->number,
+                    'supplier_invoice_number' => $document->supplier_invoice_number,
                     'party' => $item->party?->displayLabel(),
-                    'issue_date' => $document?->issue_date?->toDateString(),
-                    'receipt_date' => $document?->receipt_date?->toDateString(),
+                    'issue_date' => $document->issue_date?->toDateString(),
+                    'receipt_date' => $document->receipt_date?->toDateString(),
                     'due_date' => $item->due_on?->toDateString(),
-                    'gross_minor' => (int) ($document?->gross_minor ?? $item->original_minor),
+                    'gross_minor' => (int) ($document->gross_minor ?? $item->original_minor),
                     'settled_minor' => $settled,
                     'remaining_minor' => $remaining,
                     'currency' => (string) $item->currency,
                     'payment_status' => $this->paymentStatus((int) $item->original_minor, $remaining)->value,
-                    'score' => $suggestion?->score ?? 0,
+                    'score' => $suggestion->score ?? 0,
                     'confidence' => $suggestion?->confidence() ?? 'none',
-                    'reasons' => $suggestion?->reasons ?? [],
-                    'ambiguous' => $suggestion?->ambiguous ?? false,
+                    'reasons' => $suggestion->reasons ?? [],
+                    'ambiguous' => $suggestion->ambiguous ?? false,
                 ];
             })
             ->filter(function (array $candidate) use ($needle, $onlyOpen, $amountNear, $line, $tolerance): bool {

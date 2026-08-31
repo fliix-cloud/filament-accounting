@@ -81,8 +81,8 @@ final class DeterministicReconciliationMatcher implements ReconciliationMatcher
                 $reasons[] = 'history';
             }
 
-            $name = Str::lower((string) ($item->party?->displayLabel() ?? ''));
-            $counterparty = Str::lower((string) $line->counterparty_name);
+            $name = $this->normalizedName((string) ($item->party?->displayLabel() ?? ''));
+            $counterparty = $this->normalizedName((string) $line->counterparty_name);
             if ($name !== '' && $counterparty !== '' && (str_contains($counterparty, $name) || str_contains($name, $counterparty))) {
                 $score += 30;
                 $reasons[] = 'name';

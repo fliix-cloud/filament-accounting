@@ -97,7 +97,10 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         $this->registerPackageTranslations();
-        Livewire::component('filament-accounting.reconciliation-assistant', ReconciliationAssistant::class);
+
+        if ($this->app->bound('livewire.finder')) {
+            Livewire::component('filament-accounting.reconciliation-assistant', ReconciliationAssistant::class);
+        }
 
         foreach (config('filament-accounting.authorization.abilities', []) as $ability) {
             if (! Gate::has($ability)) {

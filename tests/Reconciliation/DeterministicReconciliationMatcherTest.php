@@ -3,8 +3,10 @@
 namespace FilamentAccounting\Tests\Reconciliation;
 
 use FilamentAccounting\Banking\Data\BankStatementLineData;
+use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\PartyBankAccount;
+use FilamentAccounting\Services\AssignStatementLine;
 use FilamentAccounting\Services\ImportBankStatementLines;
 use FilamentAccounting\Services\IssueSalesInvoice;
 use FilamentAccounting\Services\SuggestReconciliationMatches;
@@ -78,7 +80,7 @@ class DeterministicReconciliationMatcherTest extends TestCase
                 sourceAccountExternalId: 'acc-1',
                 bookingDate: '2026-03-10',
                 sourceStatus: 'booked',
-                counterpartyName: 'Similar Name GmbH',
+                counterpartyName: 'Similar-Name GmbH',
                 purpose: 'Unrelated payment',
             ),
         ]);
@@ -92,6 +94,98 @@ class DeterministicReconciliationMatcherTest extends TestCase
         $this->assertNotContains('document_number', $suggestion->reasons);
         $this->assertNotContains('iban', $suggestion->reasons);
         $this->assertSame('low', $suggestion->confidence());
+    }
+
+    #[Test]
+    public function historical_confirmations_never_influence_another_legal_entity(): void
+    {
+        $this->actingAs($this->makeUser());
+        $firstEntity = $this->makeEntity(['legal_name' => 'First Entity GmbH']);
+        $firstCustomer = $this->makeParty($firstEntity, ['legal_name' => 'First Customer GmbH']);
+        $historicalInvoice = app(IssueSalesInvoice::class)->handle($firstEntity, [
+            'party_id' => $firstCustomer->getKey(),
+            'issue_date' => '2026-03-01',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'Historical', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+        ]);
+        $firstBank = $this->makeBankAccount($firstEntity);
+        app(ImportBankStatementLines::class)->handle($firstBank, [
+            new BankStatementLineData(
+                externalId: 'historical-confirmation',
+                amountMinor: 1190,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-1',
+                bookingDate: '2026-03-10',
+                sourceStatus: 'booked',
+                counterpartyName: 'Shared Bank Alias',
+                counterpartyIban: 'DE02120300000000202051',
+                purpose: 'Confirmed manually',
+            ),
+        ]);
+        $historicalLine = BankStatementLine::query()->where('external_id', 'historical-confirmation')->firstOrFail();
+        app(AssignStatementLine::class)->handle($historicalLine, [
+            'purpose' => SplitPurpose::SettleOpenItem->value,
+            'open_item_id' => $historicalInvoice->openItem->getKey(),
+            'selection_source' => 'manual',
+        ]);
+
+        $nextInvoice = app(IssueSalesInvoice::class)->handle($firstEntity, [
+            'party_id' => $firstCustomer->getKey(),
+            'issue_date' => '2026-03-11',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'Next', 'quantity' => '1', 'unit_price_minor' => 2000, 'tax_code' => 'DE-19']],
+        ]);
+        app(ImportBankStatementLines::class)->handle($firstBank, [
+            new BankStatementLineData(
+                externalId: 'same-entity-history',
+                amountMinor: 500,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-1',
+                bookingDate: '2026-03-12',
+                sourceStatus: 'booked',
+                counterpartyName: 'Shared Bank Alias',
+                counterpartyIban: 'DE02120300000000202051',
+                purpose: 'No other signal',
+            ),
+        ]);
+        $sameEntitySuggestion = app(SuggestReconciliationMatches::class)->handle(
+            BankStatementLine::query()->where('external_id', 'same-entity-history')->firstOrFail(),
+        )[0];
+
+        $this->assertSame($nextInvoice->openItem->getKey(), $sameEntitySuggestion->targetId);
+        $this->assertContains('history', $sameEntitySuggestion->reasons);
+
+        $secondEntity = $this->makeEntity(['legal_name' => 'Second Entity GmbH']);
+        $secondCustomer = $this->makeParty($secondEntity, ['legal_name' => 'Second Customer GmbH']);
+        $secondInvoice = app(IssueSalesInvoice::class)->handle($secondEntity, [
+            'party_id' => $secondCustomer->getKey(),
+            'issue_date' => '2026-03-11',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'Independent', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+        ]);
+        $secondBank = $this->makeBankAccount($secondEntity);
+        app(ImportBankStatementLines::class)->handle($secondBank, [
+            new BankStatementLineData(
+                externalId: 'other-entity-history',
+                amountMinor: 1190,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-1',
+                bookingDate: '2026-03-12',
+                sourceStatus: 'booked',
+                counterpartyName: 'Shared Bank Alias',
+                counterpartyIban: 'DE02120300000000202051',
+                purpose: 'No cross-tenant history',
+            ),
+        ]);
+        $otherEntitySuggestion = app(SuggestReconciliationMatches::class)->handle(
+            BankStatementLine::query()->where('external_id', 'other-entity-history')->firstOrFail(),
+        )[0];
+
+        $this->assertSame($secondInvoice->openItem->getKey(), $otherEntitySuggestion->targetId);
+        $this->assertNotContains('history', $otherEntitySuggestion->reasons);
     }
 
     #[Test]
