@@ -1,7 +1,7 @@
 <div @class(['fac-assistant', 'fac-assistant-modal' => $this->context === 'modal'])>
     <style>
-        .fac-assistant { --fac-border: rgb(var(--gray-200)); display: grid; gap: 1rem; color: rgb(var(--gray-950)); }
-        .dark .fac-assistant { --fac-border: rgb(var(--gray-700)); color: rgb(var(--gray-50)); }
+        .fac-assistant { --fac-border: rgb(var(--gray-200), 1); display: grid; gap: 1rem; color: rgb(var(--gray-950)); }
+        .dark .fac-assistant { --fac-border: rgb(var(--gray-700), 1); color: rgb(var(--gray-50)); }
         .fac-assistant-modal { padding: 0 .125rem .25rem; }
         .fac-card { border: 1px solid var(--fac-border); border-radius: .65rem; background: rgb(var(--gray-50)); padding: .85rem; }
         .dark .fac-card { background: rgb(var(--gray-900)); }
@@ -13,24 +13,26 @@
         .fac-amount { align-items: center; display: inline-flex; font-size: 1.25rem; font-variant-numeric: tabular-nums; font-weight: 700; gap: .35rem; }
         .fac-amount-incoming { color: rgb(var(--success-700)); }
         .dark .fac-amount-incoming { color: rgb(var(--success-400)); }
-        .fac-amount-outgoing { color: rgb(var(--danger-700)); }
-        .dark .fac-amount-outgoing { color: rgb(var(--danger-400)); }
+        .fac-amount-outgoing { color: #2563eb; }
+        .dark .fac-amount-outgoing { color: #60a5fa; }
         .fac-transaction-summary { align-items: center; display: flex; gap: 1rem; justify-content: space-between; }
         .fac-summary-line { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .3rem; }
         .fac-summary-counterparty { font-weight: 600; }
         .fac-details { border-top: 1px solid var(--fac-border); margin-top: .75rem; padding-top: .65rem; }
         .fac-details > summary, .fac-row-details > summary { color: rgb(var(--primary-600)); cursor: pointer; font-size: .75rem; font-weight: 600; list-style-position: inside; }
         .dark .fac-details > summary, .dark .fac-row-details > summary { color: rgb(var(--primary-400)); }
-        .fac-type-grid { background: rgb(var(--gray-100) / .7); border: 1px solid var(--fac-border); border-radius: .65rem; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .25rem; padding: .25rem; }
+        .fac-type-grid { background: #f3f4f6; border: 1px solid var(--fac-border, #d1d5db); border-radius: .65rem; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .25rem; padding: .25rem; }
         .dark .fac-type-grid { background: rgb(var(--gray-900)); }
-        .fac-type { align-items: center; background: transparent; border: 1px solid transparent; border-radius: .5rem; display: flex; gap: .55rem; min-height: 4.25rem; padding: .6rem .65rem; text-align: left; transition: background .15s, border-color .15s, box-shadow .15s; }
+        .fac-type { align-items: center; background: #fff; border: 1px solid #d1d5db; border-radius: .5rem; display: flex; gap: .55rem; min-height: 4.25rem; padding: .6rem .65rem; text-align: left; transition: background .15s, border-color .15s, box-shadow .15s; }
         .fac-type:hover { border-color: rgb(var(--primary-400)); }
-        .fac-type[aria-selected="true"] { background: rgb(var(--primary-600)); border-color: rgb(var(--primary-700)); box-shadow: 0 0 0 2px rgb(var(--primary-500) / .2); color: white; }
-        .dark .fac-type[aria-selected="true"] { background: rgb(var(--primary-500)); border-color: rgb(var(--primary-400)); }
+        .fac-type[aria-selected="true"] { background: #2563eb; border-color: #1d4ed8; box-shadow: 0 0 0 3px #93c5fd; color: #fff; }
+        .fac-type[aria-selected="true"]::after { content: '✓'; font-size: 1rem; font-weight: 800; margin-left: auto; }
+        .dark .fac-type { background: #1f2937; border-color: #4b5563; }
+        .dark .fac-type[aria-selected="true"] { background: #60a5fa; border-color: #2563eb; color: #0f172a; }
         .fac-type-icon { flex: 0 0 auto; height: 1.5rem; width: 1.5rem; }
         .fac-type-copy { display: grid; gap: .25rem; }
         .fac-type-copy small, .fac-muted, .fac-reasons, .fac-date-line { color: rgb(var(--gray-500)); font-size: .75rem; }
-        .fac-type[aria-selected="true"] .fac-type-copy small { color: rgb(var(--primary-50)); }
+        .fac-type[aria-selected="true"] .fac-type-copy small { color: #dbeafe; }
         .fac-type-active { font-size: .65rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
         .fac-date-line, .fac-reasons { display: block; }
         .fac-toolbar { align-items: end; display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
