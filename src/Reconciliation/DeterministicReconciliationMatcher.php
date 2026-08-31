@@ -6,7 +6,9 @@ use FilamentAccounting\Contracts\ReconciliationMatcher;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\OpenItem;
+use FilamentAccounting\Models\PartyBankAccount;
 use FilamentAccounting\Reconciliation\Data\MatchSuggestion;
+use FilamentAccounting\Support\Sepa;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -17,11 +19,14 @@ final class DeterministicReconciliationMatcher implements ReconciliationMatcher
         $items = OpenItem::query()
             ->where('legal_entity_id', $line->legal_entity_id)
             ->where('is_reversed', false)
-            ->with(['document.party', 'party'])
+            ->with(['document.party', 'party.bankAccounts'])
             ->get()
             ->filter(fn (OpenItem $item): bool => $item->remainingMinor() !== 0);
 
         $incoming = $line->amount_minor > 0;
+        $counterpartyIban = filled($line->counterparty_iban)
+            ? Sepa::normalizeIban((string) $line->counterparty_iban)
+            : null;
         $scored = [];
 
         foreach ($items as $item) {
@@ -60,8 +65,10 @@ final class DeterministicReconciliationMatcher implements ReconciliationMatcher
                 $reasons[] = 'amount';
             }
 
-            $iban = $item->party?->external_reference;
-            if (filled($line->counterparty_iban) && filled($iban) && str_replace(' ', '', (string) $iban) === str_replace(' ', '', (string) $line->counterparty_iban)) {
+            $ibanMatches = $counterpartyIban !== null && $item->party?->bankAccounts->contains(
+                fn (PartyBankAccount $account): bool => Sepa::normalizeIban($account->iban) === $counterpartyIban,
+            );
+            if ($ibanMatches) {
                 $score += 40;
                 $reasons[] = 'iban';
             }
