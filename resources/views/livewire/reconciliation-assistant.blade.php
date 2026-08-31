@@ -2,8 +2,8 @@
     <style>
         .fac-assistant { --fac-border: rgb(var(--gray-200)); display: grid; gap: 1rem; color: rgb(var(--gray-950)); }
         .dark .fac-assistant { --fac-border: rgb(var(--gray-700)); color: rgb(var(--gray-50)); }
-        .fac-assistant-modal { max-height: min(78vh, 64rem); overflow-y: auto; padding: .125rem .25rem .25rem; }
-        .fac-card { border: 1px solid var(--fac-border); border-radius: .75rem; background: rgb(var(--gray-50)); padding: 1rem; }
+        .fac-assistant-modal { padding: 0 .125rem .25rem; }
+        .fac-card { border: 1px solid var(--fac-border); border-radius: .65rem; background: rgb(var(--gray-50)); padding: .85rem; }
         .dark .fac-card { background: rgb(var(--gray-900)); }
         .fac-transaction-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem 1rem; }
         .fac-detail { min-width: 0; }
@@ -15,21 +15,31 @@
         .dark .fac-amount-incoming { color: rgb(var(--success-400)); }
         .fac-amount-outgoing { color: rgb(var(--danger-700)); }
         .dark .fac-amount-outgoing { color: rgb(var(--danger-400)); }
-        .fac-type-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
-        .fac-type { align-items: flex-start; border: 1px solid var(--fac-border); border-radius: .75rem; display: flex; gap: .65rem; min-height: 6.5rem; padding: .85rem; text-align: left; transition: border-color .15s, box-shadow .15s; }
+        .fac-transaction-summary { align-items: center; display: flex; gap: 1rem; justify-content: space-between; }
+        .fac-summary-line { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .3rem; }
+        .fac-summary-counterparty { font-weight: 600; }
+        .fac-details { border-top: 1px solid var(--fac-border); margin-top: .75rem; padding-top: .65rem; }
+        .fac-details > summary, .fac-row-details > summary { color: rgb(var(--primary-600)); cursor: pointer; font-size: .75rem; font-weight: 600; list-style-position: inside; }
+        .dark .fac-details > summary, .dark .fac-row-details > summary { color: rgb(var(--primary-400)); }
+        .fac-type-grid { background: rgb(var(--gray-100) / .7); border: 1px solid var(--fac-border); border-radius: .65rem; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .25rem; padding: .25rem; }
+        .dark .fac-type-grid { background: rgb(var(--gray-900)); }
+        .fac-type { align-items: center; background: transparent; border: 1px solid transparent; border-radius: .5rem; display: flex; gap: .55rem; min-height: 4.25rem; padding: .6rem .65rem; text-align: left; transition: background .15s, border-color .15s, box-shadow .15s; }
         .fac-type:hover { border-color: rgb(var(--primary-400)); }
-        .fac-type[aria-selected="true"] { border-color: rgb(var(--primary-500)); box-shadow: 0 0 0 2px rgb(var(--primary-500) / .2); }
+        .fac-type[aria-selected="true"] { background: rgb(var(--primary-600)); border-color: rgb(var(--primary-700)); box-shadow: 0 0 0 2px rgb(var(--primary-500) / .2); color: white; }
+        .dark .fac-type[aria-selected="true"] { background: rgb(var(--primary-500)); border-color: rgb(var(--primary-400)); }
         .fac-type-icon { flex: 0 0 auto; height: 1.5rem; width: 1.5rem; }
         .fac-type-copy { display: grid; gap: .25rem; }
         .fac-type-copy small, .fac-muted, .fac-reasons, .fac-date-line { color: rgb(var(--gray-500)); font-size: .75rem; }
+        .fac-type[aria-selected="true"] .fac-type-copy small { color: rgb(var(--primary-50)); }
+        .fac-type-active { font-size: .65rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
         .fac-date-line, .fac-reasons { display: block; }
         .fac-toolbar { align-items: end; display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
         .fac-toolbar-search { flex: 1 1 18rem; }
         .fac-check { align-items: center; display: inline-flex; gap: .4rem; min-height: 2.5rem; }
         .fac-table-wrap { overflow-x: auto; }
-        .fac-table { border-collapse: collapse; min-width: 74rem; width: 100%; }
+        .fac-table { border-collapse: collapse; min-width: 48rem; width: 100%; }
         .fac-table th { color: rgb(var(--gray-500)); font-size: .7rem; font-weight: 600; letter-spacing: .025em; padding: .55rem; text-align: left; text-transform: uppercase; }
-        .fac-table td { border-top: 1px solid var(--fac-border); font-size: .82rem; padding: .65rem .55rem; vertical-align: top; }
+        .fac-table td { border-top: 1px solid var(--fac-border); font-size: .82rem; padding: .55rem .45rem; vertical-align: top; }
         .fac-table .fac-number { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
         .fac-open-amount { font-weight: 700; }
         .fac-selected-row { background: rgb(var(--primary-50)); }
@@ -41,6 +51,10 @@
         .fac-confidence-low { background: rgb(var(--gray-100)); color: rgb(var(--gray-700)); }
         .dark .fac-confidence-high { background: rgb(var(--success-950)); color: rgb(var(--success-300)); }
         .dark .fac-confidence-medium { background: rgb(var(--warning-950)); color: rgb(var(--warning-300)); }
+        .fac-row-details { margin-top: .3rem; }
+        .fac-detail-grid { display: grid; gap: .35rem .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .4rem; }
+        .fac-detail-grid > span { color: rgb(var(--gray-600)); font-size: .72rem; }
+        .dark .fac-detail-grid > span { color: rgb(var(--gray-400)); }
         .fac-alert { align-items: flex-start; border: 1px solid rgb(var(--warning-300)); border-radius: .6rem; display: flex; gap: .5rem; margin-bottom: .8rem; padding: .65rem .75rem; }
         .fac-alert-danger { border-color: rgb(var(--danger-400)); color: rgb(var(--danger-700)); }
         .dark .fac-alert-danger { color: rgb(var(--danger-300)); }
@@ -56,10 +70,10 @@
         .fac-split-row { border: 1px solid var(--fac-border); border-radius: .65rem; padding: .8rem; }
         .fac-split-grid { align-items: end; display: grid; grid-template-columns: 1fr 1.35fr .75fr 1fr auto; gap: .75rem; }
         .fac-field { display: grid; gap: .3rem; }
-        .fac-footer { align-items: center; background: rgb(var(--gray-50) / .94); border-top: 1px solid var(--fac-border); bottom: 0; display: flex; flex-wrap: wrap; gap: .65rem; justify-content: flex-end; margin: 0 -.25rem -.25rem; padding: .8rem .25rem .25rem; position: sticky; z-index: 2; }
+        .fac-footer { align-items: center; background: rgb(var(--gray-50)); border-top: 1px solid var(--fac-border); display: flex; flex-wrap: wrap; gap: .65rem; justify-content: flex-end; margin: 0 -.25rem -.25rem; padding: .8rem .25rem .25rem; }
         .dark .fac-footer { background: rgb(var(--gray-900) / .94); }
         @media (max-width: 75rem) { .fac-transaction-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fac-type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fac-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fac-split-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (max-width: 42rem) { .fac-transaction-grid, .fac-type-grid, .fac-category-grid, .fac-split-summary, .fac-split-grid { grid-template-columns: 1fr; } .fac-detail-wide { grid-column: auto; } .fac-assistant-modal { max-height: 82vh; } }
+        @media (max-width: 42rem) { .fac-transaction-grid, .fac-type-grid, .fac-category-grid, .fac-split-summary, .fac-split-grid { grid-template-columns: 1fr; } .fac-detail-wide { grid-column: auto; } .fac-transaction-summary { align-items: flex-start; flex-direction: column; gap: .5rem; } .fac-amount { font-size: 1.05rem; } }
     </style>
 
     @if (! $statementLine)
@@ -68,10 +82,14 @@
         </div>
     @else
         <section class="fac-card" aria-labelledby="fac-transaction-heading">
-            <div style="align-items: start; display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1rem;">
+            <div class="fac-transaction-summary">
                 <div>
                     <h2 id="fac-transaction-heading" style="font-size: 1rem; font-weight: 700;">{{ __('filament-accounting::fields.transaction_details') }}</h2>
-                    <span class="fac-badge">{{ __('filament-accounting::statuses.reconciliation.'.$statementLine->derivedBadge()->value) }}</span>
+                    <div class="fac-summary-line">
+                        <span class="fac-summary-counterparty">{{ $statementLine->counterparty_name ?: __('filament-accounting::fields.not_available') }}</span>
+                        <span class="fac-badge">{{ __('filament-accounting::statuses.reconciliation.'.$statementLine->derivedBadge()->value) }}</span>
+                    </div>
+                    <span class="fac-muted">{{ $statementLine->booking_date?->toDateString() ?: __('filament-accounting::fields.not_available') }} · {{ $statementLine->bankAccount->display_name }}</span>
                 </div>
                 <span @class(['fac-amount', 'fac-amount-incoming' => $statementLine->isIncoming(), 'fac-amount-outgoing' => ! $statementLine->isIncoming()])>
                     <x-filament::icon :icon="$statementLine->isIncoming() ? 'heroicon-o-arrow-down-left' : 'heroicon-o-arrow-up-right'" style="height: 1.25rem; width: 1.25rem;" />
@@ -80,7 +98,9 @@
                 </span>
             </div>
 
-            <div class="fac-transaction-grid">
+            <details class="fac-details">
+                <summary>{{ __('filament-accounting::fields.show_transaction_details') }}</summary>
+                <div class="fac-transaction-grid" style="margin-top: .7rem;">
                 <div class="fac-detail"><span class="fac-label">{{ __('filament-accounting::fields.counterparty') }}</span><span class="fac-value">{{ $statementLine->counterparty_name ?: __('filament-accounting::fields.not_available') }}</span></div>
                 <div class="fac-detail"><span class="fac-label">{{ __('filament-accounting::fields.booking_date') }}</span><span class="fac-value">{{ $statementLine->booking_date?->toDateString() ?: __('filament-accounting::fields.not_available') }}</span></div>
                 <div class="fac-detail"><span class="fac-label">{{ __('filament-accounting::fields.value_date') }}</span><span class="fac-value">{{ $statementLine->value_date?->toDateString() ?: __('filament-accounting::fields.not_available') }}</span></div>
@@ -94,7 +114,8 @@
                 @if ($sourceUrl)
                     <div class="fac-detail"><span class="fac-label">{{ __('filament-accounting::fields.source') }}</span><a href="{{ $sourceUrl }}" target="_blank" rel="noopener" class="fi-link fac-value">{{ __('filament-accounting::actions.open_source') }}</a></div>
                 @endif
-            </div>
+                </div>
+            </details>
         </section>
 
         @if ($postedReconciliation)
@@ -139,6 +160,7 @@
                         <button type="button" class="fac-type" role="tab" aria-selected="{{ $this->assignmentType === $type ? 'true' : 'false' }}" wire:click="selectAssignmentType('{{ $type }}')">
                             <x-filament::icon :icon="$icon" class="fac-type-icon" />
                             <span class="fac-type-copy"><strong>{{ __('filament-accounting::fields.assignment_types.'.$type) }}</strong><small>{{ __('filament-accounting::fields.assignment_type_help.'.$type) }}</small></span>
+                            @if ($this->assignmentType === $type)<span class="fac-type-active">{{ __('filament-accounting::fields.active') }}</span>@endif
                         </button>
                     @endforeach
                 </div>
