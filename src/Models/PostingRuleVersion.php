@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $tax_code
  * @property array<string, mixed> $account_mappings
  * @property array<int, mixed> $line_templates
+ * @property-read PostingRule|null $postingRule
  */
 class PostingRuleVersion extends AccountingModel
 {
@@ -49,6 +50,7 @@ class PostingRuleVersion extends AccountingModel
         ];
     }
 
+    /** @return BelongsTo<PostingRule, $this> */
     public function postingRule(): BelongsTo
     {
         return $this->belongsTo(PostingRule::class);

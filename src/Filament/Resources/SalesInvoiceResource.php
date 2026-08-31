@@ -61,7 +61,8 @@ class SalesInvoiceResource extends Resource
     {
         return parent::getEloquentQuery()
             ->where('type', DocumentType::SalesInvoice)
-            ->with(['party', 'openItem.settlements']);
+            ->with(['party', 'openItem.settlements', 'settlements.reconciliation.statementLine'])
+            ->withCount('settlements');
     }
 
     public static function form(Schema $schema): Schema
@@ -103,6 +104,8 @@ class SalesInvoiceResource extends Resource
                 TextColumn::make('payment_status')
                     ->label(__('filament-accounting::fields.payment_status'))
                     ->state(fn (Document $record): string => __('filament-accounting::statuses.payment.'.$record->paymentStatus()->value)),
+                TextColumn::make('settlements_count')
+                    ->label(__('filament-accounting::fields.assigned_transactions')),
             ])
             ->recordActions([
                 Action::make('issue')

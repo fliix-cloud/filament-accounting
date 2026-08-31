@@ -1,6 +1,5 @@
 {
     "name": "fliix-cloud/filament-accounting",
-    "version": "dev-main",
     "description": "Laravel 13 / Filament v5 double-entry accounting package with German-first compliance profiles",
     "type": "library",
     "license": "MIT",

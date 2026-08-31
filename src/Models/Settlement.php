@@ -5,6 +5,7 @@ namespace FilamentAccounting\Models;
 use FilamentAccounting\Models\Concerns\BelongsToLegalEntity;
 use FilamentAccounting\Support\HasUuid;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property int $id
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $currency
  * @property bool $is_reversed
  * @property int|null $reverses_id
+ * @property-read Reconciliation|null $reconciliation
  */
 class Settlement extends AccountingModel
 {
@@ -50,6 +52,11 @@ class Settlement extends AccountingModel
     public function journalEntry(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class);
+    }
+
+    public function reconciliation(): HasOne
+    {
+        return $this->hasOne(Reconciliation::class, 'journal_entry_id', 'journal_entry_id');
     }
 
     public function reverses(): BelongsTo

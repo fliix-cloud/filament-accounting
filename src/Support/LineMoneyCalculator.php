@@ -35,4 +35,16 @@ final class LineMoneyCalculator
             ->dividedBy(10000, 0, self::roundingMode())
             ->toInt();
     }
+
+    public static function netMinorFromGross(int $grossMinor, int $rateBp): int
+    {
+        if ($rateBp === 0 || $grossMinor === 0) {
+            return $grossMinor;
+        }
+
+        return BigDecimal::of($grossMinor)
+            ->multipliedBy(10000)
+            ->dividedBy(10000 + $rateBp, 0, self::roundingMode())
+            ->toInt();
+    }
 }

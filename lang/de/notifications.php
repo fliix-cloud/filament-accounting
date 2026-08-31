@@ -5,6 +5,7 @@ return [
     'invoice_posted' => 'Rechnung gebucht',
     'purchase_registered' => 'Eingangsrechnung erfasst',
     'reconciliation_finalized' => 'Zuordnung gebucht',
+    'reconciliation_failed' => 'Zuordnung konnte nicht gebucht werden',
     'reconciliation_reversed' => 'Zuordnung storniert',
     'period_closed' => 'Periode geschlossen',
     'period_reopened' => 'Periode wieder geöffnet',

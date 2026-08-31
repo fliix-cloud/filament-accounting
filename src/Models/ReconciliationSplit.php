@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $reason
  * @property-read OpenItem|null $openItem
  * @property-read PostingRuleVersion|null $postingRuleVersion
+ * @property-read LedgerAccount|null $ledgerAccount
  */
 class ReconciliationSplit extends AccountingModel
 {
@@ -41,21 +42,25 @@ class ReconciliationSplit extends AccountingModel
         ];
     }
 
+    /** @return BelongsTo<Reconciliation, $this> */
     public function reconciliation(): BelongsTo
     {
         return $this->belongsTo(Reconciliation::class);
     }
 
+    /** @return BelongsTo<OpenItem, $this> */
     public function openItem(): BelongsTo
     {
         return $this->belongsTo(OpenItem::class);
     }
 
+    /** @return BelongsTo<PostingRuleVersion, $this> */
     public function postingRuleVersion(): BelongsTo
     {
         return $this->belongsTo(PostingRuleVersion::class);
     }
 
+    /** @return BelongsTo<LedgerAccount, $this> */
     public function ledgerAccount(): BelongsTo
     {
         return $this->belongsTo(LedgerAccount::class);

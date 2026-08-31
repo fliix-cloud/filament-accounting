@@ -13,6 +13,7 @@ use FilamentAccounting\Support\HasUuid;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
@@ -51,6 +52,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, DocumentLine> $lines
  * @property-read OpenItem|null $openItem
  * @property-read Party|null $party
+ * @property-read Collection<int, Settlement> $settlements
  */
 class Document extends AccountingModel
 {
@@ -184,6 +186,16 @@ class Document extends AccountingModel
     public function openItem(): HasOne
     {
         return $this->hasOne(OpenItem::class);
+    }
+
+    public function settlements(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            Settlement::class,
+            OpenItem::class,
+            'document_id',
+            'open_item_id',
+        )->where('accounting_settlements.is_reversed', false);
     }
 
     public function correctedDocument(): BelongsTo
