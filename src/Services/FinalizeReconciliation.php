@@ -107,10 +107,7 @@ final class FinalizeReconciliation
                 'actor_type' => $actor?->getMorphClass(),
                 'actor_id' => $actor ? (string) $actor->getKey() : null,
                 'reason' => $reason,
-                'match_meta' => [
-                    'mode' => count($allocations) === 1 ? 'direct' : 'split',
-                    'allocation_count' => count($allocations),
-                ],
+                'match_meta' => $this->matchMeta($line, $allocations),
             ]);
             $reconciliation->save();
 
@@ -192,6 +189,44 @@ final class FinalizeReconciliation
 
             return $reconciliation->fresh(['splits', 'journalEntry']) ?? $reconciliation;
         });
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $allocations
+     * @return array<string, mixed>
+     */
+    private function matchMeta(BankStatementLine $line, array $allocations): array
+    {
+        $meta = [
+            'mode' => count($allocations) === 1 ? 'direct' : 'split',
+            'allocation_count' => count($allocations),
+        ];
+
+        if (count($allocations) !== 1) {
+            return $meta;
+        }
+
+        $allocation = $allocations[0];
+        $purpose = $allocation['purpose'] ?? null;
+        if (! $purpose instanceof SplitPurpose) {
+            $purpose = SplitPurpose::tryFrom((string) $purpose);
+        }
+        if ($purpose !== SplitPurpose::SettleOpenItem || empty($allocation['open_item_id'])) {
+            return $meta;
+        }
+
+        $item = OpenItem::query()->find($allocation['open_item_id']);
+        if (! $item instanceof OpenItem) {
+            return $meta;
+        }
+
+        $assigned = abs((int) $line->amount_minor);
+        $remaining = abs($item->remainingMinor());
+        $meta['amount_match'] = $assigned === $remaining;
+        $meta['assigned_amount_minor'] = (int) $line->amount_minor;
+        $meta['open_item_remaining_minor'] = $item->remainingMinor();
+
+        return $meta;
     }
 
     private function singlePostingRuleVersionId(Reconciliation $reconciliation): ?int

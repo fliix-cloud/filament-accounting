@@ -25,4 +25,5 @@ return [
     'open_bank_transaction' => 'Open :amount bank transaction from :date',
     'view_assignment' => 'View assignment',
     'preview' => 'Preview',
+    'add_bank_account' => 'Add bank account',
 ];

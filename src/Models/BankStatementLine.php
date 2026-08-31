@@ -107,6 +107,11 @@ class BankStatementLine extends AccountingModel
             ->first(fn (Reconciliation $reconciliation): bool => $reconciliation->status === ReconciliationStatus::Posted);
     }
 
+    public function assignedAmountMatches(): ?bool
+    {
+        return $this->activePostedReconciliation()?->amountMatches();
+    }
+
     public function derivedBadge(): DerivedReconciliationBadge
     {
         if ($this->needs_review) {

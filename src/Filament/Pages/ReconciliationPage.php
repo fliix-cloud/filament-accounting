@@ -11,6 +11,7 @@ use FilamentAccounting\Enums\OpenItemKind;
 use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Exceptions\InvalidMoneyException;
 use FilamentAccounting\Exceptions\ReconciliationException;
+use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
 use FilamentAccounting\Models\BankStatementLine;
@@ -34,6 +35,8 @@ use Livewire\Attributes\Url;
 class ReconciliationPage extends Page
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-arrows-right-left';
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $slug = 'accounting/reconcile';
 
@@ -281,7 +284,39 @@ class ReconciliationPage extends Page
             'sourceUrl' => $line ? app(BankSourceLinkRegistry::class)->url($line) : null,
             'remaining' => $line ? MoneyFormatter::format($this->remainingMinor(), $line->currency) : null,
             'formattedAmount' => $line ? MoneyFormatter::format((int) $line->amount_minor, $line->currency) : null,
+            'transactionsUrl' => $this->bankTransactionsUrl(),
+            'amountMismatch' => $this->directAssignmentAmountMismatch(),
+            'amountMatch' => $posted instanceof Reconciliation ? $posted->amountMatches() : null,
         ];
+    }
+
+    public function directAssignmentAmountMismatch(): bool
+    {
+        if ($this->mode !== 'direct' || $this->directPurpose !== SplitPurpose::SettleOpenItem->value) {
+            return false;
+        }
+
+        $line = $this->statementLine();
+        $item = $this->selectedOpenItem();
+        if (! $line || ! $item) {
+            return false;
+        }
+
+        return abs((int) $line->amount_minor) !== abs($item->remainingMinor());
+    }
+
+    public function directAssignmentConfirmationBody(): ?string
+    {
+        $line = $this->statementLine();
+        $item = $this->selectedOpenItem();
+        if (! $line || ! $item || ! $this->directAssignmentAmountMismatch()) {
+            return null;
+        }
+
+        return __('filament-accounting::fields.amount_mismatch_confirm', [
+            'transaction' => MoneyFormatter::format((int) $line->amount_minor, $line->currency),
+            'invoice' => MoneyFormatter::format($item->remainingMinor(), $item->currency),
+        ]);
     }
 
     protected function getHeaderActions(): array
@@ -314,6 +349,13 @@ class ReconciliationPage extends Page
                 ->label(__('filament-accounting::actions.assign_and_post'))
                 ->visible(fn (): bool => app(AccountingAuthorizer::class)->can('finalize_reconciliation'))
                 ->requiresConfirmation()
+                ->modalHeading(fn (): string => $this->directAssignmentAmountMismatch()
+                    ? __('filament-accounting::fields.amount_mismatch_heading')
+                    : __('filament-accounting::actions.assign_and_post'))
+                ->modalDescription(fn (): ?string => $this->directAssignmentConfirmationBody())
+                ->modalIcon(fn (): ?string => $this->directAssignmentAmountMismatch()
+                    ? 'heroicon-o-exclamation-triangle'
+                    : null)
                 ->action(fn (AssignStatementLine $assigner) => $this->assign($assigner));
 
             return $actions;
@@ -431,6 +473,25 @@ class ReconciliationPage extends Page
 
             return ExactMoney::ofString($value, $currency)->minorAmount;
         } catch (InvalidMoneyException) {
+            return null;
+        }
+    }
+
+    private function selectedOpenItem(): ?OpenItem
+    {
+        $line = $this->statementLine();
+        if (! $line || ! filled($this->directOpenItemId)) {
+            return null;
+        }
+
+        return $this->openItems($line)->firstWhere('id', (int) $this->directOpenItemId);
+    }
+
+    private function bankTransactionsUrl(): ?string
+    {
+        try {
+            return BankStatementLineResource::getUrl();
+        } catch (\Throwable) {
             return null;
         }
     }

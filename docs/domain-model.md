@@ -4,6 +4,7 @@
 | --- | --- | --- |
 | Firma | `LegalEntity` | Accounting boundary |
 | Kunde / Lieferant | `Party` | Role flags; shared model, separate Filament resources |
+| Kundenkonto / Mandat | `PartyBankAccount` | IBAN/BIC on the party; optional SEPA Mandatsreferenz per account |
 | Beleg | `Document` + `DocumentLine` | Type + direction; commercial snapshot after issue |
 | Offener Posten | `OpenItem` | Remaining = original − active settlements |
 | Buchungssatz | `JournalEntry` + `JournalLine` | Posted records are immutable |

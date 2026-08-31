@@ -82,6 +82,20 @@ class BankStatementLineResource extends Resource
                     ->label(__('filament-accounting::fields.reconciliation'))
                     ->badge()
                     ->state(fn (BankStatementLine $record): string => __('filament-accounting::statuses.reconciliation.'.$record->derivedBadge()->value)),
+                TextColumn::make('amount_match')
+                    ->label(__('filament-accounting::fields.amount_match'))
+                    ->badge()
+                    ->color(fn (BankStatementLine $record): string => match ($record->assignedAmountMatches()) {
+                        true => 'success',
+                        false => 'warning',
+                        default => 'gray',
+                    })
+                    ->state(fn (BankStatementLine $record): ?string => match ($record->assignedAmountMatches()) {
+                        true => __('filament-accounting::statuses.amount_match.matched'),
+                        false => __('filament-accounting::statuses.amount_match.mismatch'),
+                        default => null,
+                    })
+                    ->placeholder('—'),
                 TextColumn::make('linked_targets')
                     ->label(__('filament-accounting::fields.target'))
                     ->state(fn (BankStatementLine $record): string => self::linkedTargetsSummary($record))

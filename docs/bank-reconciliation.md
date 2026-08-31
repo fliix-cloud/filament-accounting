@@ -28,7 +28,9 @@ Ambiguous equal top scores are marked `ambiguous`.
 
 The database stores one or more allocation rows for every reconciliation, but the UI deliberately distinguishes two user operations:
 
-- **Direct assignment** assigns the complete statement line to one invoice, bill, posting rule, or ledger target. A payment smaller than an invoice's open amount is a partial settlement and remains a direct assignment.
+- **Direct assignment** assigns the complete statement line to one invoice, bill, posting rule, or ledger target. A payment smaller than an invoice's open amount is a partial settlement and remains a direct assignment. The assign confirmation and the bank-transaction table warn when the transaction amount does not equal the open invoice remaining.
+
+The standalone Reconciliation page is the assign/split workspace opened from a bank transaction. It is not registered in navigation.
 - **Split transaction** requires at least two allocations. Use it when one transfer pays several invoices or combines an invoice settlement with a fee, discount, transfer, or other explicit posting purpose.
 
 Several independent payments settling the same invoice are several direct assignments over time, not a split. Allocation amounts are signed and must sum exactly to the signed statement amount.

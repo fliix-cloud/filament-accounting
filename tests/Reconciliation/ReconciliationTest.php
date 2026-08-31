@@ -50,6 +50,8 @@ class ReconciliationTest extends TestCase
         ]);
 
         $this->assertSame('direct', $reconciliation->match_meta['mode']);
+        $this->assertFalse($reconciliation->match_meta['amount_match']);
+        $this->assertFalse($line->fresh('reconciliations.splits')->assignedAmountMatches());
         $this->assertCount(1, $reconciliation->splits);
         $this->assertSame(50000, $reconciliation->splits->sole()->amount_minor);
         $this->assertSame(PaymentStatus::PartiallyPaid, $invoice->fresh('openItem.settlements')->paymentStatus());
@@ -99,6 +101,68 @@ class ReconciliationTest extends TestCase
         $page->allocations[0]['amount'] = '10.00';
         $this->assertSame(0, $page->remainingMinor());
         $this->assertTrue($page->hasInvalidAllocationAmounts());
+    }
+
+    #[Test]
+    public function reconciliation_page_is_hidden_from_navigation(): void
+    {
+        $this->assertFalse(ReconciliationPage::shouldRegisterNavigation());
+    }
+
+    #[Test]
+    public function direct_assignment_warns_when_the_transaction_does_not_match_the_open_amount(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+        $bank = $this->makeBankAccount($entity);
+        $invoice = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-01',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'Partial', 'quantity' => '1', 'unit_price_minor' => 100000, 'tax_code' => 'DE-19']],
+        ]);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('warn-partial', 300, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked', 'Acme GmbH', null, null, $invoice->number),
+        ]);
+        $line = BankStatementLine::query()->where('external_id', 'warn-partial')->firstOrFail();
+
+        $page = new ReconciliationPage;
+        $page->line = $line->uuid;
+        $page->directPurpose = SplitPurpose::SettleOpenItem->value;
+        $page->directOpenItemId = (string) $invoice->openItem->getKey();
+
+        $this->assertTrue($page->directAssignmentAmountMismatch());
+        $this->assertNotNull($page->directAssignmentConfirmationBody());
+        $this->assertStringContainsString('3.00', (string) $page->directAssignmentConfirmationBody());
+    }
+
+    #[Test]
+    public function a_matching_direct_assignment_records_an_amount_match(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+        $bank = $this->makeBankAccount($entity);
+        $invoice = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-01',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'Full', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+        ]);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('full-match', 1190, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked', 'Acme GmbH', null, null, $invoice->number),
+        ]);
+        $line = BankStatementLine::query()->where('external_id', 'full-match')->firstOrFail();
+
+        $reconciliation = app(AssignStatementLine::class)->handle($line, [
+            'purpose' => SplitPurpose::SettleOpenItem->value,
+            'open_item_id' => $invoice->openItem->getKey(),
+        ]);
+
+        $this->assertTrue($reconciliation->match_meta['amount_match']);
+        $this->assertTrue($line->fresh('reconciliations.splits.openItem')->assignedAmountMatches());
+        $this->assertSame(PaymentStatus::Paid, $invoice->fresh('openItem.settlements')->paymentStatus());
     }
 
     #[Test]

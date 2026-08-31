@@ -3,6 +3,13 @@
         <x-filament::section>
             <x-slot name="heading">{{ __('filament-accounting::navigation.bank_transactions') }}</x-slot>
             <p>{{ __('filament-accounting::fields.select_line') }}</p>
+            @if ($transactionsUrl ?? null)
+                <p style="margin-top: 0.75rem;">
+                    <a href="{{ $transactionsUrl }}" class="fi-link">
+                        {{ __('filament-accounting::navigation.bank_transactions') }}
+                    </a>
+                </p>
+            @endif
         </x-filament::section>
     @else
         <x-filament::section>
@@ -53,6 +60,11 @@
                     {{ ($postedReconciliation->match_meta['mode'] ?? null) === 'split'
                         ? __('filament-accounting::fields.split_assignment_summary')
                         : __('filament-accounting::fields.direct_assignment_summary') }}
+                    @if ($amountMatch === false)
+                        · {{ __('filament-accounting::fields.amount_mismatch') }}
+                    @elseif ($amountMatch === true)
+                        · {{ __('filament-accounting::fields.amount_matched') }}
+                    @endif
                 </x-slot>
 
                 <div style="display: grid; gap: 0.75rem;">
@@ -138,7 +150,7 @@
                                     : __('filament-accounting::navigation.purchase_invoices') }}
                             </label>
                             <x-filament::input.wrapper>
-                                <x-filament::input.select wire:model="directOpenItemId">
+                                <x-filament::input.select wire:model.live="directOpenItemId">
                                     <option value="">{{ __('filament-accounting::fields.select_target') }}</option>
                                     @foreach ($openItems as $item)
                                         <option value="{{ $item->getKey() }}">
@@ -186,6 +198,12 @@
                     <p style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600;">
                         {{ __('filament-accounting::fields.assigned_amount') }}: {{ $formattedAmount }}
                     </p>
+
+                    @if ($this->directAssignmentAmountMismatch())
+                        <p style="color: rgb(217 119 6); font-weight: 600;">
+                            {{ $this->directAssignmentConfirmationBody() }}
+                        </p>
+                    @endif
                 </div>
             </x-filament::section>
         @else

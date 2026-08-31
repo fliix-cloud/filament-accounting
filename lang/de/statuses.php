@@ -48,4 +48,21 @@ return [
         'active' => 'Aktiv',
         'inactive' => 'Inaktiv',
     ],
+    'amount_match' => [
+        'matched' => 'Beträge gleich',
+        'mismatch' => 'Betragsabweichung',
+    ],
+    'mandate_scheme' => [
+        'CORE' => 'CORE',
+        'B2B' => 'B2B',
+    ],
+    'mandate_type' => [
+        'one_off' => 'Einmalig',
+        'recurring' => 'Wiederkehrend',
+    ],
+    'mandate_status' => [
+        'active' => 'Aktiv',
+        'revoked' => 'Widerrufen',
+        'closed' => 'Beendet',
+    ],
 ];

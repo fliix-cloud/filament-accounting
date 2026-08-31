@@ -3,6 +3,7 @@
 namespace FilamentAccounting\Models;
 
 use FilamentAccounting\Enums\ReconciliationStatus;
+use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Models\Concerns\BelongsToLegalEntity;
 use FilamentAccounting\Support\HasUuid;
 use Illuminate\Database\Eloquent\Collection;
@@ -85,5 +86,34 @@ class Reconciliation extends AccountingModel
     public function splitSumMinor(): int
     {
         return (int) $this->splits()->sum('amount_minor');
+    }
+
+    public function amountMatches(): ?bool
+    {
+        $meta = $this->match_meta;
+        if (is_array($meta) && array_key_exists('amount_match', $meta)) {
+            return (bool) $meta['amount_match'];
+        }
+
+        if (($meta['mode'] ?? null) !== 'direct') {
+            return null;
+        }
+
+        $this->loadMissing(['splits.openItem', 'statementLine']);
+        if ($this->splits->count() !== 1) {
+            return null;
+        }
+
+        $split = $this->splits->first();
+        if (! $split instanceof ReconciliationSplit
+            || $split->purpose !== SplitPurpose::SettleOpenItem
+            || ! $split->openItem instanceof OpenItem
+            || ! $this->statementLine instanceof BankStatementLine) {
+            return null;
+        }
+
+        $remainingBefore = abs($split->openItem->remainingMinor()) + abs((int) $split->amount_minor);
+
+        return abs((int) $this->statementLine->amount_minor) === $remainingBefore;
     }
 }

@@ -8,7 +8,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property int $party_id
  * @property string|null $line1
+ * @property string|null $line2
+ * @property string|null $postal_code
  * @property string|null $city
+ * @property string|null $region
  * @property string|null $country_code
  * @property bool $is_primary
  */

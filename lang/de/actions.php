@@ -25,4 +25,5 @@ return [
     'open_bank_transaction' => 'Bankumsatz :amount vom :date öffnen',
     'view_assignment' => 'Zuordnung anzeigen',
     'preview' => 'Vorschau',
+    'add_bank_account' => 'Bankkonto hinzufügen',
 ];

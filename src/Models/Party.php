@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $external_reference
  * @property bool $is_active
  * @property-read Collection<int, PartyTaxId> $taxIds
+ * @property-read Collection<int, PartyBankAccount> $bankAccounts
  * @property-read LegalEntity $legalEntity
  */
 class Party extends AccountingModel
@@ -69,6 +70,11 @@ class Party extends AccountingModel
     public function taxIds(): HasMany
     {
         return $this->hasMany(PartyTaxId::class);
+    }
+
+    public function bankAccounts(): HasMany
+    {
+        return $this->hasMany(PartyBankAccount::class);
     }
 
     public function documents(): HasMany
