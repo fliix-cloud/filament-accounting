@@ -12,6 +12,7 @@ use Filament\Tables\Table;
 use FilamentAccounting\Enums\AccountType;
 use FilamentAccounting\Enums\NormalBalance;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\LedgerAccountResource\Pages\CreateLedgerAccount;
 use FilamentAccounting\Filament\Resources\LedgerAccountResource\Pages\EditLedgerAccount;
 use FilamentAccounting\Filament\Resources\LedgerAccountResource\Pages\ListLedgerAccounts;
@@ -28,6 +29,11 @@ class LedgerAccountResource extends Resource
     protected static ?int $navigationSort = 50;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::LEDGER;
+    }
 
     public static function getNavigationLabel(): string
     {

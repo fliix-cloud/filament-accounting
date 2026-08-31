@@ -6,6 +6,7 @@ use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\AuditEventResource\Pages\ListAuditEvents;
 use FilamentAccounting\Filament\Resources\AuditEventResource\Pages\ViewAuditEvent;
 use FilamentAccounting\Models\AuditEvent;
@@ -22,6 +23,11 @@ class AuditEventResource extends Resource
     protected static ?int $navigationSort = 99;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::ADMINISTRATION;
+    }
 
     public static function getNavigationLabel(): string
     {

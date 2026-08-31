@@ -10,6 +10,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\SupplierResource\Pages\CreateSupplier;
 use FilamentAccounting\Filament\Resources\SupplierResource\Pages\EditSupplier;
 use FilamentAccounting\Filament\Resources\SupplierResource\Pages\ListSuppliers;
@@ -27,6 +28,11 @@ class SupplierResource extends Resource
     protected static ?int $navigationSort = 21;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-truck';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::PURCHASES;
+    }
 
     public static function getNavigationLabel(): string
     {

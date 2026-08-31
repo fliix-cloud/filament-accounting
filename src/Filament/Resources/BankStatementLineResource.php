@@ -10,6 +10,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages\ListBankStatementLines;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages\ViewBankStatementLine;
@@ -32,6 +33,11 @@ class BankStatementLineResource extends Resource
     protected static ?int $navigationSort = 30;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::BANKING;
+    }
 
     public static function getNavigationLabel(): string
     {

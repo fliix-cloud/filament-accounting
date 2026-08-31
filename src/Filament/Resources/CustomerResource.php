@@ -20,6 +20,7 @@ use FilamentAccounting\Enums\PartyMandateScheme;
 use FilamentAccounting\Enums\PartyMandateStatus;
 use FilamentAccounting\Enums\PartyMandateType;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\CustomerResource\Pages\CreateCustomer;
 use FilamentAccounting\Filament\Resources\CustomerResource\Pages\EditCustomer;
 use FilamentAccounting\Filament\Resources\CustomerResource\Pages\ListCustomers;
@@ -38,6 +39,11 @@ class CustomerResource extends Resource
     protected static ?int $navigationSort = 20;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::SALES;
+    }
 
     public static function getNavigationLabel(): string
     {

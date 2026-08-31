@@ -10,6 +10,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Enums\JournalStatus;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\JournalEntryResource\Pages\ListJournalEntries;
 use FilamentAccounting\Filament\Resources\JournalEntryResource\Pages\ViewJournalEntry;
 use FilamentAccounting\Models\JournalEntry;
@@ -27,6 +28,11 @@ class JournalEntryResource extends Resource
     protected static ?int $navigationSort = 40;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-book-open';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::LEDGER;
+    }
 
     public static function getNavigationLabel(): string
     {
