@@ -445,7 +445,7 @@ Ein Draft speichert Splits, erzeugt aber weder Journal Entry noch Settlement. Be
 
 ### Phase 1 – UX und bestehende Semantik
 
-- [ ] Aus den zwei Row Actions eine Aktion „Zuordnen“ machen.
+- [x] Aus den zwei Row Actions eine Aktion „Zuordnen“ machen.
 - [ ] Wiederverwendbaren Reconciliation Workspace für Modal und Vollseite erstellen.
 - [ ] Transaktionskopf und vier fachliche Zuordnungsarten umsetzen.
 - [ ] Technische Ziele nach „Erweitert“ verschieben.
@@ -470,7 +470,7 @@ Ein Draft speichert Splits, erzeugt aber weder Journal Entry noch Settlement. Be
 
 ### Phase 3 – Deterministische Vorschläge verbessern
 
-- [ ] IBAN-Matching auf normalisierte `PartyBankAccount`-Daten umstellen.
+- [x] IBAN-Matching auf normalisierte `PartyBankAccount`-Daten umstellen.
 - [ ] Posting Rules als Kandidaten aufnehmen.
 - [ ] Score, Konfidenz, Abstand zum zweiten Treffer und Gründe modellieren.
 - [ ] Eindeutige Referenz vor Betrag und Historie priorisieren.

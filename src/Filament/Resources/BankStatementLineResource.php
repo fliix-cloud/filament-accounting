@@ -161,23 +161,11 @@ class BankStatementLineResource extends Resource
                     }),
             ])
             ->recordActions([
-                Action::make('assign')
-                    ->label(__('filament-accounting::actions.assign_directly'))
+                Action::make('reconcile')
+                    ->label(__('filament-accounting::actions.reconcile'))
                     ->icon('heroicon-o-link')
                     ->visible(fn (BankStatementLine $record): bool => ! ($record->activePostedReconciliation() instanceof Reconciliation))
-                    ->url(fn (BankStatementLine $record): string => ReconciliationPage::getUrl([
-                        'line' => $record->uuid,
-                        'mode' => 'direct',
-                    ])),
-                Action::make('split')
-                    ->label(__('filament-accounting::actions.split_transaction'))
-                    ->icon('heroicon-o-arrows-pointing-out')
-                    ->color('gray')
-                    ->visible(fn (BankStatementLine $record): bool => ! ($record->activePostedReconciliation() instanceof Reconciliation))
-                    ->url(fn (BankStatementLine $record): string => ReconciliationPage::getUrl([
-                        'line' => $record->uuid,
-                        'mode' => 'split',
-                    ])),
+                    ->url(fn (BankStatementLine $record): string => ReconciliationPage::getUrl(['line' => $record->uuid])),
                 Action::make('viewAssignment')
                     ->label(__('filament-accounting::actions.view_assignment'))
                     ->visible(fn (BankStatementLine $record): bool => $record->activePostedReconciliation() instanceof Reconciliation)
