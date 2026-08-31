@@ -68,6 +68,28 @@ class PartyResourceSeparationTest extends TestCase
     }
 
     #[Test]
+    public function the_same_business_can_be_an_independent_customer_and_supplier(): void
+    {
+        $entity = $this->makeEntity();
+        $sharedData = [
+            'legal_name' => 'Shared Business GmbH',
+            'email' => 'accounting@shared-business.example',
+        ];
+
+        $customer = $this->makeParty($entity, $sharedData);
+        $supplier = $this->makeParty($entity, array_merge($sharedData, [
+            'is_customer' => false,
+            'is_supplier' => true,
+        ]));
+
+        $this->assertNotSame($customer->getKey(), $supplier->getKey());
+        $this->assertTrue(CustomerResource::getEloquentQuery()->whereKey($customer->getKey())->exists());
+        $this->assertFalse(CustomerResource::getEloquentQuery()->whereKey($supplier->getKey())->exists());
+        $this->assertTrue(SupplierResource::getEloquentQuery()->whereKey($supplier->getKey())->exists());
+        $this->assertFalse(SupplierResource::getEloquentQuery()->whereKey($customer->getKey())->exists());
+    }
+
+    #[Test]
     public function edit_pages_discard_injected_role_changes(): void
     {
         $customer = (new class extends EditCustomer
