@@ -17,6 +17,7 @@ class CreateSupplier extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $data['legal_entity_id'] = app(LegalEntityScope::class)->require()->getKey();
+        $data['is_customer'] = false;
         $data['is_supplier'] = true;
 
         return $data;

@@ -18,6 +18,7 @@ class CreateCustomer extends CreateRecord
     {
         $data['legal_entity_id'] = app(LegalEntityScope::class)->require()->getKey();
         $data['is_customer'] = true;
+        $data['is_supplier'] = false;
 
         return $data;
     }

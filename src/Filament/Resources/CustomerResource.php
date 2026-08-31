@@ -74,8 +74,6 @@ class CustomerResource extends Resource
             TextInput::make('email')->label(__('filament-accounting::fields.email'))->email(),
             TextInput::make('phone')->label(__('filament-accounting::fields.phone')),
             TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->maxLength(2),
-            Toggle::make('is_customer')->label(__('filament-accounting::fields.is_customer'))->default(true),
-            Toggle::make('is_supplier')->label(__('filament-accounting::fields.is_supplier')),
             Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),
             Section::make(__('filament-accounting::fields.bank_accounts'))
                 ->description(__('filament-accounting::fields.bank_accounts_help'))
