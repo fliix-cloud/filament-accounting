@@ -10,6 +10,7 @@ use FilamentAccounting\Models\AccountingBankAccount;
 use FilamentAccounting\Models\BankImportRun;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\LegalEntity;
+use FilamentAccounting\Support\Sepa;
 use Illuminate\Support\Facades\DB;
 
 final class ImportBankStatementLines
@@ -53,7 +54,9 @@ final class ImportBankStatementLines
                     'value_date' => $data->valueDate,
                     'source_status' => StatementLineStatus::tryFrom($data->sourceStatus) ?? StatementLineStatus::Booked,
                     'counterparty_name' => $data->counterpartyName,
-                    'counterparty_iban' => $data->counterpartyIban,
+                    'counterparty_iban' => filled($data->counterpartyIban)
+                        ? Sepa::normalizeIban((string) $data->counterpartyIban)
+                        : null,
                     'counterparty_account' => $data->counterpartyAccount,
                     'purpose' => $data->purpose,
                     'end_to_end_id' => $data->endToEndId,
