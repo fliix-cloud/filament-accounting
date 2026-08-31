@@ -21,19 +21,17 @@
         .fac-details { border-top: 1px solid var(--fac-border); margin-top: .75rem; padding-top: .65rem; }
         .fac-details > summary, .fac-row-details > summary { color: rgb(var(--primary-600)); cursor: pointer; font-size: .75rem; font-weight: 600; list-style-position: inside; }
         .dark .fac-details > summary, .dark .fac-row-details > summary { color: rgb(var(--primary-400)); }
-        .fac-type-grid { background: #f3f4f6; border: 1px solid var(--fac-border, #d1d5db); border-radius: .65rem; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .25rem; padding: .25rem; }
-        .dark .fac-type-grid { background: rgb(var(--gray-900)); }
-        .fac-type { align-items: center; background: #fff; border: 1px solid #d1d5db; border-radius: .5rem; display: flex; gap: .55rem; min-height: 4.25rem; padding: .6rem .65rem; text-align: left; transition: background .15s, border-color .15s, box-shadow .15s; }
+        .fac-type-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+        .fac-type { align-items: center; background: #fff; border: 1px solid #d1d5db; border-radius: .5rem; display: flex; gap: .55rem; min-height: 4.25rem; padding: .6rem .65rem; text-align: left; transition: background .15s, border-color .15s; }
         .fac-type:hover { border-color: rgb(var(--primary-400)); }
-        .fac-type[aria-selected="true"] { background: #2563eb; border-color: #1d4ed8; box-shadow: 0 0 0 3px #93c5fd; color: #fff; }
-        .fac-type[aria-selected="true"]::after { content: '✓'; font-size: 1rem; font-weight: 800; margin-left: auto; }
+        .fac-type[aria-selected="true"] { background: #eff6ff; border-color: #2563eb; border-width: 2px; color: #1e3a8a; }
         .dark .fac-type { background: #1f2937; border-color: #4b5563; }
-        .dark .fac-type[aria-selected="true"] { background: #60a5fa; border-color: #2563eb; color: #0f172a; }
+        .dark .fac-type[aria-selected="true"] { background: #172554; border-color: #60a5fa; color: #dbeafe; }
         .fac-type-icon { flex: 0 0 auto; height: 1.5rem; width: 1.5rem; }
         .fac-type-copy { display: grid; gap: .25rem; }
         .fac-type-copy small, .fac-muted, .fac-reasons, .fac-date-line { color: rgb(var(--gray-500)); font-size: .75rem; }
-        .fac-type[aria-selected="true"] .fac-type-copy small { color: #dbeafe; }
-        .fac-type-active { font-size: .65rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+        .fac-type[aria-selected="true"] .fac-type-copy small { color: #1d4ed8; }
+        .dark .fac-type[aria-selected="true"] .fac-type-copy small { color: #bfdbfe; }
         .fac-date-line, .fac-reasons { display: block; }
         .fac-toolbar { align-items: end; display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
         .fac-toolbar-search { flex: 1 1 18rem; }
@@ -162,7 +160,6 @@
                         <button type="button" class="fac-type" role="tab" aria-selected="{{ $this->assignmentType === $type ? 'true' : 'false' }}" wire:click="selectAssignmentType('{{ $type }}')">
                             <x-filament::icon :icon="$icon" class="fac-type-icon" />
                             <span class="fac-type-copy"><strong>{{ __('filament-accounting::fields.assignment_types.'.$type) }}</strong><small>{{ __('filament-accounting::fields.assignment_type_help.'.$type) }}</small></span>
-                            @if ($this->assignmentType === $type)<span class="fac-type-active">{{ __('filament-accounting::fields.active') }}</span>@endif
                         </button>
                     @endforeach
                 </div>

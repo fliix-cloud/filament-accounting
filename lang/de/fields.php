@@ -129,7 +129,6 @@ return [
     'no_suggestion' => 'Kein spezifischer Treffer',
     'no_invoice_candidates' => 'Keine Rechnung passt zu Suche und Filtern.',
     'selected' => 'Ausgewählt',
-    'active' => 'Aktiv',
     'show_details' => 'Details',
     'partial_payment_notice' => 'Die Zahlung von :payment liegt unter dem offenen Betrag von :open. Die Buchung erfasst direkt eine Teilzahlung; eine Splittbuchung ist nicht erforderlich.',
     'posting_rule_selection_help' => 'Angezeigt werden nur aktive Regeln, die für Mandant, Buchungsdatum und Umsatzrichtung gültig sind.',

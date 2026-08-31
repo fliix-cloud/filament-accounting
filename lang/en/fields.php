@@ -129,7 +129,6 @@ return [
     'no_suggestion' => 'No specific match',
     'no_invoice_candidates' => 'No invoices match the current search and filters.',
     'selected' => 'Selected',
-    'active' => 'Active',
     'show_details' => 'Details',
     'partial_payment_notice' => 'The payment of :payment is below the open amount of :open. Posting records a direct partial payment; no split is needed.',
     'posting_rule_selection_help' => 'Only active rules valid for the tenant, booking date, and transaction direction are shown.',
