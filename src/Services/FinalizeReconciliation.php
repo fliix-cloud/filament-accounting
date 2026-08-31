@@ -330,6 +330,11 @@ final class FinalizeReconciliation
                 throw new ReconciliationException(__('filament-accounting::errors.allocation_currency_mismatch'));
             }
 
+            $expectedKind = $amount > 0 ? OpenItemKind::Receivable : OpenItemKind::Payable;
+            if ($item->kind !== $expectedKind) {
+                throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_target'));
+            }
+
             if (abs($amount) > abs($item->remainingMinor())) {
                 throw new ReconciliationException(__('filament-accounting::errors.settlement_exceeds_remaining'));
             }

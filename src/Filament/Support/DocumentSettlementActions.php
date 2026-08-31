@@ -3,7 +3,7 @@
 namespace FilamentAccounting\Filament\Support;
 
 use Filament\Actions\Action;
-use FilamentAccounting\Filament\Resources\BankStatementLineResource;
+use FilamentAccounting\Filament\Pages\ReconciliationPage;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\Settlement;
 use FilamentAccounting\Support\MoneyFormatter;
@@ -21,7 +21,7 @@ final class DocumentSettlementActions
                 }
 
                 try {
-                    $url = BankStatementLineResource::getUrl('view', ['record' => $line]);
+                    $url = ReconciliationPage::getUrl(['line' => $line->uuid]);
                 } catch (\Throwable) {
                     return null;
                 }

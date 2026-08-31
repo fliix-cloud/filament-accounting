@@ -9,6 +9,7 @@ use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Enums\OpenItemKind;
 use FilamentAccounting\Enums\SplitPurpose;
+use FilamentAccounting\Exceptions\InvalidMoneyException;
 use FilamentAccounting\Exceptions\ReconciliationException;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
@@ -134,10 +135,29 @@ class ReconciliationPage extends Page
 
         $sum = 0;
         foreach ($this->allocations as $allocation) {
-            $sum += $this->minorFromInput($allocation['amount'] ?? null, $line->currency, false);
+            $amount = $this->minorFromInput($allocation['amount'] ?? null, $line->currency);
+            if ($amount !== null) {
+                $sum += $amount;
+            }
         }
 
         return (int) $line->amount_minor - $sum;
+    }
+
+    public function hasInvalidAllocationAmounts(): bool
+    {
+        $line = $this->statementLine();
+        if (! $line) {
+            return true;
+        }
+
+        foreach ($this->allocations as $allocation) {
+            if ($this->minorFromInput($allocation['amount'] ?? null, $line->currency) === null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function chooseOpenItem(int $openItemId): void
@@ -342,13 +362,20 @@ class ReconciliationPage extends Page
 
         $this->allocations[] = [
             'purpose' => $this->directPurpose,
-            'amount' => ExactMoney::ofMinor((int) $line->amount_minor, $line->currency)->decimalString(),
+            'amount' => '',
             'open_item_id' => $this->directOpenItemId,
             'posting_rule_version_id' => $this->directPostingRuleVersionId,
             'ledger_account_id' => $this->directLedgerAccountId,
             'reason' => $this->directReason,
         ];
-        $this->addAllocation();
+        $this->allocations[] = [
+            'purpose' => SplitPurpose::SettleOpenItem->value,
+            'amount' => '',
+            'open_item_id' => null,
+            'posting_rule_version_id' => null,
+            'ledger_account_id' => null,
+            'reason' => null,
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -372,10 +399,14 @@ class ReconciliationPage extends Page
     {
         return array_map(function (array $allocation) use ($line): array {
             $purpose = SplitPurpose::tryFrom((string) ($allocation['purpose'] ?? ''));
+            $amountMinor = $this->minorFromInput($allocation['amount'] ?? null, $line->currency);
+            if ($amountMinor === null) {
+                throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_amount'));
+            }
 
             return [
                 'purpose' => $allocation['purpose'] ?? null,
-                'amount_minor' => $this->minorFromInput($allocation['amount'] ?? null, $line->currency, true),
+                'amount_minor' => $amountMinor,
                 'open_item_id' => $purpose === SplitPurpose::SettleOpenItem
                     ? ($allocation['open_item_id'] ?? null)
                     : null,
@@ -390,7 +421,7 @@ class ReconciliationPage extends Page
         }, $this->allocations);
     }
 
-    private function minorFromInput(mixed $amount, string $currency, bool $throw): int
+    private function minorFromInput(mixed $amount, string $currency): ?int
     {
         try {
             $value = trim((string) $amount);
@@ -399,12 +430,8 @@ class ReconciliationPage extends Page
             }
 
             return ExactMoney::ofString($value, $currency)->minorAmount;
-        } catch (\Throwable $exception) {
-            if ($throw) {
-                throw $exception;
-            }
-
-            return 0;
+        } catch (InvalidMoneyException) {
+            return null;
         }
     }
 
@@ -521,14 +548,18 @@ class ReconciliationPage extends Page
 
     private function failure(\Throwable $exception): void
     {
-        if (! ($exception instanceof ReconciliationException)) {
+        $notification = Notification::make()
+            ->danger()
+            ->title(__('filament-accounting::notifications.reconciliation_failed'));
+
+        if ($exception instanceof ReconciliationException) {
+            $notification->body($exception->getMessage());
+        } elseif ($exception instanceof InvalidMoneyException) {
+            $notification->body(__('filament-accounting::errors.invalid_allocation_amount'));
+        } else {
             report($exception);
         }
 
-        Notification::make()
-            ->danger()
-            ->title(__('filament-accounting::notifications.reconciliation_failed'))
-            ->body($exception->getMessage())
-            ->send();
+        $notification->send();
     }
 }

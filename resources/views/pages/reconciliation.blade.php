@@ -193,7 +193,7 @@
                 <x-slot name="heading">{{ __('filament-accounting::fields.split_transaction') }}</x-slot>
                 <x-slot name="description">{{ __('filament-accounting::fields.split_transaction_help') }}</x-slot>
 
-                <p style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: {{ $this->remainingMinor() === 0 ? 'rgb(22 163 74)' : 'rgb(220 38 38)' }};">
+                <p style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: {{ ! $this->hasInvalidAllocationAmounts() && $this->remainingMinor() === 0 ? 'rgb(22 163 74)' : 'rgb(220 38 38)' }};">
                     {{ __('filament-accounting::fields.remaining') }}: {{ $remaining }}
                 </p>
                 <p style="margin-top: 0.5rem; font-size: 0.875rem; color: rgb(100 116 139);">

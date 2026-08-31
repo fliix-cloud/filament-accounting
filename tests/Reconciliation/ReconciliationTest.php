@@ -8,6 +8,8 @@ use FilamentAccounting\Enums\ReconciliationStatus;
 use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Enums\StatementLineStatus;
 use FilamentAccounting\Exceptions\ReconciliationException;
+use FilamentAccounting\Filament\Pages\ReconciliationPage;
+use FilamentAccounting\Filament\Support\DocumentSettlementActions;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\PostingRule;
 use FilamentAccounting\Services\AssignStatementLine;
@@ -53,6 +55,14 @@ class ReconciliationTest extends TestCase
         $this->assertSame(PaymentStatus::PartiallyPaid, $invoice->fresh('openItem.settlements')->paymentStatus());
         $settlement = $invoice->fresh('settlements.reconciliation.statementLine')->settlements->sole();
         $this->assertTrue($settlement->reconciliation->statementLine->is($line));
+
+        filament()->setCurrentPanel(filament()->getPanel('admin'));
+        $actions = DocumentSettlementActions::make($invoice->fresh('settlements.reconciliation.statementLine'));
+        $this->assertCount(1, $actions);
+        $this->assertStringContainsString(
+            'accounting/reconcile?line='.$line->uuid,
+            (string) $actions[0]->getUrl(),
+        );
     }
 
     #[Test]
@@ -65,6 +75,84 @@ class ReconciliationTest extends TestCase
             'amount_minor' => 100,
             'reason' => 'single target',
         ]]);
+    }
+
+    #[Test]
+    public function split_editor_starts_incomplete_and_does_not_treat_blank_amounts_as_zero(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $bank = $this->makeBankAccount($entity);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('split-editor', 1000, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
+        ]);
+        $line = BankStatementLine::query()->where('external_id', 'split-editor')->firstOrFail();
+
+        $page = new ReconciliationPage;
+        $page->line = $line->uuid;
+        $page->switchToSplit();
+
+        $this->assertSame(['', ''], array_column($page->allocations, 'amount'));
+        $this->assertSame(1000, $page->remainingMinor());
+        $this->assertTrue($page->hasInvalidAllocationAmounts());
+
+        $page->allocations[0]['amount'] = '10.00';
+        $this->assertSame(0, $page->remainingMinor());
+        $this->assertTrue($page->hasInvalidAllocationAmounts());
+    }
+
+    #[Test]
+    public function direct_assignment_rejects_open_items_with_the_opposite_payment_direction(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+        $supplier = $this->makeParty($entity, [
+            'is_customer' => false,
+            'is_supplier' => true,
+            'legal_name' => 'Vendor GmbH',
+        ]);
+        $bank = $this->makeBankAccount($entity);
+        $invoice = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-01',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'Receivable', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+        ]);
+        $bill = app(RegisterPurchaseInvoice::class)->handle($entity, [
+            'party_id' => $supplier->getKey(),
+            'supplier_invoice_number' => 'DIRECTION-1',
+            'issue_date' => '2026-03-01',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'Payable', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+        ]);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('wrong-incoming', 1190, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
+            new BankStatementLineData('wrong-outgoing', -1190, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
+        ]);
+
+        $cases = [
+            ['wrong-incoming', $bill->openItem->getKey()],
+            ['wrong-outgoing', $invoice->openItem->getKey()],
+        ];
+
+        foreach ($cases as [$externalId, $openItemId]) {
+            try {
+                app(AssignStatementLine::class)->handle(
+                    BankStatementLine::query()->where('external_id', $externalId)->firstOrFail(),
+                    [
+                        'purpose' => SplitPurpose::SettleOpenItem->value,
+                        'open_item_id' => $openItemId,
+                    ],
+                );
+                $this->fail('Expected an opposite-direction open item to be rejected.');
+            } catch (ReconciliationException $exception) {
+                $this->assertSame(
+                    __('filament-accounting::errors.invalid_allocation_target'),
+                    $exception->getMessage(),
+                );
+            }
+        }
     }
 
     #[Test]
