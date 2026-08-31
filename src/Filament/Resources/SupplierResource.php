@@ -60,8 +60,6 @@ class SupplierResource extends Resource
             TextInput::make('display_name')->label(__('filament-accounting::fields.display_name')),
             TextInput::make('email')->label(__('filament-accounting::fields.email'))->email(),
             TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->maxLength(2),
-            Toggle::make('is_supplier')->label(__('filament-accounting::fields.is_supplier'))->default(true),
-            Toggle::make('is_customer')->label(__('filament-accounting::fields.is_customer')),
             Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),
         ]);
     }
