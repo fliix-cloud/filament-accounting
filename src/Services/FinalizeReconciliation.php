@@ -200,6 +200,10 @@ final class FinalizeReconciliation
         $meta = [
             'mode' => count($allocations) === 1 ? 'direct' : 'split',
             'allocation_count' => count($allocations),
+            'decision_sources' => array_values(array_unique(array_map(
+                fn (array $allocation): string => (string) ($allocation['selection_source'] ?? 'manual'),
+                $allocations,
+            ))),
         ];
 
         if (count($allocations) !== 1) {
@@ -207,6 +211,10 @@ final class FinalizeReconciliation
         }
 
         $allocation = $allocations[0];
+        $meta['selection_source'] = (string) ($allocation['selection_source'] ?? 'manual');
+        if (isset($allocation['suggestion_score'])) {
+            $meta['suggestion_score'] = (int) $allocation['suggestion_score'];
+        }
         $purpose = $allocation['purpose'] ?? null;
         if (! $purpose instanceof SplitPurpose) {
             $purpose = SplitPurpose::tryFrom((string) $purpose);
@@ -253,6 +261,7 @@ final class FinalizeReconciliation
         }
 
         $normalized = [];
+        $openItemTargets = [];
 
         foreach ($allocations as $input) {
             $purpose = SplitPurpose::tryFrom((string) ($input['purpose'] ?? ''));
@@ -270,6 +279,10 @@ final class FinalizeReconciliation
                 throw new ReconciliationException(__('filament-accounting::errors.zero_allocation'));
             }
 
+            if (($line->amount_minor > 0 && $amount < 0) || ($line->amount_minor < 0 && $amount > 0)) {
+                throw new ReconciliationException(__('filament-accounting::errors.allocation_sign_mismatch'));
+            }
+
             $openItemId = $this->targetId($input['open_item_id'] ?? null);
             $postingRuleVersionId = $this->targetId($input['posting_rule_version_id'] ?? null);
             $ledgerAccountId = $this->targetId($input['ledger_account_id'] ?? null);
@@ -285,6 +298,21 @@ final class FinalizeReconciliation
                 $ledgerAccountId,
             );
 
+            if ($purpose === SplitPurpose::SettleOpenItem && $openItemId !== null) {
+                if (in_array($openItemId, $openItemTargets, true)) {
+                    throw new ReconciliationException(__('filament-accounting::errors.duplicate_open_item_allocation'));
+                }
+
+                $openItemTargets[] = $openItemId;
+            }
+
+            $selectionSource = in_array(($input['selection_source'] ?? null), ['manual', 'suggestion_confirmed'], true)
+                ? (string) $input['selection_source']
+                : 'manual';
+            $suggestionScore = isset($input['suggestion_score']) && is_numeric($input['suggestion_score'])
+                ? max(0, (int) $input['suggestion_score'])
+                : null;
+
             $normalized[] = [
                 'purpose' => $purpose,
                 'amount_minor' => $amount,
@@ -292,6 +320,8 @@ final class FinalizeReconciliation
                 'posting_rule_version_id' => $postingRuleVersionId,
                 'ledger_account_id' => $ledgerAccountId,
                 'reason' => $reason,
+                'selection_source' => $selectionSource,
+                'suggestion_score' => $suggestionScore,
             ];
         }
 

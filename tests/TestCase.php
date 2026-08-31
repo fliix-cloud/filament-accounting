@@ -25,6 +25,7 @@ use FilamentAccounting\Tests\Fixtures\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Livewire\LivewireServiceProvider;
+use Livewire\Mechanisms\DataStore;
 use Orchestra\Testbench\TestCase as Orchestra;
 use Workbench\App\Providers\Filament\AdminPanelProvider;
 
@@ -39,6 +40,7 @@ abstract class TestCase extends Orchestra
         config()->set('auth.providers.users.model', User::class);
         config()->set('filament-accounting.ownership.required', true);
         config()->set('filament-accounting.storage.disk', 'local');
+        $this->app->instance(DataStore::class, new DataStore);
     }
 
     protected function getPackageProviders($app): array

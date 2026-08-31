@@ -10,6 +10,7 @@ use FilamentAccounting\Enums\StatementLineStatus;
 use FilamentAccounting\Exceptions\ReconciliationException;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
 use FilamentAccounting\Filament\Support\DocumentSettlementActions;
+use FilamentAccounting\Livewire\ReconciliationAssistant;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\PostingRule;
 use FilamentAccounting\Services\AssignStatementLine;
@@ -21,6 +22,7 @@ use FilamentAccounting\Services\ReverseReconciliation;
 use FilamentAccounting\Services\SplitStatementLine;
 use FilamentAccounting\Services\SuggestReconciliationMatches;
 use FilamentAccounting\Tests\TestCase;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 
 class ReconciliationTest extends TestCase
@@ -80,7 +82,52 @@ class ReconciliationTest extends TestCase
     }
 
     #[Test]
-    public function split_editor_starts_incomplete_and_does_not_treat_blank_amounts_as_zero(): void
+    public function split_allocations_reject_wrong_signs_and_duplicate_invoice_targets_server_side(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+        $bank = $this->makeBankAccount($entity);
+        $invoice = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-01',
+            'currency' => 'EUR',
+            'lines' => [['description' => 'Duplicate target', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+        ]);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('wrong-sign-split', 100, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
+            new BankStatementLineData('duplicate-target-split', 1190, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
+        ]);
+
+        try {
+            app(SplitStatementLine::class)->handle(
+                BankStatementLine::query()->where('external_id', 'wrong-sign-split')->firstOrFail(),
+                [
+                    ['purpose' => SplitPurpose::BankFee->value, 'amount_minor' => -1],
+                    ['purpose' => SplitPurpose::BankFee->value, 'amount_minor' => 101],
+                ],
+            );
+            $this->fail('Expected a wrong-sign split to be rejected.');
+        } catch (ReconciliationException $exception) {
+            $this->assertSame(__('filament-accounting::errors.allocation_sign_mismatch'), $exception->getMessage());
+        }
+
+        try {
+            app(SplitStatementLine::class)->handle(
+                BankStatementLine::query()->where('external_id', 'duplicate-target-split')->firstOrFail(),
+                [
+                    ['purpose' => SplitPurpose::SettleOpenItem->value, 'amount_minor' => 500, 'open_item_id' => $invoice->openItem->getKey()],
+                    ['purpose' => SplitPurpose::SettleOpenItem->value, 'amount_minor' => 690, 'open_item_id' => $invoice->openItem->getKey()],
+                ],
+            );
+            $this->fail('Expected a duplicate invoice target to be rejected.');
+        } catch (ReconciliationException $exception) {
+            $this->assertSame(__('filament-accounting::errors.duplicate_open_item_allocation'), $exception->getMessage());
+        }
+    }
+
+    #[Test]
+    public function split_assistant_starts_incomplete_and_does_not_treat_blank_amounts_as_zero(): void
     {
         $entity = $this->makeEntity();
         $this->actingAs($this->makeUser());
@@ -90,17 +137,14 @@ class ReconciliationTest extends TestCase
         ]);
         $line = BankStatementLine::query()->where('external_id', 'split-editor')->firstOrFail();
 
-        $page = new ReconciliationPage;
-        $page->line = $line->uuid;
-        $page->switchToSplit();
-
-        $this->assertSame(['', ''], array_column($page->allocations, 'amount'));
-        $this->assertSame(1000, $page->remainingMinor());
-        $this->assertTrue($page->hasInvalidAllocationAmounts());
-
-        $page->allocations[0]['amount'] = '10.00';
-        $this->assertSame(0, $page->remainingMinor());
-        $this->assertTrue($page->hasInvalidAllocationAmounts());
+        Livewire::test(ReconciliationAssistant::class, ['line' => $line->uuid])
+            ->call('selectAssignmentType', 'split')
+            ->assertSet('allocations.0.amount', '')
+            ->assertSet('allocations.1.amount', '')
+            ->assertSee(__('filament-accounting::errors.invalid_allocation_amount'))
+            ->set('allocations.0.amount', '10.00')
+            ->assertSet('allocations.0.amount', '10.00')
+            ->assertSee(__('filament-accounting::errors.invalid_allocation_amount'));
     }
 
     #[Test]
@@ -110,7 +154,7 @@ class ReconciliationTest extends TestCase
     }
 
     #[Test]
-    public function direct_assignment_warns_when_the_transaction_does_not_match_the_open_amount(): void
+    public function direct_assignment_explains_a_partial_payment_before_posting(): void
     {
         $entity = $this->makeEntity();
         $this->actingAs($this->makeUser());
@@ -127,14 +171,13 @@ class ReconciliationTest extends TestCase
         ]);
         $line = BankStatementLine::query()->where('external_id', 'warn-partial')->firstOrFail();
 
-        $page = new ReconciliationPage;
-        $page->line = $line->uuid;
-        $page->directPurpose = SplitPurpose::SettleOpenItem->value;
-        $page->directOpenItemId = (string) $invoice->openItem->getKey();
-
-        $this->assertTrue($page->directAssignmentAmountMismatch());
-        $this->assertNotNull($page->directAssignmentConfirmationBody());
-        $this->assertStringContainsString('3.00', (string) $page->directAssignmentConfirmationBody());
+        Livewire::test(ReconciliationAssistant::class, ['line' => $line->uuid])
+            ->call('selectAssignmentType', 'sales_invoice')
+            ->call('selectOpenItem', $invoice->openItem->getKey())
+            ->assertSee(__('filament-accounting::fields.partial_payment_notice', [
+                'payment' => '3.00 EUR',
+                'open' => '1190.00 EUR',
+            ]));
     }
 
     #[Test]
