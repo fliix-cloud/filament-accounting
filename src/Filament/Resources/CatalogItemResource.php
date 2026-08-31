@@ -11,6 +11,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Enums\CatalogItemType;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\CatalogItemResource\Pages\CreateCatalogItem;
 use FilamentAccounting\Filament\Resources\CatalogItemResource\Pages\EditCatalogItem;
 use FilamentAccounting\Filament\Resources\CatalogItemResource\Pages\ListCatalogItems;
@@ -27,6 +28,11 @@ class CatalogItemResource extends Resource
     protected static ?int $navigationSort = 22;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cube';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::SALES;
+    }
 
     public static function getNavigationLabel(): string
     {

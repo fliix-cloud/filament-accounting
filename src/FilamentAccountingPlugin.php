@@ -8,6 +8,7 @@ use FilamentAccounting\Contracts\BankFeedDriver;
 use FilamentAccounting\Contracts\BankFeedDriverRegistry;
 use FilamentAccounting\Filament\Pages\AccountingOverview;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\AuditEventResource;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\CatalogItemResource;
@@ -243,6 +244,7 @@ class FilamentAccountingPlugin implements Plugin
         }
 
         $panel
+            ->navigationItems(AccountingNavigation::items())
             ->pages($pages)
             ->resources($resources);
     }

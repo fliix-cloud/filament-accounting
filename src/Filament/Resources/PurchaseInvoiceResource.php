@@ -12,6 +12,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\CreatePurchaseInvoice;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ListPurchaseInvoices;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ViewPurchaseInvoice;
@@ -31,6 +32,11 @@ class PurchaseInvoiceResource extends Resource
     protected static ?int $navigationSort = 11;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-inbox-arrow-down';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::PURCHASES;
+    }
 
     public static function getNavigationLabel(): string
     {

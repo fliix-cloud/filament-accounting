@@ -14,6 +14,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\CreateSalesInvoice;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\EditSalesInvoice;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\ListSalesInvoices;
@@ -36,6 +37,11 @@ class SalesInvoiceResource extends Resource
     protected static ?int $navigationSort = 10;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::SALES;
+    }
 
     public static function getNavigationLabel(): string
     {

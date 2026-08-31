@@ -2,6 +2,13 @@
 
 return [
     'group' => 'Accounting',
+    'sections' => [
+        'sales' => 'Sales',
+        'purchases' => 'Purchases',
+        'banking' => 'Banking & reconciliation',
+        'ledger' => 'General ledger',
+        'administration' => 'Administration',
+    ],
     'overview' => 'Overview',
     'customers' => 'Customers',
     'suppliers' => 'Suppliers',

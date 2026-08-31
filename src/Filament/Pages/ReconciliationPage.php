@@ -11,6 +11,7 @@ use FilamentAccounting\Enums\OpenItemKind;
 use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Exceptions\InvalidMoneyException;
 use FilamentAccounting\Exceptions\ReconciliationException;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
@@ -64,6 +65,11 @@ class ReconciliationPage extends Page
     public array $allocations = [];
 
     public ?string $exceptionReason = null;
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::BANKING;
+    }
 
     public static function getNavigationLabel(): string
     {

@@ -10,6 +10,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\PostingRuleResource\Pages\CreatePostingRule;
 use FilamentAccounting\Filament\Resources\PostingRuleResource\Pages\EditPostingRule;
 use FilamentAccounting\Filament\Resources\PostingRuleResource\Pages\ListPostingRules;
@@ -26,6 +27,11 @@ class PostingRuleResource extends Resource
     protected static ?int $navigationSort = 51;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-adjustments-horizontal';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::LEDGER;
+    }
 
     public static function getNavigationLabel(): string
     {

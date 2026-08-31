@@ -2,6 +2,13 @@
 
 return [
     'group' => 'Buchhaltung',
+    'sections' => [
+        'sales' => 'Verkauf',
+        'purchases' => 'Einkauf',
+        'banking' => 'Bank & Zuordnung',
+        'ledger' => 'Finanzbuchhaltung',
+        'administration' => 'Verwaltung',
+    ],
     'overview' => 'Übersicht',
     'customers' => 'Kunden',
     'suppliers' => 'Lieferanten',

@@ -10,6 +10,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Enums\LegalEntityState;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\LegalEntityResource\Pages\CreateLegalEntity;
 use FilamentAccounting\Filament\Resources\LegalEntityResource\Pages\EditLegalEntity;
 use FilamentAccounting\Filament\Resources\LegalEntityResource\Pages\ListLegalEntities;
@@ -26,6 +27,11 @@ class LegalEntityResource extends Resource
     protected static ?int $navigationSort = 90;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-office-2';
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::ADMINISTRATION;
+    }
 
     public static function getNavigationLabel(): string
     {
