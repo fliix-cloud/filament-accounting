@@ -17,11 +17,13 @@ use FilamentAccounting\Contracts\ReconciliationMatcher;
 use FilamentAccounting\Documents\ZugferdEInvoiceAdapter;
 use FilamentAccounting\Export\GenericJournalCsvExporter;
 use FilamentAccounting\Ledger\FirstPartyLedgerEngine;
+use FilamentAccounting\Livewire\ReconciliationAssistant;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Reconciliation\DeterministicReconciliationMatcher;
 use FilamentAccounting\Support\BankFeedRegistry;
 use FilamentAccounting\Support\BankSourceLinkRegistry;
 use Illuminate\Support\Facades\Gate;
+use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -95,6 +97,7 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         $this->registerPackageTranslations();
+        Livewire::component('filament-accounting.reconciliation-assistant', ReconciliationAssistant::class);
 
         foreach (config('filament-accounting.authorization.abilities', []) as $ability) {
             if (! Gate::has($ability)) {

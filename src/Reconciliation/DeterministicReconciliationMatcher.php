@@ -3,10 +3,12 @@
 namespace FilamentAccounting\Reconciliation;
 
 use FilamentAccounting\Contracts\ReconciliationMatcher;
+use FilamentAccounting\Enums\ReconciliationStatus;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\OpenItem;
 use FilamentAccounting\Models\PartyBankAccount;
+use FilamentAccounting\Models\Reconciliation;
 use FilamentAccounting\Reconciliation\Data\MatchSuggestion;
 use FilamentAccounting\Support\Sepa;
 use Illuminate\Support\Carbon;
@@ -27,6 +29,7 @@ final class DeterministicReconciliationMatcher implements ReconciliationMatcher
         $counterpartyIban = filled($line->counterparty_iban)
             ? Sepa::normalizeIban((string) $line->counterparty_iban)
             : null;
+        $historicalPartyIds = $this->historicalPartyIds($line, $counterpartyIban);
         $scored = [];
 
         foreach ($items as $item) {
@@ -73,6 +76,11 @@ final class DeterministicReconciliationMatcher implements ReconciliationMatcher
                 $reasons[] = 'iban';
             }
 
+            if ($item->party_id && in_array((int) $item->party_id, $historicalPartyIds, true)) {
+                $score += 25;
+                $reasons[] = 'history';
+            }
+
             $name = Str::lower((string) ($item->party?->displayLabel() ?? ''));
             $counterparty = Str::lower((string) $line->counterparty_name);
             if ($name !== '' && $counterparty !== '' && (str_contains($counterparty, $name) || str_contains($name, $counterparty))) {
@@ -115,5 +123,50 @@ final class DeterministicReconciliationMatcher implements ReconciliationMatcher
         }
 
         return $scored;
+    }
+
+    /** @return list<int> */
+    private function historicalPartyIds(BankStatementLine $line, ?string $counterpartyIban): array
+    {
+        $counterpartyName = $this->normalizedName((string) $line->counterparty_name);
+
+        return Reconciliation::query()
+            ->where('legal_entity_id', $line->legal_entity_id)
+            ->where('status', ReconciliationStatus::Posted)
+            ->where('statement_line_id', '!=', $line->getKey())
+            ->with(['statementLine', 'splits.openItem'])
+            ->orderByDesc('finalized_at')
+            ->limit(200)
+            ->get()
+            ->filter(function (Reconciliation $reconciliation) use ($counterpartyIban, $counterpartyName): bool {
+                $historicalLine = $reconciliation->statementLine;
+                if (! $historicalLine instanceof BankStatementLine) {
+                    return false;
+                }
+
+                $ibanMatches = $counterpartyIban !== null
+                    && filled($historicalLine->counterparty_iban)
+                    && Sepa::normalizeIban((string) $historicalLine->counterparty_iban) === $counterpartyIban;
+                $nameMatches = $counterpartyName !== ''
+                    && $this->normalizedName((string) $historicalLine->counterparty_name) === $counterpartyName;
+
+                return $ibanMatches || $nameMatches;
+            })
+            ->flatMap(fn (Reconciliation $reconciliation) => $reconciliation->splits)
+            ->map(fn ($split): ?int => $split->openItem?->party_id ? (int) $split->openItem->party_id : null)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function normalizedName(string $name): string
+    {
+        return Str::of($name)
+            ->lower()
+            ->ascii()
+            ->replaceMatches('/[^a-z0-9]+/', ' ')
+            ->squish()
+            ->toString();
     }
 }

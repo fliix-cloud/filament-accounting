@@ -5,6 +5,7 @@ namespace FilamentAccounting\Filament\Resources;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -20,6 +21,7 @@ use FilamentAccounting\Models\Reconciliation;
 use FilamentAccounting\Models\ReconciliationSplit;
 use FilamentAccounting\Support\BankSourceLinkRegistry;
 use FilamentAccounting\Support\MoneyFormatter;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 
 class BankStatementLineResource extends Resource
@@ -165,7 +167,20 @@ class BankStatementLineResource extends Resource
                     ->label(__('filament-accounting::actions.reconcile'))
                     ->icon('heroicon-o-link')
                     ->visible(fn (BankStatementLine $record): bool => ! ($record->activePostedReconciliation() instanceof Reconciliation))
-                    ->url(fn (BankStatementLine $record): string => ReconciliationPage::getUrl(['line' => $record->uuid])),
+                    ->modalHeading(__('filament-accounting::fields.reconciliation_assistant'))
+                    ->modalDescription(__('filament-accounting::fields.reconciliation_assistant_help'))
+                    ->modalWidth(Width::ScreenTwoExtraLarge)
+                    ->stickyModalHeader()
+                    ->closeModalByClickingAway(false)
+                    ->modalSubmitAction(false)
+                    ->modalCancelAction(false)
+                    ->modalContent(fn (BankStatementLine $record): View => view(
+                        'filament-accounting::components.reconciliation-modal',
+                        [
+                            'line' => $record->uuid,
+                            'fallbackUrl' => ReconciliationPage::getUrl(['line' => $record->uuid]),
+                        ],
+                    )),
                 Action::make('viewAssignment')
                     ->label(__('filament-accounting::actions.view_assignment'))
                     ->visible(fn (BankStatementLine $record): bool => $record->activePostedReconciliation() instanceof Reconciliation)

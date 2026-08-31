@@ -3,6 +3,7 @@
 namespace FilamentAccounting\Tests\Filament;
 
 use Filament\Actions\Action;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Table;
 use FilamentAccounting\Banking\Data\BankStatementLineData;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
@@ -53,9 +54,16 @@ class BankStatementLineResourceTest extends TestCase
 
         $this->assertTrue($reconcile->isVisible());
         $this->assertSame(__('filament-accounting::actions.reconcile'), $reconcile->getLabel());
+        $this->assertNull($reconcile->getUrl());
+        $this->assertTrue($reconcile->shouldOpenModal());
+        $this->assertSame(Width::ScreenTwoExtraLarge, $reconcile->getModalWidth());
+
+        $content = $reconcile->getModalContent();
+        $this->assertNotNull($content);
+        $this->assertSame($line->uuid, $content->getData()['line']);
         $this->assertSame(
             ReconciliationPage::getUrl(['line' => $line->uuid]),
-            $reconcile->getUrl(),
+            $content->getData()['fallbackUrl'],
         );
     }
 }
