@@ -11,6 +11,12 @@
 
 ---
 
+## Umsetzungsfortschritt nach der Bestandsaufnahme
+
+Die Bestandsaufnahme in Abschnitt 4 beschreibt den dort festgehaltenen Ausgangsstand. Seitdem wurden im Accounting-Paket eine kanonische SHA-256-Audit-Kette je Legal Entity, ein unveränderlicher Model-Guard, ein Datenbank-Kettenkopf, ein externer dateisystembasierter Anker mit expliziter Storage-Attestierung sowie menschen- und maschinenlesbare Integritätsprüfungen umgesetzt. Die aktuellen Nachweise und Restrisiken stehen in `GOBD_CONTROL_MATRIX.md` und `audit-integrity.md`.
+
+ACC-02 bleibt teilweise offen: Das portable Evidenzpaket und der datenbankunabhängige Offline-Verifier sind umgesetzt; weiterhin fehlen der belegte Referenzbetrieb mit Object Lock/Versionierung, ein unabhängig bezogener Vertrauensnachweis für den Anker, getrennte Berechtigungen, Monitoring und Restore-Test. Die historischen Lückenformulierungen in Abschnitt 4 sind deshalb nicht als aktueller Implementierungsstatus zu lesen.
+
 ## 1. Ergebnis in einem Satz
 
 Das realistische Ziel lautet nicht „amtlich GoBD-zertifiziert“, sondern:

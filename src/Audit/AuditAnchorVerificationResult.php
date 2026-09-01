@@ -2,15 +2,15 @@
 
 namespace FilamentAccounting\Audit;
 
-final readonly class AuditChainVerificationResult
+final readonly class AuditAnchorVerificationResult
 {
     /**
      * @param  list<AuditChainIssue>  $issues
      */
     public function __construct(
-        public int $eventCount,
-        public int $lastSequence,
-        public ?string $headHash,
+        public int $anchorCount,
+        public ?int $lastAnchoredSequence,
+        public ?string $latestAnchorHash,
         public array $issues,
     ) {}
 

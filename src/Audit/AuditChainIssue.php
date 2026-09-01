@@ -9,4 +9,16 @@ final readonly class AuditChainIssue
         public string $message,
         public ?int $sequence = null,
     ) {}
+
+    /**
+     * @return array{code: string, message: string, sequence: int|null}
+     */
+    public function toArray(): array
+    {
+        return [
+            'code' => $this->code,
+            'message' => $this->message,
+            'sequence' => $this->sequence,
+        ];
+    }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use FilamentAccounting\Audit\FilesystemAuditAnchorStore;
 use FilamentAccounting\Authorization\DefaultAccountingAuthorizer;
 use FilamentAccounting\Compliance\GenericComplianceProfile;
 use FilamentAccounting\Compliance\Germany\GermanComplianceProfile;
@@ -90,6 +91,16 @@ return [
         'application_version' => env('ACCOUNTING_RELEASE_VERSION'),
         'application_commit' => env('ACCOUNTING_RELEASE_COMMIT'),
         'configuration_snapshot_id' => env('ACCOUNTING_CONFIGURATION_SNAPSHOT_ID'),
+        'anchor' => [
+            'store' => FilesystemAuditAnchorStore::class,
+            'disk' => env('ACCOUNTING_AUDIT_ANCHOR_DISK', 'local'),
+            'prefix' => env('ACCOUNTING_AUDIT_ANCHOR_PREFIX', 'accounting/audit-anchors'),
+            'required' => env('ACCOUNTING_AUDIT_ANCHOR_REQUIRED', false),
+
+            // This is an explicit host assertion. The package cannot infer object lock,
+            // retention, versioning, or independent permissions from Laravel's API.
+            'immutable_storage_attested' => env('ACCOUNTING_AUDIT_ANCHOR_STORAGE_ATTESTED', false),
+        ],
     ],
 
     'bank_feeds' => [
