@@ -87,15 +87,21 @@ class BankStatementLineResource extends Resource
 
         return $table
             ->defaultSort('booking_date', 'desc')
-            ->defaultGroup('source_status')
+            ->defaultGroup('transaction_date')
             ->groupingSettingsHidden()
             ->groups([
-                Group::make('source_status')
+                Group::make('transaction_date')
+                    ->column('booking_date')
                     ->collapsible()
                     ->titlePrefixedWithLabel(false)
+                    ->getKeyFromRecordUsing(fn (BankStatementLine $record): string => match (true) {
+                        $record->source_status === StatementLineStatus::Pending => '__pending__',
+                        $record->booking_date !== null => $record->booking_date->toDateString(),
+                        default => '__without_booking_date__',
+                    })
                     ->getTitleFromRecordUsing(function (BankStatementLine $record, $livewire): string {
                         if ($record->source_status !== StatementLineStatus::Pending) {
-                            return __('filament-accounting::statuses.statement.'.$record->source_status->value);
+                            return $record->booking_date?->translatedFormat('d.m.Y') ?? '—';
                         }
 
                         $count = 1;
@@ -117,9 +123,25 @@ class BankStatementLineResource extends Resource
                         return __('filament-accounting::statuses.statement.pending')
                             .' ('.$count.' · '.MoneyFormatter::format($sumMinor, $record->currency).')';
                     })
-                    ->orderQueryUsing(fn (Builder $query): Builder => $query->orderByRaw(
-                        "case source_status when 'pending' then 0 when 'booked' then 1 else 2 end"
-                    )),
+                    ->groupQueryUsing(fn ($query) => $query
+                        ->groupByRaw("case when source_status = 'pending' then 0 else 1 end")
+                        ->groupByRaw("case when source_status = 'pending' then null else booking_date end"))
+                    ->scopeQueryByKeyUsing(function (Builder $query, ?string $key): Builder {
+                        if ($key === '__pending__') {
+                            return $query->where('source_status', StatementLineStatus::Pending->value);
+                        }
+
+                        $query->where('source_status', '!=', StatementLineStatus::Pending->value);
+
+                        return $key === '__without_booking_date__'
+                            ? $query->whereNull('booking_date')
+                            : $query->whereDate('booking_date', $key);
+                    })
+                    ->orderQueryUsing(fn (Builder $query): Builder => $query
+                        ->reorder()
+                        ->orderByRaw("case when source_status = 'pending' then 0 else 1 end")
+                        ->orderByDesc('booking_date')
+                        ->orderByDesc('id')),
             ])
             ->recordClasses(fn (BankStatementLine $record): ?string => $record->source_status === StatementLineStatus::Pending
                 ? 'text-gray-500 dark:text-gray-400'

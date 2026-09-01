@@ -100,6 +100,73 @@ class BankStatementLineResourceTest extends TestCase
     }
 
     #[Test]
+    public function it_groups_all_pending_lines_first_and_then_booked_lines_by_date(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $bank = $this->makeBankAccount($entity);
+
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData(
+                externalId: 'pending-old',
+                amountMinor: -100,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-1',
+                bookingDate: '2026-03-01',
+                sourceStatus: 'pending',
+            ),
+            new BankStatementLineData(
+                externalId: 'booked-new',
+                amountMinor: 200,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-1',
+                bookingDate: '2026-03-20',
+                sourceStatus: 'booked',
+            ),
+            new BankStatementLineData(
+                externalId: 'pending-new',
+                amountMinor: -300,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-1',
+                bookingDate: '2026-03-15',
+                sourceStatus: 'pending',
+            ),
+            new BankStatementLineData(
+                externalId: 'booked-old',
+                amountMinor: 400,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-1',
+                bookingDate: '2026-03-10',
+                sourceStatus: 'booked',
+            ),
+        ]);
+
+        $records = BankStatementLine::query()->get()->keyBy('external_id');
+        $group = BankStatementLineResource::table(Table::make(new ListBankStatementLines))->getDefaultGroup();
+
+        $this->assertNotNull($group);
+        $this->assertSame('__pending__', $group->getStringKey($records->get('pending-old')));
+        $this->assertSame('__pending__', $group->getStringKey($records->get('pending-new')));
+        $this->assertSame('2026-03-20', $group->getStringKey($records->get('booked-new')));
+        $this->assertSame('2026-03-10', $group->getStringKey($records->get('booked-old')));
+
+        $ordered = $group->orderQuery(BankStatementLine::query(), 'asc')
+            ->pluck('external_id')
+            ->all();
+
+        $this->assertSame([
+            'pending-new',
+            'pending-old',
+            'booked-new',
+            'booked-old',
+        ], $ordered);
+    }
+
+    #[Test]
     public function an_unassigned_transaction_has_one_reconciliation_entry_point(): void
     {
         $entity = $this->makeEntity();
