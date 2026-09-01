@@ -465,25 +465,50 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('legal_entity_id')->constrained('accounting_legal_entities')->restrictOnDelete();
+            $table->unsignedBigInteger('sequence');
+            $table->unsignedSmallInteger('event_schema_version')->default(1);
+            $table->unsignedSmallInteger('canonicalization_version')->default(1);
+            $table->string('hash_algorithm', 32)->default('sha256');
             $table->string('actor_type', 191)->nullable();
             $table->string('actor_id', 64)->nullable();
+            $table->string('impersonator_type', 191)->nullable();
+            $table->string('impersonator_id', 64)->nullable();
             $table->string('operation', 64);
             $table->string('target_type', 191)->nullable();
             $table->string('target_id', 64)->nullable();
             $table->text('reason')->nullable();
             $table->json('payload')->nullable();
+            $table->longText('canonical_payload');
+            $table->char('previous_hash', 64)->nullable();
+            $table->char('event_hash', 64);
             $table->string('correlation_id', 64)->nullable();
+            $table->string('causation_id', 64)->nullable();
             $table->string('request_id', 64)->nullable();
+            $table->string('application_version', 64)->nullable();
+            $table->string('application_commit', 64)->nullable();
+            $table->string('configuration_snapshot_id', 64)->nullable();
             $table->timestamp('occurred_at');
+            $table->timestamp('technical_at');
             $table->timestamps();
+            $table->unique(['legal_entity_id', 'sequence'], 'acct_audit_entity_seq_uidx');
+            $table->unique('event_hash', 'acct_audit_event_hash_uidx');
             $table->index(['legal_entity_id', 'occurred_at'], 'acct_audit_time_idx');
             $table->index(['target_type', 'target_id']);
+        });
+
+        Schema::create('accounting_audit_chain_heads', function (Blueprint $table) {
+            $table->foreignId('legal_entity_id')->primary()->constrained('accounting_legal_entities')->restrictOnDelete();
+            $table->unsignedBigInteger('last_sequence');
+            $table->char('last_event_hash', 64);
+            $table->unsignedBigInteger('event_count');
+            $table->timestamp('updated_at');
         });
     }
 
     public function down(): void
     {
         $tables = [
+            'accounting_audit_chain_heads',
             'accounting_audit_events',
             'accounting_reconciliation_splits',
             'accounting_reconciliations',

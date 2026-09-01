@@ -19,3 +19,14 @@ Relevant primary sources (verify current text before relying on them):
 The package lays foundations for complete records, immutability, audit logging, period locks (Festschreibung), reversal-based correction, and export architecture. It does **not** claim that installation equals GoBD certification.
 
 The generic journal CSV exporter is **not** DATEV-compatible. DATEV export remains an `AccountingExporter` extension point.
+
+## GoBD readiness roadmap
+
+The repository-spanning implementation and audit roadmap is maintained in the
+[GoBD readiness and audit master plan](GOBD_COMPLIANCE_MASTER_PLAN.md). It is the
+source of truth for the `ACC-*`, `FINTS-*`, and `BRIDGE-*` work packages across
+`filament-accounting`, `filament-fints`, and `filament-accounting-fints`.
+
+Merging the roadmap does not establish compliance. Each control must be implemented,
+tested, evidenced in a defined reference installation, and independently reviewed
+within the documented scope.

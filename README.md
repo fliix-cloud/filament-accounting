@@ -35,6 +35,17 @@ php artisan filament-accounting:seed-profile DE
 php artisan filament-accounting:verify
 ```
 
+For tamper-evident audit-chain anchors outside the application database, configure independently controlled immutable/versioned storage, then run:
+
+```bash
+php artisan filament-accounting:audit-anchor --json
+php artisan filament-accounting:verify --json
+php artisan filament-accounting:audit-export ENTITY_UUID exports/audit-evidence.json --json
+php artisan filament-accounting:audit-verify-file exports/audit-evidence.json --json
+```
+
+See [Audit-chain integrity and external anchors](docs/audit-integrity.md) for the required trust boundary, configuration, scheduling, and residual risks.
+
 Register the plugin on a Filament panel:
 
 ```php

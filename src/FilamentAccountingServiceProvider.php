@@ -2,14 +2,19 @@
 
 namespace FilamentAccounting;
 
+use FilamentAccounting\Audit\FilesystemAuditAnchorStore;
+use FilamentAccounting\Commands\CreateAuditAnchorCommand;
+use FilamentAccounting\Commands\ExportAuditEvidenceCommand;
 use FilamentAccounting\Commands\InstallCommand;
 use FilamentAccounting\Commands\SeedProfileCommand;
+use FilamentAccounting\Commands\VerifyAuditEvidenceCommand;
 use FilamentAccounting\Commands\VerifyCommand;
 use FilamentAccounting\Contracts\AccountingActorResolver;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Contracts\AccountingEntityResolver;
 use FilamentAccounting\Contracts\AccountingExporter;
 use FilamentAccounting\Contracts\AccountingTenancyContextActivator;
+use FilamentAccounting\Contracts\AuditAnchorStore;
 use FilamentAccounting\Contracts\BankFeedDriverRegistry;
 use FilamentAccounting\Contracts\EInvoiceAdapter;
 use FilamentAccounting\Contracts\LedgerEngine;
@@ -36,8 +41,11 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
         $package
             ->name('filament-accounting')
             ->hasCommands([
+                CreateAuditAnchorCommand::class,
+                ExportAuditEvidenceCommand::class,
                 InstallCommand::class,
                 SeedProfileCommand::class,
+                VerifyAuditEvidenceCommand::class,
                 VerifyCommand::class,
             ]);
     }
@@ -71,6 +79,9 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
         $this->app->singleton(ReconciliationMatcher::class, DeterministicReconciliationMatcher::class);
         $this->app->singleton(EInvoiceAdapter::class, ZugferdEInvoiceAdapter::class);
         $this->app->singleton(AccountingExporter::class, GenericJournalCsvExporter::class);
+        $this->app->singleton(AuditAnchorStore::class, function ($app) {
+            return $app->make(config('filament-accounting.audit.anchor.store', FilesystemAuditAnchorStore::class));
+        });
     }
 
     protected function registerPackageTranslations(): void
