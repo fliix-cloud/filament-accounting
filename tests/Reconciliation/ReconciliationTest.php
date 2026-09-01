@@ -21,6 +21,7 @@ use FilamentAccounting\Services\RegisterPurchaseInvoice;
 use FilamentAccounting\Services\ReverseReconciliation;
 use FilamentAccounting\Services\SplitStatementLine;
 use FilamentAccounting\Services\SuggestReconciliationMatches;
+use FilamentAccounting\Support\MoneyFormatter;
 use FilamentAccounting\Tests\TestCase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -175,8 +176,8 @@ class ReconciliationTest extends TestCase
             ->call('selectAssignmentType', 'sales_invoice')
             ->call('selectOpenItem', $invoice->openItem->getKey())
             ->assertSee(__('filament-accounting::fields.partial_payment_notice', [
-                'payment' => '3.00 EUR',
-                'open' => '1190.00 EUR',
+                'payment' => MoneyFormatter::format(300, 'EUR'),
+                'open' => MoneyFormatter::format(119000, 'EUR'),
             ]));
     }
 

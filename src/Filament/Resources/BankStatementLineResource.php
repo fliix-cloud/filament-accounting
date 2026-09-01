@@ -5,17 +5,20 @@ namespace FilamentAccounting\Filament\Resources;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\FontFamily;
+use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
+use FilamentAccounting\Enums\StatementLineStatus;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages\ListBankStatementLines;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages\ViewBankStatementLine;
-use FilamentAccounting\Models\AccountingBankAccount;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\Reconciliation;
 use FilamentAccounting\Models\ReconciliationSplit;
@@ -35,6 +38,9 @@ class BankStatementLineResource extends Resource
     protected static ?int $navigationSort = 30;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';
+
+    /** @var class-string<ListBankStatementLines> */
+    protected static string $listPage = ListBankStatementLines::class;
 
     public static function getNavigationParentItem(): ?string
     {
@@ -75,17 +81,71 @@ class BankStatementLineResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $pendingGray = fn (BankStatementLine $record): ?string => $record->source_status === StatementLineStatus::Pending
+            ? 'gray'
+            : null;
+
         return $table
+            ->defaultSort('booking_date', 'desc')
+            ->defaultGroup('source_status')
+            ->groupingSettingsHidden()
+            ->groups([
+                Group::make('source_status')
+                    ->collapsible()
+                    ->titlePrefixedWithLabel(false)
+                    ->getTitleFromRecordUsing(function (BankStatementLine $record, $livewire): string {
+                        if ($record->source_status !== StatementLineStatus::Pending) {
+                            return __('filament-accounting::statuses.statement.'.$record->source_status->value);
+                        }
+
+                        $count = 1;
+                        $sumMinor = $record->amount_minor;
+
+                        if (is_object($livewire) && method_exists($livewire, 'getFilteredTableQuery')) {
+                            $query = $livewire->getFilteredTableQuery();
+                            if ($query instanceof Builder) {
+                                $summary = (clone $query)
+                                    ->where('source_status', StatementLineStatus::Pending->value)
+                                    ->toBase()
+                                    ->selectRaw('count(*) as pending_count, coalesce(sum(amount_minor), 0) as pending_sum_minor')
+                                    ->first();
+                                $count = max(1, (int) ($summary->pending_count ?? 0));
+                                $sumMinor = (int) ($summary->pending_sum_minor ?? 0);
+                            }
+                        }
+
+                        return __('filament-accounting::statuses.statement.pending')
+                            .' ('.$count.' · '.MoneyFormatter::format($sumMinor, $record->currency).')';
+                    })
+                    ->orderQueryUsing(fn (Builder $query): Builder => $query->orderByRaw(
+                        "case source_status when 'pending' then 0 when 'booked' then 1 else 2 end"
+                    )),
+            ])
+            ->recordClasses(fn (BankStatementLine $record): ?string => $record->source_status === StatementLineStatus::Pending
+                ? 'text-gray-500 dark:text-gray-400'
+                : null)
             ->columns([
-                TextColumn::make('booking_date')->date()->sortable()->label(__('filament-accounting::fields.booking_date')),
-                TextColumn::make('bankAccount.display_name')->label(__('filament-accounting::fields.account')),
-                TextColumn::make('counterparty_name')->searchable()->label(__('filament-accounting::fields.counterparty')),
-                TextColumn::make('purpose')->searchable()->limit(40)->label(__('filament-accounting::fields.purpose')),
+                TextColumn::make('booking_date')->date()->sortable()->label(__('filament-accounting::fields.booking_date'))->color($pendingGray),
+                TextColumn::make('value_date')->date()->sortable()->label(__('filament-accounting::fields.value_date'))->color($pendingGray),
+                TextColumn::make('counterparty_name')->searchable()->label(__('filament-accounting::fields.counterparty'))->color($pendingGray),
+                TextColumn::make('purpose')->searchable()->limit(40)->label(__('filament-accounting::fields.purpose'))->color($pendingGray),
                 TextColumn::make('amount_minor')
                     ->label(__('filament-accounting::fields.amount'))
                     ->alignEnd()
-                    ->formatStateUsing(fn ($state, BankStatementLine $record): string => MoneyFormatter::format((int) $state, $record->currency)),
-                TextColumn::make('source_status')->badge()->label(__('filament-accounting::fields.source_status')),
+                    ->fontFamily(FontFamily::Mono)
+                    ->weight(FontWeight::SemiBold)
+                    ->formatStateUsing(fn ($state, BankStatementLine $record): string => MoneyFormatter::format((int) $state, $record->currency))
+                    ->color(fn (BankStatementLine $record): string => match (true) {
+                        $record->source_status === StatementLineStatus::Pending => 'gray',
+                        $record->amount_minor < 0 => 'accounting-negative',
+                        $record->amount_minor > 0 => 'accounting-positive',
+                        default => 'gray',
+                    })
+                    ->sortable(),
+                TextColumn::make('source_status')
+                    ->badge()
+                    ->label(__('filament-accounting::fields.source_status'))
+                    ->formatStateUsing(fn (StatementLineStatus $state): string => __('filament-accounting::statuses.statement.'.$state->value)),
                 TextColumn::make('reconciliation_badge')
                     ->label(__('filament-accounting::fields.reconciliation'))
                     ->badge()
@@ -113,9 +173,6 @@ class BankStatementLineResource extends Resource
                         : null),
             ])
             ->filters([
-                SelectFilter::make('bank_account_id')
-                    ->label(__('filament-accounting::fields.account'))
-                    ->options(fn (): array => AccountingBankAccount::query()->pluck('display_name', 'id')->all()),
                 SelectFilter::make('source_status')
                     ->label(__('filament-accounting::fields.source_status'))
                     ->options([
@@ -191,7 +248,22 @@ class BankStatementLineResource extends Resource
                     ->visible(fn (BankStatementLine $record): bool => app(BankSourceLinkRegistry::class)->url($record) !== null)
                     ->url(fn (BankStatementLine $record): ?string => app(BankSourceLinkRegistry::class)->url($record))
                     ->openUrlInNewTab(),
-            ]);
+            ])
+            ->emptyStateHeading(function ($livewire): string {
+                if ($livewire instanceof ListBankStatementLines && ! $livewire->hasSelectedAccount()) {
+                    return __('filament-accounting::fields.select_account');
+                }
+
+                return __('filament-tables::table.empty.heading');
+            })
+            ->emptyStateDescription(function ($livewire): ?string {
+                if ($livewire instanceof ListBankStatementLines && ! $livewire->hasSelectedAccount()) {
+                    return __('filament-accounting::fields.select_account_help');
+                }
+
+                return null;
+            })
+            ->paginated([25, 50, 100]);
     }
 
     private static function linkedTargetsSummary(BankStatementLine $record): string
@@ -224,9 +296,29 @@ class BankStatementLineResource extends Resource
 
     public static function getPages(): array
     {
+        $listPage = static::$listPage;
+
         return [
-            'index' => ListBankStatementLines::route('/'),
+            'index' => $listPage::route('/'),
             'view' => ViewBankStatementLine::route('/{record}'),
         ];
+    }
+
+    /**
+     * @param  class-string<ListBankStatementLines>  $page
+     */
+    public static function listPageUsing(string $page): void
+    {
+        if ($page !== ListBankStatementLines::class && ! is_subclass_of($page, ListBankStatementLines::class)) {
+            throw new \InvalidArgumentException('The bank transaction list page must extend '.ListBankStatementLines::class.'.');
+        }
+
+        static::$listPage = $page;
+    }
+
+    /** @return class-string<ListBankStatementLines> */
+    public static function getListPage(): string
+    {
+        return static::$listPage;
     }
 }

@@ -9,13 +9,96 @@ use FilamentAccounting\Banking\Data\BankStatementLineData;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages\ListBankStatementLines;
+use FilamentAccounting\Models\AccountingBankAccount;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Services\ImportBankStatementLines;
 use FilamentAccounting\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
+use ReflectionMethod;
 
 class BankStatementLineResourceTest extends TestCase
 {
+    #[Test]
+    public function it_requires_an_active_account_and_constrains_the_table_to_it(): void
+    {
+        app()->setLocale('de');
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $giro = $this->makeBankAccount($entity);
+        $savings = AccountingBankAccount::query()->create([
+            'legal_entity_id' => $entity->getKey(),
+            'display_name' => 'Tagesgeld',
+            'iban' => 'DE02120300000000202051',
+            'currency' => 'EUR',
+            'ledger_account_id' => $giro->ledger_account_id,
+            'driver_key' => 'synthetic',
+            'external_account_id' => 'acc-2',
+            'is_active' => true,
+        ]);
+
+        app(ImportBankStatementLines::class)->handle($giro, [
+            new BankStatementLineData(
+                externalId: 'giro-line',
+                amountMinor: 123943,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-1',
+                bookingDate: '2026-03-10',
+                sourceStatus: 'pending',
+            ),
+        ]);
+        app(ImportBankStatementLines::class)->handle($savings, [
+            new BankStatementLineData(
+                externalId: 'savings-line',
+                amountMinor: 500,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-2',
+                bookingDate: '2026-03-11',
+                sourceStatus: 'booked',
+            ),
+        ]);
+
+        $page = app(ListBankStatementLines::class);
+        $page->accountId = null;
+
+        $this->assertFalse($page->hasSelectedAccount());
+        $this->assertSame([], $page->constrainToSelectedAccount(BankStatementLineResource::getEloquentQuery())->pluck('id')->all());
+
+        $page->updatedAccountId($giro->id);
+
+        $this->assertTrue($page->hasSelectedAccount());
+        $this->assertSame(['giro-line'], $page->constrainToSelectedAccount(BankStatementLineResource::getEloquentQuery())->pluck('external_id')->all());
+        $this->assertSame($giro->id, session('filament-accounting.bank_transactions_account_id'));
+        $this->assertSame(1, $page->selectedAccountSummary()['pending_count']);
+        $this->assertSame('1.239,43 €', $page->selectedAccountSummary()['pending_amount']);
+    }
+
+    #[Test]
+    public function it_auto_selects_the_only_active_account(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $active = $this->makeBankAccount($entity);
+        AccountingBankAccount::query()->create([
+            'legal_entity_id' => $entity->getKey(),
+            'display_name' => 'Inactive',
+            'iban' => 'DE02120300000000202051',
+            'currency' => 'EUR',
+            'ledger_account_id' => $active->ledger_account_id,
+            'driver_key' => 'synthetic',
+            'external_account_id' => 'inactive',
+            'is_active' => false,
+        ]);
+
+        $page = app(ListBankStatementLines::class);
+        (new ReflectionMethod(ListBankStatementLines::class, 'resolveAccountId'))->invoke($page);
+
+        $this->assertSame($active->id, $page->accountId);
+        $this->assertTrue($page->hasSelectedAccount());
+        $this->assertSame([$active->id], $page->selectableAccounts()->pluck('id')->all());
+    }
+
     #[Test]
     public function an_unassigned_transaction_has_one_reconciliation_entry_point(): void
     {

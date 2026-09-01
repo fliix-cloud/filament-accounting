@@ -4,6 +4,7 @@ namespace FilamentAccounting;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Filament\Support\Colors\Color;
 use FilamentAccounting\Contracts\BankFeedDriver;
 use FilamentAccounting\Contracts\BankFeedDriverRegistry;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
@@ -244,6 +245,10 @@ class FilamentAccountingPlugin implements Plugin
         }
 
         $panel
+            ->colors([
+                'accounting-negative' => Color::hex('#0072B2'),
+                'accounting-positive' => Color::hex('#009E73'),
+            ])
             ->navigationItems(AccountingNavigation::items())
             ->pages($pages)
             ->resources($resources);
