@@ -86,6 +86,12 @@ return [
         'default' => 'generic',
     ],
 
+    'audit' => [
+        'application_version' => env('ACCOUNTING_RELEASE_VERSION'),
+        'application_commit' => env('ACCOUNTING_RELEASE_COMMIT'),
+        'configuration_snapshot_id' => env('ACCOUNTING_CONFIGURATION_SNAPSHOT_ID'),
+    ],
+
     'bank_feeds' => [
         'drivers' => [],
     ],

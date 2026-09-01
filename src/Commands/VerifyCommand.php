@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Commands;
 
+use FilamentAccounting\Audit\AuditChainVerifier;
 use FilamentAccounting\Enums\JournalStatus;
 use FilamentAccounting\Models\JournalEntry;
 use FilamentAccounting\Models\LegalEntity;
@@ -11,13 +12,13 @@ class VerifyCommand extends Command
 {
     protected $signature = 'filament-accounting:verify';
 
-    protected $description = 'Verify ledger integrity for all legal entities';
+    protected $description = 'Verify ledger and audit-chain integrity for all legal entities';
 
-    public function handle(): int
+    public function handle(AuditChainVerifier $auditVerifier): int
     {
         $failed = 0;
 
-        LegalEntity::query()->orderBy('id')->each(function (LegalEntity $entity) use (&$failed): void {
+        LegalEntity::query()->orderBy('id')->each(function (LegalEntity $entity) use ($auditVerifier, &$failed): void {
             $entries = JournalEntry::query()
                 ->where('legal_entity_id', $entity->getKey())
                 ->where('status', JournalStatus::Posted)
@@ -35,6 +36,14 @@ class VerifyCommand extends Command
                     $this->error("Journal {$entry->uuid} has fewer than two lines.");
                     $failed++;
                 }
+            }
+
+            $auditResult = $auditVerifier->verify((int) $entity->getKey());
+
+            foreach ($auditResult->issues as $issue) {
+                $sequence = $issue->sequence === null ? '' : " at sequence {$issue->sequence}";
+                $this->error("Audit [{$issue->code}] for {$entity->legal_name}{$sequence}: {$issue->message}");
+                $failed++;
             }
         });
 
