@@ -185,6 +185,7 @@ Die letzte CI ist rot, weil der Bridge-Workflow wenige Sekunden vor dem Accounti
 
 ### 4. Ausgangsrechnung als PDF + E-Rechnung + S3 implementieren
 
+- Verbindliche Technologiegrenze: Runtime, CLI, Queue, Tests, CI und Pflicht-Abnahme bleiben ausschließlich PHP-basiert. Keine JVM, keine JAR-Ausführung und keine Java-basierten KoSIT-/veraPDF-Wrapper. XML-Schema- und Geschäftsregelprüfungen erfolgen mit PHP XML-Funktionen und versionierten lokalen Regelartefakten; PDF/A wird strukturell in PHP geprüft, ohne eine unabhängige Zertifizierung zu behaupten.
 - Einen austauschbaren Invoice-Renderer und versioniertes Rechnungslayout einführen.
 - Aus dem eingefrorenen Rechnungs-Snapshot ZUGFeRD-/Factur-X-XML im passenden EN-16931-Profil erzeugen und validieren.
 - Ein visuell korrektes Rechnungs-PDF erzeugen und das XML standardskonform als eingebettete Datei in ein PDF/A-3-Dokument integrieren.
@@ -192,7 +193,7 @@ Die letzte CI ist rot, weil der Bridge-Workflow wenige Sekunden vor dem Accounti
 - Beide Artefakte als Attachments mit MIME, Größe, Hash, Erzeugungszeit, Template-/Renderer-Version und Beziehung zum Dokument speichern.
 - Sichere, autorisierte Download-/View-Aktionen mit temporären URLs oder gestreamtem Zugriff ergänzen; keine öffentliche S3-ACL.
 - Wiederholtes Erzeugen muss idempotent sein oder explizit versionierte Artefakte anlegen.
-- Tests: XML-Schema/Business Rules, eingebettetes XML byte-identisch zum separaten XML, PDF-Signatur/Attachment-Metadaten, Storage-Fakes, S3-kompatible Integration und visuelle Snapshot-/Renderprüfung. Wenn praktikabel PDF/A-Konformität mit einem etablierten Validator prüfen.
+- Tests: XML-Schema/Business Rules, eingebettetes XML byte-identisch zum separaten XML, PDF-Signatur, PDF/A-3-XMP-Marker, Output Intent, Associated-File-Beziehung und Attachment-Metadaten, Storage-Fakes, S3-kompatible Integration und visuelle Snapshot-/Renderprüfung. Alle Pflichtprüfungen laufen PHP-nativ; Java-basierte Validatoren sind ausgeschlossen.
 
 ### 5. Eingangsrechnungs-Import als Upload-first-Wizard implementieren
 
@@ -280,6 +281,7 @@ Live-Zahlungen niemals nur aufgrund gemockter Tests als erfolgreich deklarieren.
 - Kunden-/Lieferanten-/Mandats-/Artikelpflege und Tenant-Isolation sind über UI-Tests belegt.
 - Keine unbekannten Steuerfälle werden stillschweigend als 0 % behandelt; explizite 0-%-/Befreiungsfälle bleiben korrekt möglich. Keine Cross-Entity-Buchungen, keine verwaisten Attachments und keine still veralteten Mandate.
 - Dokumentation enthält Setup, Konfiguration, Queue/Scheduler, S3, Owner Mapping, Product-ID-/SCA-Voraussetzungen, Testanleitung und bekannte bankspezifische Einschränkungen.
+- Runtime, CI und verpflichtende Release-Abnahme benötigen ausschließlich PHP und keine JVM, JAR-Datei oder Java-basierten Validator.
 - Jeder PR enthält: Problem, Lösung, Migration-/BC-Auswirkung, Tests, Screenshots bei UI-Änderungen, manuellen Prüfschritt und Abhängigkeiten zu den anderen Repositories.
 
 ## Gewünschter Abschlussbericht

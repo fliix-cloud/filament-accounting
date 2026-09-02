@@ -9,6 +9,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -19,10 +20,13 @@ use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\CreateSales
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\EditSalesInvoice;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\ListSalesInvoices;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\ViewSalesInvoice;
+use FilamentAccounting\Models\CatalogItem;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\Party;
+use FilamentAccounting\Models\TaxCode;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Services\IssueSalesInvoice;
+use FilamentAccounting\Support\ExactMoney;
 use FilamentAccounting\Support\MoneyFormatter;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -65,7 +69,7 @@ class SalesInvoiceResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
+        return app(LegalEntityScope::class)->constrain(parent::getEloquentQuery())
             ->where('type', DocumentType::SalesInvoice)
             ->with(['party', 'openItem.settlements', 'settlements.reconciliation.statementLine'])
             ->withCount('settlements');
@@ -76,21 +80,66 @@ class SalesInvoiceResource extends Resource
         return $schema->components([
             Select::make('party_id')
                 ->label(__('filament-accounting::fields.customer'))
-                ->options(fn (): array => Party::query()->where('is_customer', true)->orderBy('legal_name')->pluck('legal_name', 'id')->all())
+                ->options(fn (): array => Party::query()
+                    ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
+                    ->where('is_customer', true)
+                    ->where('is_active', true)
+                    ->orderBy('legal_name')
+                    ->pluck('legal_name', 'id')
+                    ->all())
                 ->required()
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
-            DatePicker::make('issue_date')->label(__('filament-accounting::fields.issue_date'))->required(),
-            DatePicker::make('due_date')->label(__('filament-accounting::fields.due_date')),
-            TextInput::make('currency')->label(__('filament-accounting::fields.currency'))->maxLength(3)->required(),
+            DatePicker::make('issue_date')->label(__('filament-accounting::fields.issue_date'))->required()
+                ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
+            DatePicker::make('supply_date')->label(__('filament-accounting::fields.supply_date'))
+                ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
+            DatePicker::make('due_date')->label(__('filament-accounting::fields.due_date'))
+                ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
+            TextInput::make('currency')->label(__('filament-accounting::fields.currency'))->maxLength(3)->required()
+                ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
             Repeater::make('lines')
                 ->label(__('filament-accounting::fields.lines'))
-                ->relationship()
                 ->schema([
+                    Select::make('catalog_item_id')
+                        ->label(__('filament-accounting::fields.catalog_item'))
+                        ->options(fn (): array => CatalogItem::query()
+                            ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
+                            ->where('is_active', true)
+                            ->orderBy('name')
+                            ->pluck('name', 'id')
+                            ->all())
+                        ->live()
+                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                            $item = CatalogItem::query()
+                                ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
+                                ->whereKey($state)
+                                ->first();
+
+                            if (! $item instanceof CatalogItem) {
+                                return;
+                            }
+
+                            $set('description', $item->name);
+                            $set('quantity', $item->default_quantity);
+                            $set('unit', $item->unit);
+                            $set('unit_price', ExactMoney::ofMinor((int) $item->default_unit_price_minor, (string) $item->currency)->decimalString());
+                            $set('tax_code', $item->default_tax_code);
+                        }),
                     TextInput::make('description')->label(__('filament-accounting::fields.description'))->required(),
                     TextInput::make('quantity')->label(__('filament-accounting::fields.quantity'))->required(),
-                    TextInput::make('unit_price_minor')->label(__('filament-accounting::fields.unit_price'))->numeric()->required(),
-                    TextInput::make('tax_code')->label(__('filament-accounting::fields.tax_code')),
+                    TextInput::make('unit')->label(__('filament-accounting::fields.unit')),
+                    TextInput::make('unit_price')->label(__('filament-accounting::fields.unit_price'))->numeric()->required(),
+                    Select::make('tax_code')
+                        ->label(__('filament-accounting::fields.tax_code'))
+                        ->options(fn (): array => TaxCode::query()
+                            ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
+                            ->where('is_active', true)
+                            ->orderBy('code')
+                            ->pluck('name', 'code')
+                            ->all())
+                        ->required(),
                 ])
+                ->defaultItems(1)
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
         ]);
     }
@@ -118,16 +167,7 @@ class SalesInvoiceResource extends Resource
                     ->label(__('filament-accounting::actions.issue'))
                     ->visible(fn (Document $record): bool => $record->document_status->value === 'draft')
                     ->action(function (Document $record, IssueSalesInvoice $issuer): void {
-                        $entity = app(LegalEntityScope::class)->require();
-                        $issuer->handle($entity, [
-                            'party_id' => $record->party_id,
-                            'issue_date' => $record->issue_date?->toDateString(),
-                            'due_date' => $record->due_date?->toDateString(),
-                            'currency' => $record->currency,
-                            'lines' => $record->lines->map(fn ($line): array => $line->only([
-                                'description', 'quantity', 'unit_price_minor', 'tax_code',
-                            ]))->all(),
-                        ]);
+                        $issuer->issue($record);
                         Notification::make()->title(__('filament-accounting::notifications.invoice_issued'))->success()->send();
                     }),
             ]);

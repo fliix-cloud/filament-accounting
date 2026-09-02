@@ -10,6 +10,7 @@ return [
     'journal_entry' => ['singular' => 'Buchungssatz', 'plural' => 'Buchungssätze'],
     'ledger_account' => ['singular' => 'Konto', 'plural' => 'Konten'],
     'posting_rule' => ['singular' => 'Steuerfall', 'plural' => 'Steuerfälle'],
+    'tax_code' => ['singular' => 'Steuerschlüssel', 'plural' => 'Steuerschlüssel'],
     'legal_entity' => ['singular' => 'Mandant', 'plural' => 'Mandanten'],
     'audit_event' => ['singular' => 'Prüfereignis', 'plural' => 'Prüfereignisse'],
 ];

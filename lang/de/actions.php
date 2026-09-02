@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'download_attachment' => ':name herunterladen',
+    'receive_and_post' => 'Prüfen, empfangen und buchen',
     'create' => 'Anlegen',
     'save' => 'Speichern',
     'issue' => 'Ausstellen',

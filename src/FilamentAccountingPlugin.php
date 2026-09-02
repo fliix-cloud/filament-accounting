@@ -10,6 +10,7 @@ use FilamentAccounting\Contracts\BankFeedDriverRegistry;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Pages\AccountingOverview;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
+use FilamentAccounting\Filament\Resources\AccountingBankAccountResource;
 use FilamentAccounting\Filament\Resources\AuditEventResource;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\CatalogItemResource;
@@ -21,6 +22,7 @@ use FilamentAccounting\Filament\Resources\PostingRuleResource;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
 use FilamentAccounting\Filament\Resources\SupplierResource;
+use FilamentAccounting\Filament\Resources\TaxCodeResource;
 
 class FilamentAccountingPlugin implements Plugin
 {
@@ -220,6 +222,7 @@ class FilamentAccountingPlugin implements Plugin
         }
 
         if ($this->enabled('bank_reconciliation') && $this->hasBankReconciliation) {
+            $resources[] = AccountingBankAccountResource::class;
             $resources[] = BankStatementLineResource::class;
             $pages[] = ReconciliationPage::class;
         }
@@ -233,6 +236,7 @@ class FilamentAccountingPlugin implements Plugin
         }
 
         if ($this->enabled('tax_and_posting_rules') && $this->hasTaxAndRules) {
+            $resources[] = TaxCodeResource::class;
             $resources[] = PostingRuleResource::class;
         }
 

@@ -17,6 +17,8 @@ use FilamentAccounting\Filament\Resources\LedgerAccountResource\Pages\CreateLedg
 use FilamentAccounting\Filament\Resources\LedgerAccountResource\Pages\EditLedgerAccount;
 use FilamentAccounting\Filament\Resources\LedgerAccountResource\Pages\ListLedgerAccounts;
 use FilamentAccounting\Models\LedgerAccount;
+use FilamentAccounting\Ownership\LegalEntityScope;
+use Illuminate\Database\Eloquent\Builder;
 
 class LedgerAccountResource extends Resource
 {
@@ -53,6 +55,11 @@ class LedgerAccountResource extends Resource
     protected static function ability(): string
     {
         return 'manage_chart';
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return app(LegalEntityScope::class)->constrain(parent::getEloquentQuery());
     }
 
     public static function form(Schema $schema): Schema

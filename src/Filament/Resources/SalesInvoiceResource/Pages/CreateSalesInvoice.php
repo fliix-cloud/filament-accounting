@@ -18,9 +18,10 @@ class CreateSalesInvoice extends CreateRecord
     {
         $entity = app(LegalEntityScope::class)->require();
 
-        return app(IssueSalesInvoice::class)->handle($entity, [
+        return app(IssueSalesInvoice::class)->createDraft($entity, [
             'party_id' => $data['party_id'],
             'issue_date' => $data['issue_date'],
+            'supply_date' => $data['supply_date'] ?? null,
             'due_date' => $data['due_date'] ?? null,
             'currency' => $data['currency'],
             'lines' => $data['lines'] ?? [],

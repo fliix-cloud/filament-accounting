@@ -118,12 +118,22 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
             $basisQty = null;
             $basisUnit = null;
             $reader->getDocumentPositionNetPrice($netLine, $basisQty, $basisUnit);
+            $taxCategory = null;
+            $taxType = null;
+            $taxRate = null;
+            $calculatedTax = null;
+            $taxReason = null;
+            $taxReasonCode = null;
+            $reader->getDocumentPositionTax($taxCategory, $taxType, $taxRate, $calculatedTax, $taxReason, $taxReasonCode);
             $lines[] = [
                 'position' => $lineId,
                 'description' => $name ?: $description,
                 'quantity' => $quantity !== null ? (string) $quantity : '1',
                 'unit' => $unitCode,
                 'unit_price' => $netLine !== null ? (string) $netLine : '0',
+                'tax_rate_bp' => $taxRate !== null ? (int) round($taxRate * 100) : null,
+                'tax_category' => $taxCategory,
+                'tax_reason' => $taxReason,
             ];
         } while ($reader->nextDocumentPosition());
 
@@ -158,11 +168,59 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
         $issueDate = new \DateTimeImmutable((string) ($snapshot['issue_date'] ?? 'now'));
         $currency = (string) ($snapshot['currency'] ?? 'EUR');
 
+        $seller = (array) ($snapshot['seller'] ?? []);
+        $buyer = (array) ($snapshot['buyer'] ?? []);
         $builder->setDocumentInformation($number, '380', \DateTime::createFromImmutable($issueDate), $currency);
-        $builder->setDocumentSeller((string) ($snapshot['seller_name'] ?? 'Seller'));
-        $builder->setDocumentBuyer((string) ($snapshot['buyer_name'] ?? 'Buyer'));
+        $builder->setDocumentSeller((string) ($seller['legal_name'] ?? $snapshot['seller_name'] ?? 'Seller'));
+        $builder->setDocumentSellerAddress(
+            $seller['address_line1'] ?? null,
+            $seller['address_line2'] ?? null,
+            null,
+            $seller['postal_code'] ?? null,
+            $seller['city'] ?? null,
+            $seller['country_code'] ?? null,
+            $seller['region'] ?? null,
+        );
+        if (filled($seller['vat_id'] ?? null)) {
+            $builder->addDocumentSellerTaxRegistration('VA', (string) $seller['vat_id']);
+        }
+        if (filled($seller['tax_number'] ?? null)) {
+            $builder->addDocumentSellerTaxNumber((string) $seller['tax_number']);
+        }
+        $builder->setDocumentSellerContact(null, null, $seller['phone'] ?? null, null, $seller['email'] ?? null);
+
+        $buyerAddress = isset($buyer['addresses'][0]) && is_array($buyer['addresses'][0]) ? $buyer['addresses'][0] : [];
+        $builder->setDocumentBuyer((string) ($buyer['legal_name'] ?? $snapshot['buyer_name'] ?? 'Buyer'));
+        $builder->setDocumentBuyerAddress(
+            $buyerAddress['line1'] ?? null,
+            $buyerAddress['line2'] ?? null,
+            null,
+            $buyerAddress['postal_code'] ?? null,
+            $buyerAddress['city'] ?? null,
+            $buyerAddress['country_code'] ?? $buyer['country_code'] ?? null,
+            $buyerAddress['region'] ?? null,
+        );
+        foreach ((array) ($buyer['vat_ids'] ?? []) as $taxId) {
+            if (is_array($taxId) && ($taxId['type'] ?? null) === 'vat') {
+                $builder->addDocumentBuyerTaxRegistration('VA', (string) ($taxId['number'] ?? ''));
+            }
+        }
+
+        if (filled($seller['invoice_iban'] ?? null)) {
+            $builder->addDocumentPaymentMeanToCreditTransfer(
+                (string) $seller['invoice_iban'],
+                (string) ($seller['legal_name'] ?? ''),
+                null,
+                filled($seller['invoice_bic'] ?? null) ? (string) $seller['invoice_bic'] : null,
+                $number,
+            );
+        }
+        if (filled($snapshot['due_date'] ?? null)) {
+            $builder->addDocumentPaymentTerm(null, new \DateTimeImmutable((string) $snapshot['due_date']));
+        }
 
         $position = 1;
+        $taxGroups = [];
         foreach ($snapshot['lines'] ?? [] as $line) {
             $builder->addNewPosition((string) $position);
             $builder->setDocumentPositionProductDetails((string) ($line['description'] ?? 'Item'));
@@ -172,7 +230,34 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
                 ? ExactMoney::ofMinor((int) $line['unit_price_minor'], $currency)->decimalString()
                 : (string) ($line['unit_price'] ?? '0');
             $builder->setDocumentPositionNetPrice((float) $unitPrice);
+            $rate = ((int) ($line['tax_rate_bp'] ?? 0)) / 100;
+            $category = $this->taxCategory((string) ($line['tax_category'] ?? 'standard'), $rate);
+            $lineTax = ExactMoney::ofMinor((int) ($line['tax_minor'] ?? 0), $currency)->decimalString();
+            $lineNet = ExactMoney::ofMinor((int) ($line['net_minor'] ?? 0), $currency)->decimalString();
+            $builder->addDocumentPositionTax(
+                $category,
+                'VAT',
+                $rate,
+                (float) $lineTax,
+                filled($line['tax_reason'] ?? null) ? (string) $line['tax_reason'] : null,
+            );
+            $builder->setDocumentPositionLineSummation((float) $lineNet);
+            $key = $category.'|'.$rate.'|'.(string) ($line['tax_reason'] ?? '');
+            $taxGroups[$key] ??= ['category' => $category, 'rate' => $rate, 'net_minor' => 0, 'tax_minor' => 0, 'reason' => $line['tax_reason'] ?? null];
+            $taxGroups[$key]['net_minor'] += (int) ($line['net_minor'] ?? 0);
+            $taxGroups[$key]['tax_minor'] += (int) ($line['tax_minor'] ?? 0);
             $position++;
+        }
+
+        foreach ($taxGroups as $taxGroup) {
+            $builder->addDocumentTax(
+                (string) $taxGroup['category'],
+                'VAT',
+                (float) ExactMoney::ofMinor((int) $taxGroup['net_minor'], $currency)->decimalString(),
+                (float) ExactMoney::ofMinor((int) $taxGroup['tax_minor'], $currency)->decimalString(),
+                (float) $taxGroup['rate'],
+                filled($taxGroup['reason']) ? (string) $taxGroup['reason'] : null,
+            );
         }
 
         $gross = ExactMoney::ofMinor((int) ($snapshot['gross_minor'] ?? 0), $currency)->decimalString();
@@ -181,6 +266,17 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
         $builder->setDocumentSummation((float) $gross, (float) $gross, (float) $net, 0.0, 0.0, (float) $net, (float) $tax);
 
         return $builder->getContent();
+    }
+
+    private function taxCategory(string $category, float $rate): string
+    {
+        return match ($category) {
+            'exempt', 'non_taxable' => 'E',
+            'reverse_charge' => 'AE',
+            'intra_community_acquisition' => 'K',
+            'zero' => 'Z',
+            default => $rate === 0.0 ? 'Z' : 'S',
+        };
     }
 
     private function toMinor(mixed $amount, string $currency): int

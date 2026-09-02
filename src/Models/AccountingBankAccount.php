@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $driver_key
  * @property string $external_account_id
  * @property bool $is_active
+ * @property bool $ledger_mapping_confirmed
  * @property-read LedgerAccount $ledgerAccount
  */
 class AccountingBankAccount extends AccountingModel
@@ -40,12 +41,14 @@ class AccountingBankAccount extends AccountingModel
         'driver_key',
         'external_account_id',
         'is_active',
+        'ledger_mapping_confirmed',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'ledger_mapping_confirmed' => 'boolean',
         ];
     }
 

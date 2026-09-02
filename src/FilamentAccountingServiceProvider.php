@@ -17,8 +17,10 @@ use FilamentAccounting\Contracts\AccountingTenancyContextActivator;
 use FilamentAccounting\Contracts\AuditAnchorStore;
 use FilamentAccounting\Contracts\BankFeedDriverRegistry;
 use FilamentAccounting\Contracts\EInvoiceAdapter;
+use FilamentAccounting\Contracts\InvoiceRenderer;
 use FilamentAccounting\Contracts\LedgerEngine;
 use FilamentAccounting\Contracts\ReconciliationMatcher;
+use FilamentAccounting\Documents\FpdfInvoiceRenderer;
 use FilamentAccounting\Documents\ZugferdEInvoiceAdapter;
 use FilamentAccounting\Export\GenericJournalCsvExporter;
 use FilamentAccounting\Ledger\FirstPartyLedgerEngine;
@@ -78,6 +80,7 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
         $this->app->singleton(BankSourceLinkRegistry::class);
         $this->app->singleton(ReconciliationMatcher::class, DeterministicReconciliationMatcher::class);
         $this->app->singleton(EInvoiceAdapter::class, ZugferdEInvoiceAdapter::class);
+        $this->app->singleton(InvoiceRenderer::class, FpdfInvoiceRenderer::class);
         $this->app->singleton(AccountingExporter::class, GenericJournalCsvExporter::class);
         $this->app->singleton(AuditAnchorStore::class, function ($app) {
             return $app->make(config('filament-accounting.audit.anchor.store', FilesystemAuditAnchorStore::class));

@@ -19,6 +19,30 @@ use PHPUnit\Framework\Attributes\Test;
 class LedgerEngineTest extends TestCase
 {
     #[Test]
+    public function journals_reject_inactive_or_cross_entity_accounts(): void
+    {
+        $first = $this->makeEntity(['legal_name' => 'First GmbH']);
+        $firstAccount = $first->ledgerAccounts()->where('is_active', true)->firstOrFail();
+        $second = $this->makeEntity(['legal_name' => 'Second GmbH']);
+        $secondAccount = $second->ledgerAccounts()->where('is_active', true)->firstOrFail();
+
+        $this->expectException(UnbalancedJournalException::class);
+
+        app(LedgerEngine::class)->post(new PostJournalCommand(
+            legalEntityId: (int) $first->getKey(),
+            postedOn: '2026-03-10',
+            sourceType: 'test',
+            sourceId: 'cross-entity',
+            currency: 'EUR',
+            baseCurrency: 'EUR',
+            lines: [
+                JournalLineDraft::debit((int) $firstAccount->getKey(), 100, 'EUR'),
+                JournalLineDraft::credit((int) $secondAccount->getKey(), 100, 'EUR'),
+            ],
+        ));
+    }
+
+    #[Test]
     public function it_posts_a_balanced_journal(): void
     {
         $entity = $this->makeEntity();

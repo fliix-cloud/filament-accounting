@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'bank_accounts' => 'Bank account mappings',
     'group' => 'Accounting',
     'sections' => [
         'sales' => 'Sales',
@@ -20,6 +21,7 @@ return [
     'journal' => 'Journal',
     'accounts' => 'Chart of accounts',
     'posting_rules' => 'Posting rules',
+    'tax_codes' => 'Tax codes',
     'legal_entities' => 'Legal entities',
     'audit' => 'Audit log',
 ];

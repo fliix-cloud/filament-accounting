@@ -25,6 +25,7 @@ class ReconciliationAssistant extends Component
         'sales_invoice',
         'purchase_invoice',
         'posting_rule',
+        'ledger_account',
         'split',
     ];
 
@@ -33,6 +34,7 @@ class ReconciliationAssistant extends Component
         'sales_invoice',
         'purchase_invoice',
         'posting_rule',
+        'ledger_account',
     ];
 
     public string $line;
@@ -52,6 +54,8 @@ class ReconciliationAssistant extends Component
     public ?int $selectedOpenItemId = null;
 
     public ?int $selectedPostingRuleVersionId = null;
+
+    public ?int $selectedLedgerAccountId = null;
 
     public ?string $allocationReason = null;
 
@@ -86,6 +90,7 @@ class ReconciliationAssistant extends Component
         $this->assignmentType = $type;
         $this->selectedOpenItemId = null;
         $this->selectedPostingRuleVersionId = null;
+        $this->selectedLedgerAccountId = null;
 
         if ($type === 'split' && $this->allocations === []) {
             $line = $this->statementLine();
@@ -106,6 +111,12 @@ class ReconciliationAssistant extends Component
     public function selectPostingRule(int $id): void
     {
         $this->selectedPostingRuleVersionId = $id;
+        $this->resetErrorBag();
+    }
+
+    public function selectLedgerAccount(int $id): void
+    {
+        $this->selectedLedgerAccountId = $id;
         $this->resetErrorBag();
     }
 
@@ -238,6 +249,7 @@ class ReconciliationAssistant extends Component
         $salesInvoices = [];
         $purchaseInvoices = [];
         $postingRules = [];
+        $ledgerAccounts = [];
         $selectedOpenItem = null;
         $validationErrors = [];
 
@@ -257,6 +269,7 @@ class ReconciliationAssistant extends Component
                 $this->amountNear,
             );
             $postingRules = $this->query()->postingRuleCandidates($line, $this->postingRuleSearch);
+            $ledgerAccounts = $this->query()->ledgerAccountCandidates($line);
             $selectedOpenItem = $this->query()->openItemCandidate($line, $this->selectedOpenItemId);
             $validationErrors = $this->validationErrors($line);
         }
@@ -268,6 +281,7 @@ class ReconciliationAssistant extends Component
             'salesInvoices' => $salesInvoices,
             'purchaseInvoices' => $purchaseInvoices,
             'postingRules' => $postingRules,
+            'ledgerAccounts' => $ledgerAccounts,
             'selectedOpenItem' => $selectedOpenItem,
             'validationErrors' => $validationErrors,
             'canFinalize' => $validationErrors === [],
@@ -346,6 +360,16 @@ class ReconciliationAssistant extends Component
             return $errors;
         }
 
+        if ($this->assignmentType === 'ledger_account') {
+            $valid = collect($this->query()->ledgerAccountCandidates($line))
+                ->contains(fn (array $candidate): bool => $candidate['id'] === $this->selectedLedgerAccountId);
+            if (! $valid) {
+                $errors['selectedLedgerAccountId'] = __('filament-accounting::errors.assignment_target_required');
+            }
+
+            return $errors;
+        }
+
         $errors['assignmentType'] = __('filament-accounting::errors.invalid_allocation_purpose');
 
         return $errors;
@@ -399,6 +423,12 @@ class ReconciliationAssistant extends Component
                 if (! $valid) {
                     $errors["allocations.{$index}.target_id"] = __('filament-accounting::errors.assignment_target_required');
                 }
+            } elseif ($type === 'ledger_account') {
+                $valid = collect($this->query()->ledgerAccountCandidates($line))
+                    ->contains(fn (array $candidate): bool => $candidate['id'] === $targetId);
+                if (! $valid) {
+                    $errors["allocations.{$index}.target_id"] = __('filament-accounting::errors.assignment_target_required');
+                }
             } else {
                 $errors["allocations.{$index}.type"] = __('filament-accounting::errors.invalid_allocation_purpose');
             }
@@ -423,6 +453,15 @@ class ReconciliationAssistant extends Component
             ];
         }
 
+        if ($this->assignmentType === 'ledger_account') {
+            return [
+                'purpose' => SplitPurpose::LedgerAccount->value,
+                'ledger_account_id' => $this->selectedLedgerAccountId,
+                'reason' => $this->allocationReason,
+                'selection_source' => 'manual',
+            ];
+        }
+
         $candidate = $this->query()->openItemCandidate($line, $this->selectedOpenItemId);
 
         return [
@@ -440,12 +479,16 @@ class ReconciliationAssistant extends Component
         return array_map(function (array $allocation) use ($line): array {
             $type = (string) ($allocation['type'] ?? '');
             $isInvoice = in_array($type, ['sales_invoice', 'purchase_invoice'], true);
+            $isLedgerAccount = $type === 'ledger_account';
 
             return [
-                'purpose' => $isInvoice ? SplitPurpose::SettleOpenItem->value : SplitPurpose::PostingRule->value,
+                'purpose' => $isInvoice
+                    ? SplitPurpose::SettleOpenItem->value
+                    : ($isLedgerAccount ? SplitPurpose::LedgerAccount->value : SplitPurpose::PostingRule->value),
                 'amount_minor' => $this->minorFromInput($allocation['amount'] ?? null, $line->currency),
                 'open_item_id' => $isInvoice ? ($allocation['target_id'] ?? null) : null,
                 'posting_rule_version_id' => $type === 'posting_rule' ? ($allocation['target_id'] ?? null) : null,
+                'ledger_account_id' => $isLedgerAccount ? ($allocation['target_id'] ?? null) : null,
                 'reason' => $allocation['reason'] ?? null,
                 'selection_source' => 'manual',
             ];

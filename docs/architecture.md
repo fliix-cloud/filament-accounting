@@ -20,6 +20,10 @@ Host app
 
 Money is `FilamentAccounting\Support\ExactMoney` backed by `brick/money`. Persisted amounts are signed integer minor units.
 
+E-invoice generation and validation are PHP-only. The package, its CI, and its
+release gates must not require Java or a JVM; see
+[ADR 0002](adr/0002-php-only-e-invoice-validation.md).
+
 ## Source layout
 
 ```
