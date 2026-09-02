@@ -50,6 +50,7 @@ class AccountingOverviewStats extends StatsOverviewWidget
 
         $unassignedLines = BankStatementLine::query()
             ->where('legal_entity_id', $entity->getKey())
+            ->whereHas('bankAccount', fn ($query) => $query->where('is_active', true))
             ->with('reconciliations.splits')
             ->get()
             ->filter(fn (BankStatementLine $line): bool => $line->derivedBadge() === DerivedReconciliationBadge::Unassigned)

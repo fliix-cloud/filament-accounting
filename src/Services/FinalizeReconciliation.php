@@ -49,6 +49,9 @@ final class FinalizeReconciliation
         return DB::transaction(function () use ($line, $splits, $reason, $idempotencyKey): Reconciliation {
             $line = BankStatementLine::query()->lockForUpdate()->with('bankAccount')->findOrFail($line->getKey());
             $this->scope->assertSame((int) $line->legal_entity_id);
+            if (! $line->bankAccount->is_active) {
+                throw new ReconciliationException(__('filament-accounting::errors.bank_account_inactive'));
+            }
             if (! $line->bankAccount?->ledger_mapping_confirmed) {
                 throw new ReconciliationException(__('filament-accounting::errors.bank_ledger_mapping_unconfirmed'));
             }

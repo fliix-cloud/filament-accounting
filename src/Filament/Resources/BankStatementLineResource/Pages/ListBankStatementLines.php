@@ -112,7 +112,7 @@ class ListBankStatementLines extends ListRecords
     {
         return AccountingBankAccount::query()
             ->withPendingStatementLineSummary()
-            ->where('is_active', true)
+            ->active()
             ->orderBy('iban')
             ->get();
     }

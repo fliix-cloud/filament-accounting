@@ -32,6 +32,10 @@ final class SyntheticBankFeedDriver implements BankFeedDriver
 
     public function fetchChangedLines(AccountingBankAccount $account, ?string $cursor, ?string $fromDate, ?string $toDate): array
     {
+        if (! $account->is_active) {
+            return [];
+        }
+
         return array_values(array_filter(
             $this->lines,
             function (BankStatementLineData $line) use ($account, $fromDate, $toDate): bool {

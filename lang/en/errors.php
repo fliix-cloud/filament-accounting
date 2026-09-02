@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'bank_account_inactive' => 'This bank account is not enabled for use.',
     'attachment_requires_persisted_model' => 'Attachments require a persisted accounting record.',
     'invalid_attachment' => 'The attachment is empty, too large, or has an invalid filename.',
     'unsupported_attachment_type' => 'Only PDF, XML, PNG, and JPEG attachments are supported.',

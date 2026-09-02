@@ -70,6 +70,7 @@ class BankStatementLineResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
+            ->whereHas('bankAccount', fn (Builder $query): Builder => $query->where('is_active', true))
             ->with([
                 'bankAccount',
                 'reconciliations.splits.openItem.document.party',
