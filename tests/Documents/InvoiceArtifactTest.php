@@ -54,6 +54,11 @@ class InvoiceArtifactTest extends TestCase
         $xml = app(ReadAttachment::class)->handle($xmlAttachment);
 
         $this->assertStringStartsWith('%PDF-', $pdf);
+        $this->assertStringContainsString('<pdfaid:part>3</pdfaid:part>', $pdf);
+        $this->assertStringContainsString('<pdfaid:conformance>B</pdfaid:conformance>', $pdf);
+        $this->assertStringContainsString('/Type /OutputIntent', $pdf);
+        $this->assertStringContainsString('/AFRelationship /Data', $pdf);
+        $this->assertStringContainsString('factur-x.xml', $pdf);
         $this->assertStringContainsString('CrossIndustryInvoice', $xml);
         $invoice = ZugferdDocumentReader::readAndGuessFromContent($xml);
         $this->assertTrue((new ZugferdXsdValidator($invoice))->validate()->hasNoValidationErrors());

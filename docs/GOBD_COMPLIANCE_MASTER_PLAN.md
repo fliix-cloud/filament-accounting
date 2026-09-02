@@ -354,7 +354,7 @@ Für Deutschland:
 - Transport-/Empfangsnachweis und Anhänge soweit steuerlich relevant erhalten,
 - Ausgabe aus einem unveränderlichen Rechnungssnapshot erzeugen.
 
-Die Generierung muss gegen offizielle bzw. anerkannte Testfälle und Schematron-Regeln geprüft werden. Ein Parserfolg allein reicht nicht.
+Die Generierung muss gegen offizielle bzw. anerkannte Testfälle und Schematron-Regeln geprüft werden. Ein Parserfolg allein reicht nicht. Die verbindliche Validierungspipeline bleibt PHP-nativ; Java/JVM, JAR-Dateien und Java-basierte KoSIT-/veraPDF-Wrapper sind in Runtime, CI und Pflicht-Abnahme ausgeschlossen.
 
 ### 5.8 Retention und Legal Hold
 
