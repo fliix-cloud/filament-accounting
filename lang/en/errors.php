@@ -14,6 +14,7 @@ return [
     'purchase_classification_required' => 'Every purchase line needs an expense category and an expense or inventory account.',
     'purchase_classification_confirmation_required' => 'Every purchase line must be manually confirmed for both expense category and tax treatment before posting.',
     'invalid_e_invoice' => 'The file is not a valid supported EN 16931 invoice.',
+    'invalid_generated_e_invoice' => 'The generated EN 16931 invoice failed schema or business-rule validation.',
     'bank_ledger_mapping_unconfirmed' => 'Confirm the bank account ledger mapping before reconciliation.',
     'entity_required' => 'No legal entity is available for the current context.',
     'entity_mismatch' => 'The record does not belong to the current legal entity.',

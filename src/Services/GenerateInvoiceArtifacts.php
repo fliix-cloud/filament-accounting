@@ -13,6 +13,9 @@ use FilamentAccounting\Models\DocumentLine;
 use FilamentAccounting\Models\LegalEntity;
 use horstoeko\zugferd\ZugferdDocumentPdfMerger;
 use horstoeko\zugferd\ZugferdDocumentPdfReaderExt;
+use horstoeko\zugferd\ZugferdDocumentReader;
+use horstoeko\zugferd\ZugferdDocumentValidator;
+use horstoeko\zugferd\ZugferdXsdValidator;
 use Illuminate\Support\Facades\Storage;
 
 final class GenerateInvoiceArtifacts
@@ -52,6 +55,7 @@ final class GenerateInvoiceArtifacts
 
         $snapshot = $this->snapshot($document);
         $xml = $this->eInvoice->generate($snapshot);
+        $this->validateXml($xml);
         $basePdf = $this->renderer->render($snapshot);
         $pdf = (new ZugferdDocumentPdfMerger($xml, $basePdf))->generateDocument()->downloadString();
         $embeddedXml = ZugferdDocumentPdfReaderExt::getInvoiceDocumentContentFromContent($pdf);
@@ -84,6 +88,21 @@ final class GenerateInvoiceArtifacts
         }
 
         return ['pdf' => $pdfAttachment, 'xml' => $xmlAttachment];
+    }
+
+    private function validateXml(string $xml): void
+    {
+        try {
+            $invoice = ZugferdDocumentReader::readAndGuessFromContent($xml);
+            $schema = (new ZugferdXsdValidator($invoice))->validate();
+            $businessRuleViolations = (new ZugferdDocumentValidator($invoice))->validateDocument();
+        } catch (\Throwable $exception) {
+            throw new DocumentException(__('filament-accounting::errors.invalid_generated_e_invoice'), previous: $exception);
+        }
+
+        if ($schema->hasValidationErrors() || count($businessRuleViolations) > 0) {
+            throw new DocumentException(__('filament-accounting::errors.invalid_generated_e_invoice'));
+        }
     }
 
     /** @return array<string, mixed> */

@@ -14,6 +14,7 @@ return [
     'purchase_classification_required' => 'Jede Eingangsrechnungsposition benötigt eine Aufwandskategorie und ein Aufwands- oder Bestandskonto.',
     'purchase_classification_confirmation_required' => 'Für jede Eingangsrechnungsposition müssen Aufwandskategorie und steuerliche Behandlung vor der Buchung manuell bestätigt werden.',
     'invalid_e_invoice' => 'Die Datei ist keine gültige unterstützte EN-16931-Rechnung.',
+    'invalid_generated_e_invoice' => 'Die erzeugte EN-16931-Rechnung hat die Schema- oder Geschäftsregelprüfung nicht bestanden.',
     'bank_ledger_mapping_unconfirmed' => 'Bestätigen Sie vor der Zuordnung das Sachkonto des Bankkontos.',
     'entity_required' => 'Für den aktuellen Kontext ist kein Mandant verfügbar.',
     'entity_mismatch' => 'Der Datensatz gehört nicht zum aktuellen Mandanten.',

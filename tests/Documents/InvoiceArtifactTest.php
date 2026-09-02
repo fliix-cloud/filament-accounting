@@ -7,6 +7,9 @@ use FilamentAccounting\Services\IssueSalesInvoice;
 use FilamentAccounting\Services\ReadAttachment;
 use FilamentAccounting\Tests\TestCase;
 use horstoeko\zugferd\ZugferdDocumentPdfReaderExt;
+use horstoeko\zugferd\ZugferdDocumentReader;
+use horstoeko\zugferd\ZugferdDocumentValidator;
+use horstoeko\zugferd\ZugferdXsdValidator;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -52,6 +55,9 @@ class InvoiceArtifactTest extends TestCase
 
         $this->assertStringStartsWith('%PDF-', $pdf);
         $this->assertStringContainsString('CrossIndustryInvoice', $xml);
+        $invoice = ZugferdDocumentReader::readAndGuessFromContent($xml);
+        $this->assertTrue((new ZugferdXsdValidator($invoice))->validate()->hasNoValidationErrors());
+        $this->assertCount(0, (new ZugferdDocumentValidator($invoice))->validateDocument());
         $this->assertSame($xml, ZugferdDocumentPdfReaderExt::getInvoiceDocumentContentFromContent($pdf));
         $this->assertSame(hash('sha256', $xml), $pdfAttachment->meta['embedded_xml_sha256']);
         $this->assertSame(3, $pdfAttachment->meta['pdfa_part']);
