@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'bank_account_inactive' => 'Dieses Bankkonto ist nicht zur Nutzung aktiviert.',
     'attachment_requires_persisted_model' => 'Anhänge benötigen einen bereits gespeicherten Buchhaltungsdatensatz.',
     'invalid_attachment' => 'Der Anhang ist leer, zu groß oder hat einen ungültigen Dateinamen.',
     'unsupported_attachment_type' => 'Es werden nur PDF-, XML-, PNG- und JPEG-Anhänge unterstützt.',

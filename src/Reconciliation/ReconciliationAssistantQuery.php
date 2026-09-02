@@ -36,6 +36,7 @@ final class ReconciliationAssistantQuery
         return BankStatementLine::query()
             ->where('legal_entity_id', $entity->getKey())
             ->where('uuid', $uuid)
+            ->whereHas('bankAccount', fn ($query) => $query->where('is_active', true))
             ->with([
                 'bankAccount',
                 'reconciliations.journalEntry',

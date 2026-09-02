@@ -91,6 +91,15 @@ class AccountingBankAccount extends AccountingModel
      * @param  Builder<AccountingBankAccount>  $query
      * @return Builder<AccountingBankAccount>
      */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where($query->qualifyColumn('is_active'), true);
+    }
+
+    /**
+     * @param  Builder<AccountingBankAccount>  $query
+     * @return Builder<AccountingBankAccount>
+     */
     public function scopeWithPendingStatementLineSummary(Builder $query): Builder
     {
         $accounts = $query->getModel()->getTable();

@@ -6,6 +6,7 @@ use FilamentAccounting\Banking\Data\BankFeedImportResult;
 use FilamentAccounting\Banking\Data\BankStatementLineData;
 use FilamentAccounting\Enums\ReconciliationStatus;
 use FilamentAccounting\Enums\StatementLineStatus;
+use FilamentAccounting\Exceptions\AccountingException;
 use FilamentAccounting\Models\AccountingBankAccount;
 use FilamentAccounting\Models\BankImportRun;
 use FilamentAccounting\Models\BankStatementLine;
@@ -24,6 +25,10 @@ final class ImportBankStatementLines
      */
     public function handle(AccountingBankAccount $account, array $lines, ?string $cursor = null): BankFeedImportResult
     {
+        if (! $account->is_active) {
+            throw new AccountingException(__('filament-accounting::errors.bank_account_inactive'));
+        }
+
         return DB::transaction(function () use ($account, $lines, $cursor): BankFeedImportResult {
             $upserted = 0;
             $skipped = 0;

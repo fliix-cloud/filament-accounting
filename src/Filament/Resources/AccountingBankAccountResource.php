@@ -49,7 +49,10 @@ class AccountingBankAccountResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return app(LegalEntityScope::class)->constrain(parent::getEloquentQuery())->with('ledgerAccount');
+        return app(LegalEntityScope::class)
+            ->constrain(parent::getEloquentQuery())
+            ->where('is_active', true)
+            ->with('ledgerAccount');
     }
 
     public static function form(Schema $schema): Schema
