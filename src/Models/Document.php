@@ -30,6 +30,7 @@ use Illuminate\Support\Carbon;
  * @property PostingStatus $posting_status
  * @property int|null $party_id
  * @property array<string, mixed>|null $party_snapshot
+ * @property array<string, mixed>|null $legal_entity_snapshot
  * @property Carbon|null $issue_date
  * @property Carbon|null $receipt_date
  * @property Carbon|null $supply_date
@@ -71,6 +72,7 @@ class Document extends AccountingModel
         'supplier_invoice_number',
         'party_id',
         'party_snapshot',
+        'legal_entity_snapshot',
         'issue_date',
         'receipt_date',
         'supply_date',
@@ -95,6 +97,7 @@ class Document extends AccountingModel
         'posting_status',
         'party_id',
         'party_snapshot',
+        'legal_entity_snapshot',
         'issue_date',
         'receipt_date',
         'supply_date',
@@ -124,6 +127,7 @@ class Document extends AccountingModel
             'document_status' => DocumentStatus::class,
             'posting_status' => PostingStatus::class,
             'party_snapshot' => 'array',
+            'legal_entity_snapshot' => 'array',
             'issue_date' => 'date',
             'receipt_date' => 'date',
             'supply_date' => 'date',

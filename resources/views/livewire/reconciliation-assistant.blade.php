@@ -155,6 +155,7 @@
                         'sales_invoice' => 'heroicon-o-document-currency-euro',
                         'purchase_invoice' => 'heroicon-o-receipt-percent',
                         'posting_rule' => 'heroicon-o-scale',
+                        'ledger_account' => 'heroicon-o-book-open',
                         'split' => 'heroicon-o-view-columns',
                     ] as $type => $icon)
                         <button type="button" class="fac-type" role="tab" aria-selected="{{ $this->assignmentType === $type ? 'true' : 'false' }}" wire:click="selectAssignmentType('{{ $type }}')">
@@ -208,6 +209,25 @@
                     </div>
                     @if ($validationErrors['selectedPostingRuleVersionId'] ?? null)<span class="fac-error">{{ $validationErrors['selectedPostingRuleVersionId'] }}</span>@endif
                 </section>
+            @elseif ($this->assignmentType === 'ledger_account')
+                <section class="fac-card">
+                    <h2 style="font-size: 1rem; font-weight: 700;">{{ __('filament-accounting::fields.assignment_types.ledger_account') }}</h2>
+                    <p class="fac-muted">{{ __('filament-accounting::fields.ledger_account_selection_help') }}</p>
+                    <div class="fac-category-grid" style="margin-top: .8rem;">
+                        @forelse ($ledgerAccounts as $account)
+                            <article @class(['fac-category', 'fac-category-selected' => $this->selectedLedgerAccountId === $account['id']])>
+                                <div>
+                                    <strong>{{ $account['code'] }} · {{ $account['name'] }}</strong>
+                                    <p class="fac-muted">{{ $account['type'] }}</p>
+                                </div>
+                                <x-filament::button type="button" size="sm" :color="$this->selectedLedgerAccountId === $account['id'] ? 'success' : 'gray'" wire:click="selectLedgerAccount({{ $account['id'] }})">{{ $this->selectedLedgerAccountId === $account['id'] ? __('filament-accounting::fields.selected') : __('filament-accounting::actions.select') }}</x-filament::button>
+                            </article>
+                        @empty
+                            <p class="fac-empty">{{ __('filament-accounting::fields.no_ledger_accounts') }}</p>
+                        @endforelse
+                    </div>
+                    @if ($validationErrors['selectedLedgerAccountId'] ?? null)<span class="fac-error">{{ $validationErrors['selectedLedgerAccountId'] }}</span>@endif
+                </section>
             @else
                 <section class="fac-card">
                     <h2 style="font-size: 1rem; font-weight: 700;">{{ __('filament-accounting::fields.assignment_types.split') }}</h2>
@@ -225,13 +245,13 @@
                         @foreach ($this->allocations as $index => $allocation)
                             @php
                                 $type = $allocation['type'] ?? 'sales_invoice';
-                                $targets = $type === 'sales_invoice' ? $salesInvoices : ($type === 'purchase_invoice' ? $purchaseInvoices : $postingRules);
+                                $targets = $type === 'sales_invoice' ? $salesInvoices : ($type === 'purchase_invoice' ? $purchaseInvoices : ($type === 'ledger_account' ? $ledgerAccounts : $postingRules));
                                 $target = collect($targets)->firstWhere('id', (int) ($allocation['target_id'] ?? 0));
                             @endphp
                             <article class="fac-split-row" wire:key="reconciliation-allocation-{{ $index }}">
                                 <div class="fac-split-grid">
-                                    <label class="fac-field"><span>{{ __('filament-accounting::fields.assignment_type') }}</span><x-filament::input.wrapper><x-filament::input.select wire:change="changeAllocationType({{ $index }}, $event.target.value)">@foreach (['sales_invoice', 'purchase_invoice', 'posting_rule'] as $splitType)<option value="{{ $splitType }}" @selected($type === $splitType)>{{ __('filament-accounting::fields.assignment_types.'.$splitType) }}</option>@endforeach</x-filament::input.select></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.type"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.type"] }}</span>@endif</label>
-                                    <label class="fac-field"><span>{{ __('filament-accounting::fields.target') }}</span><x-filament::input.wrapper><x-filament::input.select wire:model.live="allocations.{{ $index }}.target_id"><option value="">{{ __('filament-accounting::fields.select_target') }}</option>@foreach ($targets as $candidate)<option value="{{ $candidate['id'] }}">@if ($type === 'posting_rule'){{ $candidate['code'] }} · {{ $candidate['label'] }}@else{{ $candidate['number'] ?: $candidate['supplier_invoice_number'] }} · {{ $candidate['party'] }} · {{ \FilamentAccounting\Support\MoneyFormatter::format($candidate['remaining_minor'], $candidate['currency']) }}@endif</option>@endforeach</x-filament::input.select></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.target_id"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.target_id"] }}</span>@endif</label>
+                                    <label class="fac-field"><span>{{ __('filament-accounting::fields.assignment_type') }}</span><x-filament::input.wrapper><x-filament::input.select wire:change="changeAllocationType({{ $index }}, $event.target.value)">@foreach (['sales_invoice', 'purchase_invoice', 'posting_rule', 'ledger_account'] as $splitType)<option value="{{ $splitType }}" @selected($type === $splitType)>{{ __('filament-accounting::fields.assignment_types.'.$splitType) }}</option>@endforeach</x-filament::input.select></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.type"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.type"] }}</span>@endif</label>
+                                    <label class="fac-field"><span>{{ __('filament-accounting::fields.target') }}</span><x-filament::input.wrapper><x-filament::input.select wire:model.live="allocations.{{ $index }}.target_id"><option value="">{{ __('filament-accounting::fields.select_target') }}</option>@foreach ($targets as $candidate)<option value="{{ $candidate['id'] }}">@if ($type === 'posting_rule'){{ $candidate['code'] }} · {{ $candidate['label'] }}@elseif ($type === 'ledger_account'){{ $candidate['code'] }} · {{ $candidate['name'] }}@else{{ $candidate['number'] ?: $candidate['supplier_invoice_number'] }} · {{ $candidate['party'] }} · {{ \FilamentAccounting\Support\MoneyFormatter::format($candidate['remaining_minor'], $candidate['currency']) }}@endif</option>@endforeach</x-filament::input.select></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.target_id"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.target_id"] }}</span>@endif</label>
                                     <label class="fac-field"><span>{{ __('filament-accounting::fields.amount') }} ({{ $statementLine->currency }})</span><x-filament::input.wrapper><x-filament::input type="text" inputmode="decimal" wire:model.live.debounce.300ms="allocations.{{ $index }}.amount" /></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.amount"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.amount"] }}</span>@endif</label>
                                     <label class="fac-field"><span>{{ __('filament-accounting::fields.reason_optional') }}</span><x-filament::input.wrapper><x-filament::input type="text" wire:model="allocations.{{ $index }}.reason" /></x-filament::input.wrapper>@if (is_array($target) && isset($target['remaining_minor']))<span class="fac-muted">{{ __('filament-accounting::fields.open_amount') }}: {{ \FilamentAccounting\Support\MoneyFormatter::format($target['remaining_minor'], $target['currency']) }}</span>@endif</label>
                                     <div style="display: flex; gap: .35rem;"><x-filament::button type="button" size="sm" color="gray" wire:click="useRemaining({{ $index }})">{{ __('filament-accounting::actions.use_remaining') }}</x-filament::button><x-filament::icon-button type="button" color="danger" icon="heroicon-o-trash" label="{{ __('filament-accounting::actions.remove_allocation') }}" wire:click="removeAllocation({{ $index }})" /></div>

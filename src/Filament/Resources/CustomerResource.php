@@ -25,6 +25,7 @@ use FilamentAccounting\Filament\Resources\CustomerResource\Pages\CreateCustomer;
 use FilamentAccounting\Filament\Resources\CustomerResource\Pages\EditCustomer;
 use FilamentAccounting\Filament\Resources\CustomerResource\Pages\ListCustomers;
 use FilamentAccounting\Models\Party;
+use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Support\Sepa;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -67,9 +68,9 @@ class CustomerResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
+        return app(LegalEntityScope::class)->constrain(parent::getEloquentQuery())
             ->where('is_customer', true)
-            ->with('bankAccounts');
+            ->with(['addresses', 'taxIds', 'bankAccounts']);
     }
 
     public static function form(Schema $schema): Schema
@@ -80,7 +81,29 @@ class CustomerResource extends Resource
             TextInput::make('email')->label(__('filament-accounting::fields.email'))->email(),
             TextInput::make('phone')->label(__('filament-accounting::fields.phone')),
             TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->maxLength(2),
+            TextInput::make('payment_terms_days')->label(__('filament-accounting::fields.payment_terms_days'))->numeric()->minValue(0)->default(14),
+            TextInput::make('default_currency')->label(__('filament-accounting::fields.default_currency'))->maxLength(3)->default('EUR'),
             Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),
+            Section::make(__('filament-accounting::fields.addresses'))
+                ->schema([
+                    Repeater::make('addresses')
+                        ->label(__('filament-accounting::fields.addresses'))
+                        ->relationship()
+                        ->schema(self::addressSchema())
+                        ->collapsible()
+                        ->defaultItems(0),
+                ])
+                ->columnSpanFull(),
+            Section::make(__('filament-accounting::fields.tax_ids'))
+                ->schema([
+                    Repeater::make('taxIds')
+                        ->label(__('filament-accounting::fields.tax_ids'))
+                        ->relationship()
+                        ->schema(self::taxIdSchema())
+                        ->collapsible()
+                        ->defaultItems(0),
+                ])
+                ->columnSpanFull(),
             Section::make(__('filament-accounting::fields.bank_accounts'))
                 ->description(__('filament-accounting::fields.bank_accounts_help'))
                 ->schema([
@@ -137,7 +160,7 @@ class CustomerResource extends Resource
     }
 
     /** @return list<Component> */
-    private static function bankAccountSchema(): array
+    public static function bankAccountSchema(): array
     {
         return [
             TextInput::make('holder_name')
@@ -208,6 +231,36 @@ class CustomerResource extends Resource
                 ])
                 ->default(PartyMandateStatus::Active->value)
                 ->visible(fn (Get $get): bool => filled($get('mandate_reference'))),
+        ];
+    }
+
+    /** @return list<Component> */
+    public static function addressSchema(): array
+    {
+        return [
+            TextInput::make('line1')->label(__('filament-accounting::fields.address_line1'))->required()->maxLength(255),
+            TextInput::make('line2')->label(__('filament-accounting::fields.address_line2'))->maxLength(255),
+            TextInput::make('postal_code')->label(__('filament-accounting::fields.postal_code'))->required()->maxLength(20),
+            TextInput::make('city')->label(__('filament-accounting::fields.city'))->required()->maxLength(255),
+            TextInput::make('region')->label(__('filament-accounting::fields.region'))->maxLength(255),
+            TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->required()->maxLength(2)->default('DE'),
+            Toggle::make('is_primary')->label(__('filament-accounting::fields.primary_address'))->default(false),
+        ];
+    }
+
+    /** @return list<Component> */
+    public static function taxIdSchema(): array
+    {
+        return [
+            Select::make('type')
+                ->label(__('filament-accounting::fields.tax_id_type'))
+                ->options([
+                    'vat' => __('filament-accounting::fields.vat_id'),
+                    'tax_number' => __('filament-accounting::fields.tax_number'),
+                ])
+                ->required(),
+            TextInput::make('number')->label(__('filament-accounting::fields.tax_id_number'))->required()->maxLength(64),
+            TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->maxLength(2)->default('DE'),
         ];
     }
 }

@@ -29,6 +29,24 @@ use PHPUnit\Framework\Attributes\Test;
 class ReconciliationTest extends TestCase
 {
     #[Test]
+    public function reconciliation_is_blocked_until_the_specific_bank_ledger_mapping_is_confirmed(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $bank = $this->makeBankAccount($entity);
+        $bank->update(['ledger_mapping_confirmed' => false]);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('unmapped-bank', 100, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
+        ]);
+
+        $this->expectException(ReconciliationException::class);
+        app(FinalizeReconciliation::class)->handle(
+            BankStatementLine::query()->where('external_id', 'unmapped-bank')->firstOrFail(),
+            [['purpose' => SplitPurpose::Suspense->value, 'amount_minor' => 100, 'reason' => 'mapping test']],
+        );
+    }
+
+    #[Test]
     public function direct_assignment_settles_one_target_and_a_smaller_payment_is_not_a_split(): void
     {
         $entity = $this->makeEntity();
@@ -232,7 +250,7 @@ class ReconciliationTest extends TestCase
             'supplier_invoice_number' => 'DIRECTION-1',
             'issue_date' => '2026-03-01',
             'currency' => 'EUR',
-            'lines' => [['description' => 'Payable', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+            'lines' => [['description' => 'Payable', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19', 'account_role' => 'expense', 'classification_code' => 'other_operating_expense', 'classification_confirmed' => true, 'tax_confirmed' => true]],
         ]);
         app(ImportBankStatementLines::class)->handle($bank, [
             new BankStatementLineData('wrong-incoming', 1190, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
@@ -380,7 +398,7 @@ class ReconciliationTest extends TestCase
             'supplier_invoice_number' => 'S-1',
             'issue_date' => '2026-03-03',
             'currency' => 'EUR',
-            'lines' => [['description' => 'Bill', 'quantity' => '1', 'unit_price_minor' => 100000, 'tax_code' => 'DE-19']],
+            'lines' => [['description' => 'Bill', 'quantity' => '1', 'unit_price_minor' => 100000, 'tax_code' => 'DE-19', 'account_role' => 'expense', 'classification_code' => 'other_operating_expense', 'classification_confirmed' => true, 'tax_confirmed' => true]],
         ]);
 
         $importer = app(ImportBankStatementLines::class);

@@ -90,6 +90,29 @@ class PartyResourceSeparationTest extends TestCase
     }
 
     #[Test]
+    public function customer_and_supplier_queries_never_cross_the_current_legal_entity(): void
+    {
+        $firstEntity = $this->makeEntity(['legal_name' => 'First Entity GmbH']);
+        $firstCustomer = $this->makeParty($firstEntity);
+        $firstSupplier = $this->makeParty($firstEntity, [
+            'is_customer' => false,
+            'is_supplier' => true,
+        ]);
+
+        $secondEntity = $this->makeEntity(['legal_name' => 'Second Entity GmbH']);
+        $secondCustomer = $this->makeParty($secondEntity);
+        $secondSupplier = $this->makeParty($secondEntity, [
+            'is_customer' => false,
+            'is_supplier' => true,
+        ]);
+
+        $this->assertFalse(CustomerResource::getEloquentQuery()->whereKey($firstCustomer)->exists());
+        $this->assertTrue(CustomerResource::getEloquentQuery()->whereKey($secondCustomer)->exists());
+        $this->assertFalse(SupplierResource::getEloquentQuery()->whereKey($firstSupplier)->exists());
+        $this->assertTrue(SupplierResource::getEloquentQuery()->whereKey($secondSupplier)->exists());
+    }
+
+    #[Test]
     public function edit_pages_discard_injected_role_changes(): void
     {
         $customer = (new class extends EditCustomer

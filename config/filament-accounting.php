@@ -16,6 +16,7 @@ return [
     'storage' => [
         'disk' => env('ACCOUNTING_DISK', 'local'),
         'attachments_directory' => 'accounting/attachments',
+        'maximum_attachment_bytes' => 15 * 1024 * 1024,
     ],
 
     'money' => [
@@ -109,5 +110,6 @@ return [
 
     'e_invoice' => [
         'default_profile' => 'en16931',
+        'generate_on_issue' => true,
     ],
 ];

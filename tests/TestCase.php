@@ -40,6 +40,7 @@ abstract class TestCase extends Orchestra
         config()->set('auth.providers.users.model', User::class);
         config()->set('filament-accounting.ownership.required', true);
         config()->set('filament-accounting.storage.disk', 'local');
+        config()->set('filament-accounting.e_invoice.generate_on_issue', false);
         $this->app->instance(DataStore::class, new DataStore);
     }
 
@@ -148,6 +149,7 @@ abstract class TestCase extends Orchestra
             'iban' => 'DE89370400440532013000',
             'currency' => $entity->base_currency,
             'ledger_account_id' => $ledgerAccountId,
+            'ledger_mapping_confirmed' => true,
             'driver_key' => 'synthetic',
             'external_account_id' => 'acc-1',
             'is_active' => true,

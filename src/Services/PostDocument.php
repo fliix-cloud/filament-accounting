@@ -88,8 +88,6 @@ final class PostDocument
         $inputTax = $this->accountForRole($entity, AccountRole::InputTax);
 
         $gross = (int) $document->gross_minor;
-        $tax = (int) $document->tax_minor;
-
         if (in_array($document->type, [DocumentType::SalesInvoice, DocumentType::SalesCreditNote], true)) {
             $netByAccount = [];
             foreach ($document->lines as $line) {
@@ -103,8 +101,15 @@ final class PostDocument
                     $drafts[] = JournalLineDraft::credit((int) $accountId, $amount, $currency, $document->number);
                 }
             }
-            if ($tax !== 0) {
-                $drafts[] = JournalLineDraft::credit($outputTax, $tax, $currency, $document->number, $document->lines->first()?->tax_code);
+            foreach ($this->taxGroups($document) as $group) {
+                $drafts[] = JournalLineDraft::credit(
+                    $outputTax,
+                    $group['amount'],
+                    $currency,
+                    $document->number,
+                    $group['tax_code'],
+                    $group['tax_rule_version_id'],
+                );
             }
         } else {
             $netByAccount = [];
@@ -118,8 +123,15 @@ final class PostDocument
                     $drafts[] = JournalLineDraft::debit((int) $accountId, $amount, $currency, $document->number);
                 }
             }
-            if ($tax !== 0) {
-                $drafts[] = JournalLineDraft::debit($inputTax, $tax, $currency, $document->number, $document->lines->first()?->tax_code);
+            foreach ($this->taxGroups($document) as $group) {
+                $drafts[] = JournalLineDraft::debit(
+                    $inputTax,
+                    $group['amount'],
+                    $currency,
+                    $document->number,
+                    $group['tax_code'],
+                    $group['tax_rule_version_id'],
+                );
             }
             $drafts[] = JournalLineDraft::credit($payable, $gross, $currency, $document->number);
         }
@@ -129,6 +141,27 @@ final class PostDocument
         }
 
         return $drafts;
+    }
+
+    /**
+     * @return list<array{amount: int, tax_code: string, tax_rule_version_id: int}>
+     */
+    private function taxGroups(Document $document): array
+    {
+        return $document->lines
+            ->filter(fn ($line): bool => (int) $line->tax_minor !== 0)
+            ->groupBy(fn ($line): string => implode('|', [
+                (string) $line->tax_code,
+                (string) $line->tax_rule_version_id,
+                (string) $line->tax_rate_bp,
+            ]))
+            ->map(fn ($lines): array => [
+                'amount' => (int) $lines->sum('tax_minor'),
+                'tax_code' => (string) $lines->first()->tax_code,
+                'tax_rule_version_id' => (int) $lines->first()->tax_rule_version_id,
+            ])
+            ->values()
+            ->all();
     }
 
     private function accountForRole(LegalEntity $entity, AccountRole $role): int

@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'download_attachment' => 'Download :name',
+    'receive_and_post' => 'Validate, receive and post',
     'create' => 'Create',
     'save' => 'Save',
     'issue' => 'Issue',

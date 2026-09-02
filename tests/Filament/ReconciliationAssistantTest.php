@@ -4,8 +4,10 @@ namespace FilamentAccounting\Tests\Filament;
 
 use FilamentAccounting\Banking\Data\BankStatementLineData;
 use FilamentAccounting\Enums\PaymentStatus;
+use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Livewire\ReconciliationAssistant;
 use FilamentAccounting\Models\BankStatementLine;
+use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\PostingRule;
 use FilamentAccounting\Models\Reconciliation;
 use FilamentAccounting\Services\ImportBankStatementLines;
@@ -75,6 +77,36 @@ class ReconciliationAssistantTest extends TestCase
 
         $this->assertSame(PaymentStatus::Paid, $invoice->fresh('openItem.settlements')->paymentStatus());
         $this->assertSame('suggestion_confirmed', Reconciliation::query()->sole()->match_meta['selection_source']);
+    }
+
+    #[Test]
+    public function a_booked_transaction_can_be_posted_directly_to_a_ledger_account(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $bank = $this->makeBankAccount($entity);
+        $expense = LedgerAccount::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('code', '4900')
+            ->firstOrFail();
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('assistant-direct-ledger', -2500, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
+        ]);
+        $line = BankStatementLine::query()->where('external_id', 'assistant-direct-ledger')->firstOrFail();
+
+        Livewire::test(ReconciliationAssistant::class, ['line' => $line->uuid])
+            ->call('selectAssignmentType', 'ledger_account')
+            ->call('selectLedgerAccount', $expense->getKey())
+            ->call('finalize')
+            ->assertHasNoErrors()
+            ->assertDispatched('reconciliation-assistant-finalized');
+
+        $reconciliation = Reconciliation::query()->with('splits')->sole();
+        $split = $reconciliation->splits->sole();
+
+        $this->assertSame(SplitPurpose::LedgerAccount, $split->purpose);
+        $this->assertSame($expense->getKey(), $split->ledger_account_id);
+        $this->assertNotNull($reconciliation->journal_entry_id);
     }
 
     #[Test]
@@ -156,7 +188,7 @@ class ReconciliationAssistantTest extends TestCase
             'supplier_invoice_number' => 'VENDOR-11581',
             'issue_date' => '2026-03-01',
             'currency' => 'EUR',
-            'lines' => [['description' => 'Purchase', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19']],
+            'lines' => [['description' => 'Purchase', 'quantity' => '1', 'unit_price_minor' => 1000, 'tax_code' => 'DE-19', 'account_role' => 'expense', 'classification_code' => 'other_operating_expense', 'classification_confirmed' => true, 'tax_confirmed' => true]],
         ]);
         $feeRule = PostingRule::query()->where('legal_entity_id', $entity->getKey())->where('code', 'bank_fees')->firstOrFail();
         $feeVersion = $feeRule->versionOn('2026-03-10');
@@ -185,7 +217,7 @@ class ReconciliationAssistantTest extends TestCase
         foreach (['en', 'de'] as $locale) {
             app()->setLocale($locale);
 
-            foreach (['sales_invoice', 'purchase_invoice', 'posting_rule', 'split'] as $type) {
+            foreach (['sales_invoice', 'purchase_invoice', 'posting_rule', 'ledger_account', 'split'] as $type) {
                 $key = 'filament-accounting::fields.assignment_types.'.$type;
                 $this->assertNotSame($key, __($key));
             }

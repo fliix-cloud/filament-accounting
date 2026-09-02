@@ -51,6 +51,23 @@ class LegalEntity extends AccountingModel
         'vat_method',
         'compliance_profile_key',
         'state',
+        'address_line1',
+        'address_line2',
+        'postal_code',
+        'city',
+        'region',
+        'tax_number',
+        'vat_id',
+        'email',
+        'phone',
+        'website',
+        'invoice_bank_name',
+        'invoice_iban',
+        'invoice_bic',
+        'default_payment_terms_days',
+        'invoice_logo_path',
+        'invoice_template_key',
+        'invoice_template_version',
     ];
 
     protected function casts(): array
@@ -58,7 +75,34 @@ class LegalEntity extends AccountingModel
         return [
             'fiscal_year_start_month' => 'integer',
             'state' => LegalEntityState::class,
+            'default_payment_terms_days' => 'integer',
         ];
+    }
+
+    /** @return array<string, mixed> */
+    public function invoiceSnapshot(): array
+    {
+        return $this->only([
+            'uuid',
+            'legal_name',
+            'trading_name',
+            'address_line1',
+            'address_line2',
+            'postal_code',
+            'city',
+            'region',
+            'country_code',
+            'tax_number',
+            'vat_id',
+            'email',
+            'phone',
+            'website',
+            'invoice_bank_name',
+            'invoice_iban',
+            'invoice_bic',
+            'invoice_template_key',
+            'invoice_template_version',
+        ]);
     }
 
     public function parties(): HasMany

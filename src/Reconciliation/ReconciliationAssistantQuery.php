@@ -8,6 +8,7 @@ use FilamentAccounting\Enums\PaymentStatus;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
 use FilamentAccounting\Models\BankStatementLine;
+use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\OpenItem;
 use FilamentAccounting\Models\PostingRule;
 use FilamentAccounting\Models\PostingRuleVersion;
@@ -207,6 +208,24 @@ final class ReconciliationAssistantQuery
             ->all();
     }
 
+    /** @return list<array{id: int, code: string, name: string, type: string}> */
+    public function ledgerAccountCandidates(BankStatementLine $line): array
+    {
+        return LedgerAccount::query()
+            ->where('legal_entity_id', $line->legal_entity_id)
+            ->where('is_active', true)
+            ->whereKeyNot($line->bankAccount->ledger_account_id)
+            ->orderBy('code')
+            ->get()
+            ->map(fn (LedgerAccount $account): array => [
+                'id' => (int) $account->getKey(),
+                'code' => (string) $account->code,
+                'name' => (string) $account->name,
+                'type' => $account->type->value,
+            ])
+            ->all();
+    }
+
     /** @return list<array<string, mixed>> */
     public function postedAllocations(Reconciliation $reconciliation): array
     {
@@ -253,7 +272,7 @@ final class ReconciliationAssistantQuery
             return 'purchase_invoice';
         }
 
-        return 'posting_rule';
+        return $split->ledger_account_id ? 'ledger_account' : 'posting_rule';
     }
 
     private function allocationTargetLabel(ReconciliationSplit $split): string

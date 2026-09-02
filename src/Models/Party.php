@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $default_currency
  * @property string|null $external_reference
  * @property bool $is_active
+ * @property-read Collection<int, PartyAddress> $addresses
  * @property-read Collection<int, PartyTaxId> $taxIds
  * @property-read Collection<int, PartyBankAccount> $bankAccounts
  * @property-read LegalEntity $legalEntity
@@ -94,16 +95,41 @@ class Party extends AccountingModel
 
     public function snapshot(): array
     {
+        $this->loadMissing(['addresses', 'taxIds', 'bankAccounts']);
+
         return [
             'uuid' => $this->uuid,
             'legal_name' => $this->legal_name,
             'display_name' => $this->display_name,
             'country_code' => $this->country_code,
             'email' => $this->email,
+            'phone' => $this->phone,
+            'payment_terms_days' => $this->payment_terms_days,
+            'default_currency' => $this->default_currency,
+            'addresses' => $this->addresses->map(fn (PartyAddress $address): array => [
+                'line1' => $address->line1,
+                'line2' => $address->line2,
+                'postal_code' => $address->postal_code,
+                'city' => $address->city,
+                'region' => $address->region,
+                'country_code' => $address->country_code,
+                'is_primary' => $address->is_primary,
+            ])->all(),
             'vat_ids' => $this->taxIds->map(fn (PartyTaxId $id): array => [
                 'type' => $id->type,
                 'number' => $id->number,
                 'country_code' => $id->country_code,
+            ])->all(),
+            'bank_accounts' => $this->bankAccounts->map(fn (PartyBankAccount $account): array => [
+                'holder_name' => $account->holder_name,
+                'iban' => $account->iban,
+                'bic' => $account->bic,
+                'is_primary' => $account->is_primary,
+                'mandate_reference' => $account->mandate_reference,
+                'mandate_signed_on' => $account->mandate_signed_on?->toDateString(),
+                'mandate_scheme' => $account->mandate_scheme?->value,
+                'mandate_type' => $account->mandate_type?->value,
+                'mandate_status' => $account->mandate_status?->value,
             ])->all(),
         ];
     }

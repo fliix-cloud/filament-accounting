@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'bank_accounts' => 'Bankkonto-Zuordnungen',
     'group' => 'Buchhaltung',
     'sections' => [
         'sales' => 'Verkauf',
@@ -20,6 +21,7 @@ return [
     'journal' => 'Journal',
     'accounts' => 'Kontenplan',
     'posting_rules' => 'Steuerfälle',
+    'tax_codes' => 'Steuerschlüssel',
     'legal_entities' => 'Mandanten',
     'audit' => 'Prüfprotokoll',
 ];

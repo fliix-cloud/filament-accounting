@@ -25,10 +25,38 @@ final class SeedGermanProfile
     private function taxCodes(LegalEntity $entity): void
     {
         $codes = [
-            ['code' => 'DE-19', 'name' => 'USt 19%', 'rate' => 1900, 'category' => 'standard'],
-            ['code' => 'DE-7', 'name' => 'USt 7%', 'rate' => 700, 'category' => 'reduced'],
-            ['code' => 'DE-0', 'name' => 'steuerfrei', 'rate' => 0, 'category' => 'exempt'],
-            ['code' => 'DE-RC', 'name' => 'Reverse Charge', 'rate' => 0, 'category' => 'reverse_charge'],
+            [
+                'code' => 'DE-19',
+                'name' => 'USt 19%',
+                'versions' => [
+                    ['from' => '2007-01-01', 'to' => '2020-06-30', 'rate' => 1900, 'category' => 'standard'],
+                    ['from' => '2020-07-01', 'to' => '2020-12-31', 'rate' => 1600, 'category' => 'standard'],
+                    ['from' => '2021-01-01', 'to' => null, 'rate' => 1900, 'category' => 'standard'],
+                ],
+            ],
+            [
+                'code' => 'DE-7',
+                'name' => 'USt 7%',
+                'versions' => [
+                    ['from' => '2007-01-01', 'to' => '2020-06-30', 'rate' => 700, 'category' => 'reduced'],
+                    ['from' => '2020-07-01', 'to' => '2020-12-31', 'rate' => 500, 'category' => 'reduced'],
+                    ['from' => '2021-01-01', 'to' => null, 'rate' => 700, 'category' => 'reduced'],
+                ],
+            ],
+            [
+                'code' => 'DE-0',
+                'name' => 'steuerfrei',
+                'versions' => [
+                    ['from' => '2007-01-01', 'to' => null, 'rate' => 0, 'category' => 'exempt'],
+                ],
+            ],
+            [
+                'code' => 'DE-RC',
+                'name' => 'Reverse Charge',
+                'versions' => [
+                    ['from' => '2007-01-01', 'to' => null, 'rate' => 0, 'category' => 'reverse_charge'],
+                ],
+            ],
         ];
 
         foreach ($codes as $definition) {
@@ -39,21 +67,25 @@ final class SeedGermanProfile
                 ],
                 [
                     'name' => $definition['name'],
+                    'direction' => 'both',
                     'is_active' => true,
                 ]
             );
 
-            TaxRuleVersion::query()->firstOrCreate(
-                [
-                    'tax_code_id' => $code->getKey(),
-                    'valid_from' => '2021-01-01',
-                ],
-                [
-                    'rate_bp' => $definition['rate'],
-                    'recoverable' => true,
-                    'category' => $definition['category'],
-                ]
-            );
+            foreach ($definition['versions'] as $version) {
+                TaxRuleVersion::query()->firstOrCreate(
+                    [
+                        'tax_code_id' => $code->getKey(),
+                        'valid_from' => $version['from'],
+                    ],
+                    [
+                        'valid_to' => $version['to'],
+                        'rate_bp' => $version['rate'],
+                        'recoverable' => true,
+                        'category' => $version['category'],
+                    ]
+                );
+            }
         }
     }
 

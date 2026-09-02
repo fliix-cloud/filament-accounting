@@ -16,6 +16,8 @@ use FilamentAccounting\Filament\Resources\CatalogItemResource\Pages\CreateCatalo
 use FilamentAccounting\Filament\Resources\CatalogItemResource\Pages\EditCatalogItem;
 use FilamentAccounting\Filament\Resources\CatalogItemResource\Pages\ListCatalogItems;
 use FilamentAccounting\Models\CatalogItem;
+use FilamentAccounting\Ownership\LegalEntityScope;
+use Illuminate\Database\Eloquent\Builder;
 
 class CatalogItemResource extends Resource
 {
@@ -54,6 +56,11 @@ class CatalogItemResource extends Resource
         return 'manage_catalog';
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        return app(LegalEntityScope::class)->constrain(parent::getEloquentQuery());
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -65,7 +72,7 @@ class CatalogItemResource extends Resource
             ])->required(),
             TextInput::make('unit')->label(__('filament-accounting::fields.unit'))->default('unit'),
             TextInput::make('default_quantity')->label(__('filament-accounting::fields.quantity'))->default('1'),
-            TextInput::make('default_unit_price_minor')->label(__('filament-accounting::fields.unit_price'))->numeric()->required(),
+            TextInput::make('default_unit_price')->label(__('filament-accounting::fields.unit_price'))->numeric()->step('0.01')->required(),
             TextInput::make('currency')->label(__('filament-accounting::fields.currency'))->maxLength(3)->required(),
             TextInput::make('default_tax_code')->label(__('filament-accounting::fields.tax_code')),
             Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),

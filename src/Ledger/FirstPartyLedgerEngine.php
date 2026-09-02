@@ -10,6 +10,7 @@ use FilamentAccounting\Exceptions\ClosedPeriodException;
 use FilamentAccounting\Exceptions\UnbalancedJournalException;
 use FilamentAccounting\Models\JournalEntry;
 use FilamentAccounting\Models\JournalLine;
+use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Services\AuditLogger;
 use FilamentAccounting\Services\ResolveAccountingPeriod;
@@ -38,7 +39,7 @@ final class FirstPartyLedgerEngine implements LedgerEngine
                 }
             }
 
-            $this->assertLines($command->lines);
+            $this->assertLines($entity, $command->lines);
 
             $period = $this->periods->covering($entity, $command->postedOn, lock: true);
 
@@ -178,7 +179,7 @@ final class FirstPartyLedgerEngine implements LedgerEngine
     /**
      * @param  list<JournalLineDraft>  $lines
      */
-    private function assertLines(array $lines): void
+    private function assertLines(LegalEntity $entity, array $lines): void
     {
         if (count($lines) < 2) {
             throw new UnbalancedJournalException(__('filament-accounting::errors.journal_min_lines'));
@@ -196,6 +197,21 @@ final class FirstPartyLedgerEngine implements LedgerEngine
             if ($line->debitMinor < 0 || $line->creditMinor < 0) {
                 throw new UnbalancedJournalException(__('filament-accounting::errors.journal_negative_line'));
             }
+        }
+
+        $accountIds = collect($lines)
+            ->pluck('ledgerAccountId')
+            ->unique()
+            ->values();
+
+        $validAccountCount = LedgerAccount::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('is_active', true)
+            ->whereIn('id', $accountIds)
+            ->count();
+
+        if ($validAccountCount !== $accountIds->count()) {
+            throw new UnbalancedJournalException(__('filament-accounting::errors.ledger_account_invalid'));
         }
     }
 
