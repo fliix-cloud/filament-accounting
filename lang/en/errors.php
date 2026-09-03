@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'tax_suggestion_confirmation_required' => 'The suggested tax treatment is ambiguous and must be confirmed explicitly.',
     'bank_account_inactive' => 'This bank account is not enabled for use.',
     'attachment_requires_persisted_model' => 'Attachments require a persisted accounting record.',
     'invalid_attachment' => 'The attachment is empty, too large, or has an invalid filename.',

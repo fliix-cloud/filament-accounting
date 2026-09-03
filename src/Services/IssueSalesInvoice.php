@@ -16,6 +16,7 @@ use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Support\ExactMoney;
 use FilamentAccounting\Support\LineMoneyCalculator;
+use FilamentAccounting\Tax\SalesTaxSuggestionService;
 use Illuminate\Support\Facades\DB;
 
 final class IssueSalesInvoice
@@ -27,6 +28,7 @@ final class IssueSalesInvoice
         private readonly PostDocument $poster,
         private readonly AuditLogger $audit,
         private readonly ResolveTaxRuleVersion $taxRules,
+        private readonly SalesTaxSuggestionService $taxSuggestions,
         private readonly GenerateInvoiceArtifacts $artifacts,
     ) {}
 
@@ -85,7 +87,7 @@ final class IssueSalesInvoice
                 'created_by_id' => $actor ? (string) $actor->getKey() : null,
             ]);
             $document->save();
-            $document->fill($this->writeLines($entity, $document, $payload['lines'] ?? [], $taxDate, $currency));
+            $document->fill($this->writeLines($entity, $party, $document, $payload['lines'] ?? [], $taxDate, $currency));
             $document->save();
 
             $this->audit->log($entity, 'document.draft_created', $document, [
@@ -127,7 +129,7 @@ final class IssueSalesInvoice
             ]);
             $document->save();
             $document->lines()->delete();
-            $document->fill($this->writeLines($entity, $document, $payload['lines'] ?? [], $taxDate, $currency));
+            $document->fill($this->writeLines($entity, $party, $document, $payload['lines'] ?? [], $taxDate, $currency));
             $document->save();
 
             return $document->fresh(['lines']) ?? $document;
@@ -201,7 +203,7 @@ final class IssueSalesInvoice
      * @param  list<array<string, mixed>>  $lines
      * @return array{net_minor: int, tax_minor: int, gross_minor: int}
      */
-    private function writeLines(LegalEntity $entity, Document $document, array $lines, string $date, string $currency): array
+    private function writeLines(LegalEntity $entity, Party $party, Document $document, array $lines, string $date, string $currency): array
     {
         if ($lines === []) {
             throw new DocumentException(__('filament-accounting::errors.document_needs_lines'));
@@ -227,7 +229,16 @@ final class IssueSalesInvoice
                     ? ExactMoney::ofString((string) $input['unit_price'], $currency)->minorAmount
                     : ($catalog instanceof CatalogItem ? $catalog->default_unit_price_minor : 0));
             $lineNet = LineMoneyCalculator::netMinor($quantity, $unitPrice);
-            $taxCodeValue = $input['tax_code'] ?? ($catalog instanceof CatalogItem ? $catalog->default_tax_code : null);
+            $suggestion = $catalog instanceof CatalogItem
+                ? $this->taxSuggestions->suggest($entity, $party, $catalog->type, $date, $catalog->default_tax_code)
+                : null;
+            $taxCodeValue = $input['tax_code'] ?? null;
+            if ($taxCodeValue === null && $suggestion !== null) {
+                $taxCodeValue = $suggestion->taxCode;
+            }
+            if ($suggestion?->requiresConfirmation && ! ($input['tax_confirmed'] ?? false)) {
+                throw new DocumentException(__('filament-accounting::errors.tax_suggestion_confirmation_required'));
+            }
             $version = $this->taxRules->handle($entity, $taxCodeValue, $date);
             $rateBp = (int) $version->rate_bp;
 

@@ -13,4 +13,5 @@ return [
     'tax_code' => ['singular' => 'Steuerschlüssel', 'plural' => 'Steuerschlüssel'],
     'legal_entity' => ['singular' => 'Mandant', 'plural' => 'Mandanten'],
     'audit_event' => ['singular' => 'Prüfereignis', 'plural' => 'Prüfereignisse'],
+    'reconciliation_learning_rule' => ['singular' => 'Lernregel', 'plural' => 'Lernregeln'],
 ];

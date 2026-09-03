@@ -32,4 +32,5 @@ return [
     'view_assignment' => 'Zuordnung anzeigen',
     'preview' => 'Vorschau',
     'add_bank_account' => 'Bankkonto hinzufügen',
+    'add_tax_rate_period' => 'Künftigen Steuersatz hinzufügen',
 ];

@@ -3,20 +3,16 @@
 namespace FilamentAccounting\Filament\Resources;
 
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
-use FilamentAccounting\Filament\Resources\TaxCodeResource\Pages\CreateTaxCode;
 use FilamentAccounting\Filament\Resources\TaxCodeResource\Pages\EditTaxCode;
 use FilamentAccounting\Filament\Resources\TaxCodeResource\Pages\ListTaxCodes;
 use FilamentAccounting\Models\TaxCode;
@@ -37,7 +33,7 @@ class TaxCodeResource extends Resource
 
     public static function getNavigationParentItem(): ?string
     {
-        return AccountingNavigation::LEDGER;
+        return AccountingNavigation::ADMINISTRATION;
     }
 
     public static function getNavigationLabel(): string
@@ -68,17 +64,10 @@ class TaxCodeResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('code')->label(__('filament-accounting::fields.code'))->required()->maxLength(32),
-            TextInput::make('name')->label(__('filament-accounting::fields.name'))->required(),
-            Select::make('direction')
-                ->label(__('filament-accounting::fields.direction'))
-                ->options([
-                    'output' => __('filament-accounting::fields.output_tax'),
-                    'input' => __('filament-accounting::fields.input_tax'),
-                    'both' => __('filament-accounting::fields.both_directions'),
-                ])
-                ->required(),
-            Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),
+            TextInput::make('name')
+                ->label(__('filament-accounting::fields.tax_treatment'))
+                ->disabled()
+                ->dehydrated(false),
             Repeater::make('versions')
                 ->relationship()
                 ->label(__('filament-accounting::fields.tax_rule_versions'))
@@ -108,14 +97,14 @@ class TaxCodeResource extends Resource
                         ])
                         ->live()
                         ->required(),
-                    Toggle::make('recoverable')->label(__('filament-accounting::fields.recoverable'))->default(true),
                     TextInput::make('reason')
                         ->label(__('filament-accounting::fields.exemption_reason'))
                         ->required(fn (Get $get): bool => in_array($get('category'), ['exempt', 'non_taxable'], true)),
-                    KeyValue::make('export_mapping')->label(__('filament-accounting::fields.export_mapping')),
                 ])
-                ->defaultItems(1)
+                ->addActionLabel(__('filament-accounting::actions.add_tax_rate_period'))
                 ->collapsible()
+                ->reorderable(false)
+                ->deletable(false)
                 ->columnSpanFull(),
         ]);
     }
@@ -123,19 +112,34 @@ class TaxCodeResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('code')->label(__('filament-accounting::fields.code'))->searchable(),
             TextColumn::make('name')->label(__('filament-accounting::fields.name'))->searchable(),
-            TextColumn::make('direction')->label(__('filament-accounting::fields.direction')),
-            TextColumn::make('versions_count')->counts('versions')->label(__('filament-accounting::fields.versions')),
-            IconColumn::make('is_active')->boolean()->label(__('filament-accounting::fields.is_active')),
+            TextColumn::make('current_rate')
+                ->label(__('filament-accounting::fields.tax_rate'))
+                ->state(function (TaxCode $record): string {
+                    $version = $record->versionOn(now()->toDateString());
+
+                    return $version === null
+                        ? '—'
+                        : number_format($version->rate_bp / 100, 2, ',', '.').' %';
+                }),
+            TextColumn::make('versions_count')->counts('versions')->label(__('filament-accounting::fields.tax_rate_periods')),
         ]);
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return false;
     }
 
     public static function getPages(): array
     {
         return [
             'index' => ListTaxCodes::route('/'),
-            'create' => CreateTaxCode::route('/create'),
             'edit' => EditTaxCode::route('/{record}/edit'),
         ];
     }

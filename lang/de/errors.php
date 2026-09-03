@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'tax_suggestion_confirmation_required' => 'Der vorgeschlagene Steuerfall ist nicht eindeutig und muss ausdrücklich bestätigt werden.',
     'bank_account_inactive' => 'Dieses Bankkonto ist nicht zur Nutzung aktiviert.',
     'attachment_requires_persisted_model' => 'Anhänge benötigen einen bereits gespeicherten Buchhaltungsdatensatz.',
     'invalid_attachment' => 'Der Anhang ist leer, zu groß oder hat einen ungültigen Dateinamen.',

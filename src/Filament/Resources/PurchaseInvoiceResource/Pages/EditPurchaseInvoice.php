@@ -26,10 +26,7 @@ class EditPurchaseInvoice extends EditRecord
             'unit' => $line->unit,
             'unit_price' => ExactMoney::ofMinor($line->unit_price_minor, $record->currency)->decimalString(),
             'classification_code' => $line->classification_code,
-            'ledger_account_id' => $line->ledger_account_id,
             'tax_code' => $line->tax_code,
-            'classification_confirmed' => $line->classification_confirmed,
-            'tax_confirmed' => $line->tax_confirmed,
             'imported_tax_code' => $line->imported_tax_code,
         ])->all();
 
