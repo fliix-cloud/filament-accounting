@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'generic' => 'The bank request could not be completed.',
+    'configuration' => 'The FinTS product registration is missing or invalid.',
+    'authentication' => 'Login to the bank failed.',
+    'unsupported_capability' => 'This operation is not supported for the selected bank or account.',
+    'unsupported_direct_debit_pain' => 'The bank does not advertise a direct-debit PAIN format that this package can safely generate.',
+    'account_not_usable' => 'This account is not enabled for use in Filament.',
+    'validation' => 'The submitted data is invalid.',
+    'network' => 'The bank server could not be reached.',
+    'bank_rejected' => 'The bank rejected the operation.',
+    'sca_expired' => 'The authentication session has expired. Please restart the operation.',
+    'sca_dialog_expired' => 'The bank authentication dialog is no longer valid. Close this window and test the connection again.',
+    'ambiguous' => 'The bank request may already have been submitted. Do not retry automatically.',
+    'retryable' => 'The bank is temporarily unavailable. Try again later.',
+    'ownership' => 'This bank data is not available in the current context.',
+    'unauthorized' => 'You are not allowed to perform this action.',
+    'already_in_progress' => 'This payment is already being processed.',
+    'tan_mode_required' => 'Select a TAN method from the bank list, then test the connection. Use Discover TAN methods if the list is empty.',
+    'tan_medium_required' => 'This TAN method needs a TAN medium. Discover TAN methods, then choose a device from the list.',
+    'tan_medium_not_allowed' => 'This TAN method does not use a TAN medium. Clear the medium and try again.',
+    'tan_mode_unknown' => 'The selected TAN method is not available for this bank connection. Discover TAN methods again.',
+    'login_required' => 'The bank connection must be logged in before this operation. Test the connection, then try again.',
+];

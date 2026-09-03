@@ -1,0 +1,21 @@
+<?php
+
+return [
+    'institutes_synced' => 'Bank directory updated.',
+    'institutes_synced_body' => ':count institutes with a PIN/TAN endpoint are available.',
+    'saved' => 'Saved.',
+    'connection_tested' => 'Connection tested successfully.',
+    'accounts_synced' => 'Accounts synchronized.',
+    'balances_synced' => 'Balances updated.',
+    'transactions_synced' => 'Transactions synchronized.',
+    'transactions_and_balances_synced' => 'Transactions and balances updated.',
+    'transfer_submitted' => 'Transfer submitted to the bank.',
+    'direct_debit_submitted' => 'Direct debit submitted to the bank.',
+    'sca_required' => 'The bank requires additional authentication.',
+    'sca_completed' => 'Authentication completed.',
+    'product_id_missing' => 'FINTS_PRODUCT_ID is not configured.',
+    'product_id_missing_help' => 'Register the application with Deutsche Kreditwirtschaft, then set FINTS_PRODUCT_ID in the environment. This package will not open a live FinTS dialog without that registration number.',
+    'pin_kept' => 'The stored PIN was kept.',
+    'tan_modes_discovered' => 'TAN methods updated.',
+    'tan_modes_discovered_body' => ':count methods are available. Select a method (and a medium if required), then test the connection.',
+];

@@ -3,6 +3,14 @@
 namespace FilamentAccounting;
 
 use FilamentAccounting\Audit\FilesystemAuditAnchorStore;
+use FilamentAccounting\Banking\FinTs\Commands\CleanupScaCommand;
+use FilamentAccounting\Banking\FinTs\Commands\SyncCommand;
+use FilamentAccounting\Banking\FinTs\Commands\SyncInstitutesCommand;
+use FilamentAccounting\Banking\FinTs\Contracts\FintsClientFactory;
+use FilamentAccounting\Banking\FinTs\Models\BankConnection;
+use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope;
+use FilamentAccounting\Banking\FinTs\Policies\BankConnectionPolicy;
+use FilamentAccounting\Banking\FinTs\Services\PhpFintsClientFactory;
 use FilamentAccounting\Commands\CreateAuditAnchorCommand;
 use FilamentAccounting\Commands\ExportAuditEvidenceCommand;
 use FilamentAccounting\Commands\InstallCommand;
@@ -15,7 +23,6 @@ use FilamentAccounting\Contracts\AccountingEntityResolver;
 use FilamentAccounting\Contracts\AccountingExporter;
 use FilamentAccounting\Contracts\AccountingTenancyContextActivator;
 use FilamentAccounting\Contracts\AuditAnchorStore;
-use FilamentAccounting\Contracts\BankFeedDriverRegistry;
 use FilamentAccounting\Contracts\EInvoiceAdapter;
 use FilamentAccounting\Contracts\InvoiceRenderer;
 use FilamentAccounting\Contracts\LedgerEngine;
@@ -27,8 +34,6 @@ use FilamentAccounting\Ledger\FirstPartyLedgerEngine;
 use FilamentAccounting\Livewire\ReconciliationAssistant;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Reconciliation\DeterministicReconciliationMatcher;
-use FilamentAccounting\Support\BankFeedRegistry;
-use FilamentAccounting\Support\BankSourceLinkRegistry;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Package;
@@ -44,9 +49,12 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
             ->name('filament-accounting')
             ->hasCommands([
                 CreateAuditAnchorCommand::class,
+                CleanupScaCommand::class,
                 ExportAuditEvidenceCommand::class,
                 InstallCommand::class,
                 SeedProfileCommand::class,
+                SyncCommand::class,
+                SyncInstitutesCommand::class,
                 VerifyAuditEvidenceCommand::class,
                 VerifyCommand::class,
             ]);
@@ -59,6 +67,7 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
             __DIR__.'/../config/filament-accounting.php' => config_path('filament-accounting.php'),
         ], 'filament-accounting-config');
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+        $this->loadRoutesFrom(__DIR__.'/../routes/fints.php');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'filament-accounting');
 
         $this->app->singleton(config('filament-accounting.ownership.entity_resolver'));
@@ -75,9 +84,9 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
             return $app->make(config('filament-accounting.authorization.authorizer'));
         });
         $this->app->singleton(LegalEntityScope::class);
+        $this->app->singleton(LegalEntityBankScope::class);
+        $this->app->singleton(FintsClientFactory::class, PhpFintsClientFactory::class);
         $this->app->singleton(LedgerEngine::class, FirstPartyLedgerEngine::class);
-        $this->app->singleton(BankFeedDriverRegistry::class, BankFeedRegistry::class);
-        $this->app->singleton(BankSourceLinkRegistry::class);
         $this->app->singleton(ReconciliationMatcher::class, DeterministicReconciliationMatcher::class);
         $this->app->singleton(EInvoiceAdapter::class, ZugferdEInvoiceAdapter::class);
         $this->app->singleton(InvoiceRenderer::class, FpdfInvoiceRenderer::class);
@@ -111,6 +120,8 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         $this->registerPackageTranslations();
+
+        Gate::policy(BankConnection::class, BankConnectionPolicy::class);
 
         if ($this->app->bound('livewire.finder')) {
             Livewire::component('filament-accounting.reconciliation-assistant', ReconciliationAssistant::class);

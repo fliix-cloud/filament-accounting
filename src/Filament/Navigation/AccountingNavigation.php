@@ -12,9 +12,15 @@ final class AccountingNavigation
 
     public const BANKING = 'filament-accounting.banking';
 
-    public const LEDGER = 'filament-accounting.ledger';
+    public const REPORTS = 'filament-accounting.reports';
 
-    public const ADMINISTRATION = 'filament-accounting.administration';
+    public const SETTINGS = 'filament-accounting.settings';
+
+    /** @deprecated Use REPORTS. */
+    public const LEDGER = self::REPORTS;
+
+    /** @deprecated Use SETTINGS. */
+    public const ADMINISTRATION = self::SETTINGS;
 
     /**
      * @return list<NavigationItem>
@@ -25,8 +31,8 @@ final class AccountingNavigation
             self::item(self::SALES, 'sales', 'heroicon-o-arrow-trending-up', 10),
             self::item(self::PURCHASES, 'purchases', 'heroicon-o-arrow-trending-down', 20),
             self::item(self::BANKING, 'banking', 'heroicon-o-banknotes', 30),
-            self::item(self::LEDGER, 'ledger', 'heroicon-o-book-open', 40),
-            self::item(self::ADMINISTRATION, 'administration', 'heroicon-o-cog-6-tooth', 90),
+            self::item(self::REPORTS, 'reports', 'heroicon-o-chart-bar', 40),
+            self::item(self::SETTINGS, 'settings', 'heroicon-o-cog-6-tooth', 90),
         ];
     }
 

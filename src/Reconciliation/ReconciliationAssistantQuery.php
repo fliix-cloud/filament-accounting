@@ -5,6 +5,7 @@ namespace FilamentAccounting\Reconciliation;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Enums\OpenItemKind;
 use FilamentAccounting\Enums\PaymentStatus;
+use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
 use FilamentAccounting\Models\BankStatementLine;
@@ -13,11 +14,11 @@ use FilamentAccounting\Models\OpenItem;
 use FilamentAccounting\Models\PostingRule;
 use FilamentAccounting\Models\PostingRuleVersion;
 use FilamentAccounting\Models\Reconciliation;
+use FilamentAccounting\Models\ReconciliationLearningRule;
 use FilamentAccounting\Models\ReconciliationSplit;
 use FilamentAccounting\Models\TaxCode;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Services\SuggestReconciliationMatches;
-use FilamentAccounting\Support\BankSourceLinkRegistry;
 use FilamentAccounting\Support\MoneyFormatter;
 use Illuminate\Support\Str;
 
@@ -26,7 +27,6 @@ final class ReconciliationAssistantQuery
     public function __construct(
         private readonly LegalEntityScope $scope,
         private readonly SuggestReconciliationMatches $matcher,
-        private readonly BankSourceLinkRegistry $sourceLinks,
     ) {}
 
     public function statementLine(string $uuid): ?BankStatementLine
@@ -159,13 +159,17 @@ final class ReconciliationAssistantQuery
         $direction = $line->isIncoming() ? 'incoming' : 'outgoing';
         $needle = Str::lower(trim($search));
         $taxRates = [];
+        $learnedRuleIds = ReconciliationLearningRule::matching($line, 'posting_rule')
+            ->pluck('target_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
 
         return PostingRule::query()
             ->where('legal_entity_id', $line->legal_entity_id)
             ->where('is_active', true)
             ->orderBy('label')
             ->get()
-            ->map(function (PostingRule $rule) use ($date, $direction, $line, &$taxRates): ?array {
+            ->map(function (PostingRule $rule) use ($date, $direction, $line, $learnedRuleIds, &$taxRates): ?array {
                 $version = $rule->versionOn($date);
                 if (! $version instanceof PostingRuleVersion
                     || (filled($version->direction) && $version->direction !== $direction)) {
@@ -189,6 +193,8 @@ final class ReconciliationAssistantQuery
                     'tax_code' => $taxCode,
                     'tax_rate_bp' => $taxCode !== null ? ($taxRates[$taxCode] ?? null) : null,
                     'direction' => $version->direction,
+                    'score' => in_array((int) $rule->getKey(), $learnedRuleIds, true) ? 35 : 0,
+                    'reasons' => in_array((int) $rule->getKey(), $learnedRuleIds, true) ? ['learned_rule'] : [],
                 ];
             })
             ->filter()
@@ -205,6 +211,7 @@ final class ReconciliationAssistantQuery
                     $candidate['tax_code'],
                 ])), $needle);
             })
+            ->sortByDesc(fn (array $candidate): int => (int) $candidate['score'])
             ->values()
             ->all();
     }
@@ -241,9 +248,9 @@ final class ReconciliationAssistantQuery
         })->all();
     }
 
-    public function sourceUrl(BankStatementLine $line): ?string
+    public function sourceUrl(BankStatementLine $line): string
     {
-        return $this->sourceLinks->url($line);
+        return BankStatementLineResource::getUrl('view', ['record' => $line]);
     }
 
     private function paymentStatus(int $original, int $remaining): PaymentStatus

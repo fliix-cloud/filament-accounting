@@ -6,12 +6,10 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use FilamentAccounting\Enums\AccountType;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
@@ -20,7 +18,6 @@ use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\EditPurc
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ListPurchaseInvoices;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ViewPurchaseInvoice;
 use FilamentAccounting\Models\Document;
-use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Models\TaxCode;
 use FilamentAccounting\Ownership\LegalEntityScope;
@@ -101,24 +98,16 @@ class PurchaseInvoiceResource extends Resource
                             'goods' => __('filament-accounting::fields.expense_categories.goods'),
                             'external_services' => __('filament-accounting::fields.expense_categories.external_services'),
                             'other_operating_expense' => __('filament-accounting::fields.expense_categories.other_operating_expense'),
+                            'office_supplies' => __('filament-accounting::fields.expense_categories.office_supplies'),
+                            'software_it' => __('filament-accounting::fields.expense_categories.software_it'),
+                            'rent_utilities' => __('filament-accounting::fields.expense_categories.rent_utilities'),
+                            'telecom' => __('filament-accounting::fields.expense_categories.telecom'),
                             'travel' => __('filament-accounting::fields.expense_categories.travel'),
+                            'insurance' => __('filament-accounting::fields.expense_categories.insurance'),
+                            'bank_fees' => __('filament-accounting::fields.expense_categories.bank_fees'),
+                            'personnel' => __('filament-accounting::fields.expense_categories.personnel'),
+                            'suspense' => __('filament-accounting::fields.expense_categories.suspense'),
                         ])
-                        ->required(),
-                    Select::make('ledger_account_id')
-                        ->label(__('filament-accounting::fields.expense_account'))
-                        ->options(function (): array {
-                            $entity = app(LegalEntityScope::class)->require();
-
-                            return LedgerAccount::query()
-                                ->where('legal_entity_id', $entity->getKey())
-                                ->where('is_active', true)
-                                ->whereIn('type', [AccountType::Expense->value, AccountType::Asset->value])
-                                ->orderBy('code')
-                                ->get()
-                                ->mapWithKeys(fn (LedgerAccount $account): array => [$account->getKey() => $account->label()])
-                                ->all();
-                        })
-                        ->searchable()
                         ->required(),
                     Select::make('tax_code')
                         ->label(__('filament-accounting::fields.tax_treatment'))
@@ -128,10 +117,6 @@ class PurchaseInvoiceResource extends Resource
                             return TaxCode::query()->where('legal_entity_id', $entity->getKey())->where('is_active', true)->orderBy('code')->pluck('name', 'code')->all();
                         })
                         ->required(),
-                    Toggle::make('classification_confirmed')
-                        ->label(__('filament-accounting::fields.confirm_expense_category')),
-                    Toggle::make('tax_confirmed')
-                        ->label(__('filament-accounting::fields.confirm_tax_treatment')),
                     TextInput::make('imported_tax_code')->hidden(),
                 ])
                 ->defaultItems(1),

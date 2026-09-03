@@ -184,10 +184,7 @@ class InvoiceFlowTest extends TestCase
                 'quantity' => '1',
                 'unit_price_minor' => 20000,
                 'tax_code' => 'DE-19',
-                'account_role' => 'expense',
                 'classification_code' => 'other_operating_expense',
-                'classification_confirmed' => true,
-                'tax_confirmed' => true,
             ]],
         ]);
 
@@ -195,10 +192,13 @@ class InvoiceFlowTest extends TestCase
         $this->assertSame(PostingStatus::Posted, $document->posting_status);
         $this->assertSame(OpenItemKind::Payable, $document->openItem->kind);
         $this->assertSame(23800, $document->gross_minor);
+        $this->assertSame('4900', $document->lines->firstOrFail()->ledgerAccount?->code);
+        $this->assertTrue($document->lines->firstOrFail()->classification_confirmed);
+        $this->assertTrue($document->lines->firstOrFail()->tax_confirmed);
     }
 
     #[Test]
-    public function purchase_drafts_cannot_be_received_without_manual_expense_and_tax_confirmation(): void
+    public function imported_purchase_drafts_require_a_reviewed_expense_category(): void
     {
         $entity = $this->makeEntity();
         $this->actingAs($this->makeUser());
@@ -220,6 +220,36 @@ class InvoiceFlowTest extends TestCase
 
         $this->expectException(DocumentException::class);
         $service->receive($draft);
+    }
+
+    #[Test]
+    public function reviewed_purchase_categories_resolve_internal_accounts_without_accepting_a_ledger_choice(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $supplier = $this->makeParty($entity, ['is_customer' => false, 'is_supplier' => true]);
+        $foreignAccount = AccountRoleAssignment::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('role', AccountRole::Bank)
+            ->value('ledger_account_id');
+
+        $document = app(RegisterPurchaseInvoice::class)->handle($entity, [
+            'party_id' => $supplier->getKey(),
+            'issue_date' => '2026-03-11',
+            'currency' => 'EUR',
+            'lines' => [[
+                'description' => 'Papier',
+                'quantity' => '1',
+                'unit_price' => '10.00',
+                'tax_code' => 'DE-19',
+                'classification_code' => 'office_supplies',
+                'ledger_account_id' => $foreignAccount,
+            ]],
+        ]);
+
+        $line = $document->lines->firstOrFail();
+        $this->assertSame('4930', $line->ledgerAccount?->code);
+        $this->assertNotSame((int) $foreignAccount, $line->ledger_account_id);
     }
 
     #[Test]

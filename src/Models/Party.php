@@ -125,11 +125,6 @@ class Party extends AccountingModel
                 'iban' => $account->iban,
                 'bic' => $account->bic,
                 'is_primary' => $account->is_primary,
-                'mandate_reference' => $account->mandate_reference,
-                'mandate_signed_on' => $account->mandate_signed_on?->toDateString(),
-                'mandate_scheme' => $account->mandate_scheme?->value,
-                'mandate_type' => $account->mandate_type?->value,
-                'mandate_status' => $account->mandate_status?->value,
             ])->all(),
         ];
     }

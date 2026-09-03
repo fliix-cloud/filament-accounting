@@ -25,6 +25,7 @@ use FilamentAccounting\Models\ReconciliationSplit;
 use FilamentAccounting\Models\Settlement;
 use FilamentAccounting\Models\TaxCode;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Reconciliation\StoreReconciliationLearningRules;
 use FilamentAccounting\Support\LineMoneyCalculator;
 use Illuminate\Support\Facades\DB;
 
@@ -36,6 +37,7 @@ final class FinalizeReconciliation
         private readonly AccountingActorResolver $actors,
         private readonly LegalEntityScope $scope,
         private readonly AuditLogger $audit,
+        private readonly StoreReconciliationLearningRules $learningRules,
     ) {}
 
     /**
@@ -52,10 +54,6 @@ final class FinalizeReconciliation
             if (! $line->bankAccount->is_active) {
                 throw new ReconciliationException(__('filament-accounting::errors.bank_account_inactive'));
             }
-            if (! $line->bankAccount?->ledger_mapping_confirmed) {
-                throw new ReconciliationException(__('filament-accounting::errors.bank_ledger_mapping_unconfirmed'));
-            }
-
             if ($idempotencyKey !== null) {
                 $existing = Reconciliation::query()
                     ->where('legal_entity_id', $line->legal_entity_id)
@@ -185,6 +183,7 @@ final class FinalizeReconciliation
             $reconciliation->journal_entry_id = $entry->getKey();
             $reconciliation->finalized_at = now();
             $reconciliation->save();
+            $this->learningRules->handle($reconciliation, $line);
 
             $this->audit->log($entity, 'reconciliation.finalized', $reconciliation, [
                 'statement_line_id' => $line->getKey(),

@@ -1,0 +1,26 @@
+<?php
+
+return [
+    'iban' => 'The IBAN is invalid.',
+    'bic' => 'The BIC is invalid.',
+    'amount' => 'The amount must be greater than zero.',
+    'mandate' => 'Mandate reference and signature date are required.',
+    'mandate_reference' => 'The mandate reference is invalid. It must be at most 35 characters and must not start/end with “/” or contain “//”.',
+    'mandate_active' => 'The selected mandate is not active or does not belong to the current bank owner.',
+    'creditor_profile' => 'The selected creditor profile is invalid.',
+    'creditor_identifier' => 'The SEPA Creditor Identifier is invalid.',
+    'sequence_type' => 'The sequence type does not match the current mandate lifecycle.',
+    'b2b_bank_confirmation' => 'A B2B mandate must be documented as registered/confirmed with the debtor bank before collection.',
+    'collection_date' => 'A valid collection date is required and must not be in the past.',
+    'direct_debit_currency' => 'SEPA Direct Debit can only be submitted in EUR.',
+    'sepa_identifier' => 'The SEPA order identifier is invalid or longer than 35 characters.',
+    'account_holder_name' => 'Set the account holder name on the source account before submitting a transfer.',
+    'endpoint_required' => 'A FinTS endpoint URL is required.',
+    'endpoint_invalid' => 'The FinTS endpoint URL is invalid.',
+    'endpoint_https' => 'FinTS endpoints must use HTTPS.',
+    'endpoint_scheme' => 'The FinTS endpoint scheme is not allowed.',
+    'endpoint_host' => 'The FinTS endpoint host is not on the allow-list.',
+    'endpoint_private' => 'Private or loopback FinTS endpoints are not allowed.',
+    'endpoint_credentials' => 'The FinTS endpoint must not contain embedded credentials.',
+    'pin_required' => 'A PIN is required.',
+];

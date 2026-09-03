@@ -22,7 +22,7 @@ final readonly class MatchSuggestion
             'document_number',
             'amount',
             'iban',
-            'history',
+            'learned_rule',
         ]);
 
         if ($this->score >= 160 && count($strongSignals) >= 2 && ! $this->ambiguous) {

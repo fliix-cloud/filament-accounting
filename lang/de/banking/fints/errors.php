@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'generic' => 'Die Bankanfrage konnte nicht abgeschlossen werden.',
+    'configuration' => 'Die FinTS-Produktregistrierung fehlt oder ist ungültig.',
+    'authentication' => 'Die Anmeldung bei der Bank ist fehlgeschlagen.',
+    'unsupported_capability' => 'Dieser Vorgang wird für die gewählte Bank oder das Konto nicht unterstützt.',
+    'unsupported_direct_debit_pain' => 'Die Bank bietet für Lastschriften kein PAIN-Format an, das dieses Paket sicher erzeugen kann.',
+    'account_not_usable' => 'Dieses Konto ist in Filament nicht zur Nutzung aktiviert.',
+    'validation' => 'Die eingegebenen Daten sind ungültig.',
+    'network' => 'Der Bankserver ist nicht erreichbar.',
+    'bank_rejected' => 'Die Bank hat den Vorgang abgelehnt.',
+    'sca_expired' => 'Die Authentifizierungssitzung ist abgelaufen. Bitte starten Sie den Vorgang erneut.',
+    'sca_dialog_expired' => 'Der FinTS-Dialog ist nicht mehr gültig. Schließen Sie dieses Fenster und testen Sie die Verbindung erneut.',
+    'ambiguous' => 'Die Bankanfrage wurde möglicherweise bereits übermittelt. Nicht automatisch erneut senden.',
+    'retryable' => 'Die Bank ist vorübergehend nicht erreichbar. Bitte später erneut versuchen.',
+    'ownership' => 'Diese Bankdaten sind im aktuellen Kontext nicht verfügbar.',
+    'unauthorized' => 'Sie dürfen diese Aktion nicht ausführen.',
+    'already_in_progress' => 'Diese Zahlung wird bereits verarbeitet.',
+    'tan_mode_required' => 'Wählen Sie ein TAN-Verfahren aus der Bankliste und testen Sie anschließend die Verbindung. Nutzen Sie „TAN-Verfahren ermitteln“, wenn die Liste leer ist.',
+    'tan_medium_required' => 'Dieses TAN-Verfahren benötigt ein TAN-Medium. Ermitteln Sie die Verfahren und wählen Sie dann ein Gerät aus der Liste.',
+    'tan_medium_not_allowed' => 'Dieses TAN-Verfahren verwendet kein TAN-Medium. Entfernen Sie das Medium und versuchen Sie es erneut.',
+    'tan_mode_unknown' => 'Das gewählte TAN-Verfahren ist für diese Bankverbindung nicht verfügbar. Ermitteln Sie die TAN-Verfahren erneut.',
+    'login_required' => 'Für diesen Vorgang muss die Bankverbindung angemeldet sein. Testen Sie die Verbindung und versuchen Sie es erneut.',
+];

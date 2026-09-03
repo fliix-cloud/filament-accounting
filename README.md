@@ -1,6 +1,6 @@
 # filament-accounting
 
-Laravel 13 / Filament v5 double-entry accounting package with a first-party ledger, German-first compliance profiles, bank reconciliation, and e-invoice storage.
+Laravel 13 / Filament v5 accounting package with a first-party ledger, German-first invoicing, integrated FinTS banking, reconciliation, and e-invoice storage.
 
 This repository is an **installable Composer package**, not a Laravel application.
 
@@ -8,13 +8,18 @@ This repository is an **installable Composer package**, not a Laravel applicatio
 
 - Legal-entity scoped double-entry journal (`LedgerEngine`)
 - Customers, suppliers, catalog, sales and purchase invoices, open items
-- Canonical bank statement lines with direct assignment, partial settlement, and true multi-target splits
-- Versioned posting rules (“Steuerfall”) and tax rule versions
-- German and generic compliance profiles (Germany is a registered profile, not a hard-coded `if ($country === 'DE')`)
+- One canonical bank account and bank transaction model, direct FinTS synchronization, SEPA transfers/direct debits, mandates, and SCA
+- Append-only bank source versions for pending, booked, changed, and reversed source states
+- Direct assignment, partial settlement, true multi-target splits, and explainable local learning rules
+- Versioned tax rates and internal posting rules; German 19%, 7%, 0%, historical 16%/5%, EU and export treatments
+- Upload-first purchase invoices with a required business category and automatic internal ledger mapping
 - German and English UI translations
 - Exact money via `brick/money` (integer minor units, no floats)
 
-It does **not** require `filament-fints`. Bank feeds are pluggable drivers. FinTS mapping belongs in `fliix-cloud/filament-accounting-fints`.
+Applications install and register only this package. The framework-free
+`fliix-cloud/php-fints` protocol library is a transitive dependency; the former
+`filament-accounting-fints` bridge and a public bank-driver registry are not
+used at runtime.
 
 Installing this package does not make a host “GoBD certified”. Compliance also depends on deployment, permissions, backups, retention, and procedure.
 
@@ -26,12 +31,11 @@ Installing this package does not make a host “GoBD certified”. Compliance al
 
 ## Installation
 
-Until a Packagist release exists, require from VCS or a path repository:
+Install the product package and its migrations:
 
 ```bash
-composer require fliix-cloud/filament-accounting:dev-main
-php artisan filament-accounting:install --migrate
-php artisan filament-accounting:seed-profile DE
+composer require fliix-cloud/filament-accounting
+php artisan filament-accounting:install --migrate --country=DE
 php artisan filament-accounting:verify
 ```
 
@@ -53,17 +57,24 @@ use FilamentAccounting\FilamentAccountingPlugin;
 
 $panel->plugin(
     FilamentAccountingPlugin::make()
-        ->customers()
-        ->salesInvoices()
-        ->bankReconciliation()
 );
 ```
 
 Resolve the current `LegalEntity` from trusted application context (`ConfiguredLegalEntityResolver`, config `ACCOUNTING_LEGAL_ENTITY_ID`, or a host binding). Never take it from an untrusted request parameter.
 
+Configure `FINTS_PRODUCT_ID` before creating a bank connection. The integrated
+commands are `filament-accounting:sync-institutes`,
+`filament-accounting:sync-bank`, and `filament-accounting:cleanup-sca`.
+
+The project is pre-release. Development databases use the final schema directly;
+after schema changes, recreate them with `php artisan migrate:fresh --seed`.
+There is no data-upgrade or consolidation workflow.
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [ADR: unified accounting package](docs/adr/0003-unified-accounting-package.md)
+- [Maintained php-fints deltas](docs/upstream/php-fints-delta.md)
 - [Domain model](docs/domain-model.md)
 - [Ledger invariants](docs/ledger-invariants.md)
 - [Bank reconciliation](docs/bank-reconciliation.md)

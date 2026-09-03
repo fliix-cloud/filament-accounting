@@ -6,8 +6,6 @@ $ErrorActionPreference = "Stop"
 
 $demo = Join-Path $env:USERPROFILE "Herd\filament-fints-demo"
 $accounting = "C:\Code\filament-accounting"
-$fints = "C:\Code\filament-fints"
-$bridge = "C:\Code\filament-accounting-fints"
 
 function Assert-Command($name) {
     if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
@@ -24,9 +22,9 @@ if (-not (Test-Path (Join-Path $demo "artisan"))) {
 
 Set-Location $demo
 
-composer require fliix-cloud/filament-accounting:dev-main fliix-cloud/filament-accounting-fints:dev-main --no-interaction
+composer require fliix-cloud/filament-accounting:dev-main --no-interaction
 
-foreach ($pkg in @("filament-accounting", "filament-accounting-fints", "filament-fints")) {
+foreach ($pkg in @("filament-accounting")) {
     $path = Join-Path $demo "vendor\fliix-cloud\$pkg"
     if (Test-Path $path) {
         $item = Get-Item $path
@@ -38,13 +36,12 @@ foreach ($pkg in @("filament-accounting", "filament-accounting-fints", "filament
     }
 }
 
-php artisan migrate --force
+php artisan migrate:fresh --force
 php artisan db:seed --force --class=Database\\Seeders\\AccountingDemoSeeder
-php artisan filament-accounting-fints:sync
+php artisan filament-accounting:verify
 
 Write-Host ""
 Write-Host "Demo ready at $demo"
 Write-Host "Panel: /admin (existing Filament login)"
-Write-Host "Raw FinTS transactions are disabled; use Accounting bank transactions."
-Write-Host "Existing FinTS connections are preserved and reassigned to the demo LegalEntity."
-Write-Host "Rerun is non-destructive."
+Write-Host "FinTS banking and canonical Accounting bank transactions use the same plugin."
+Write-Host "The demo database was recreated from the package's target schema."

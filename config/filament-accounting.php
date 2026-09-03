@@ -19,6 +19,10 @@ return [
         'maximum_attachment_bytes' => 15 * 1024 * 1024,
     ],
 
+    'company' => [
+        'country' => env('ACCOUNTING_COUNTRY', 'DE'),
+    ],
+
     'money' => [
         'rounding_mode' => 'half_up',
         'line_rounding' => 'line',
@@ -33,11 +37,11 @@ return [
         'purchase_invoices' => true,
         'bank_reconciliation' => true,
         'journal' => true,
-        'chart_of_accounts' => true,
+        'chart_of_accounts' => false,
         'tax_and_posting_rules' => true,
         'reports' => true,
         'settings' => true,
-        'audit' => true,
+        'audit' => false,
     ],
 
     'ownership' => [
@@ -66,6 +70,11 @@ return [
             'register_purchase_invoices' => 'accounting.invoices.register-purchase',
             'post_documents' => 'accounting.documents.post',
             'view_bank' => 'accounting.bank.view',
+            'manage_bank_connections' => 'accounting.bank.manage-connections',
+            'sync_bank' => 'accounting.bank.sync',
+            'create_bank_transfer' => 'accounting.bank.transfer.create',
+            'create_bank_direct_debit' => 'accounting.bank.direct-debit.create',
+            'confirm_bank_sca' => 'accounting.bank.sca.confirm',
             'draft_reconciliation' => 'accounting.reconciliation.draft',
             'finalize_reconciliation' => 'accounting.reconciliation.finalize',
             'reverse_reconciliation' => 'accounting.reconciliation.reverse',
@@ -104,8 +113,50 @@ return [
         ],
     ],
 
-    'bank_feeds' => [
-        'drivers' => [],
+    'banking' => [
+        'fints' => [
+            'institutes' => [
+                'url' => env('FINTS_INSTITUTES_URL', 'https://raw.githubusercontent.com/hbci4j/hbci4java/master/src/main/resources/blz.properties'),
+                'timeout' => (int) env('FINTS_INSTITUTES_TIMEOUT', 30),
+            ],
+            'product' => [
+                'id' => env('FINTS_PRODUCT_ID', ''),
+                'version' => env('FINTS_PRODUCT_VERSION'),
+                'derive_version_from_package' => true,
+                'user_agent' => env('FINTS_USER_AGENT', 'filament-accounting'),
+            ],
+            'sync' => [
+                'initial_lookback_days' => (int) env('FINTS_SYNC_LOOKBACK_DAYS', 90),
+                'incremental_overlap_days' => (int) env('FINTS_SYNC_OVERLAP_DAYS', 3),
+                'max_range_days' => (int) env('FINTS_SYNC_MAX_RANGE_DAYS', 90),
+                'use_queue' => (bool) env('FINTS_SYNC_USE_QUEUE', false),
+                'queue' => env('FINTS_QUEUE', 'default'),
+                'retention_days' => (int) env('FINTS_RETENTION_DAYS', 30),
+            ],
+            'features' => [
+                'accounts' => true,
+                'balances' => true,
+                'transactions' => true,
+                'transfers' => true,
+                'direct_debits' => true,
+                'realtime_transfers' => true,
+                'international_transfers' => false,
+                'statement_xml' => false,
+                'holdings' => false,
+            ],
+            'security' => [
+                'https_only' => true,
+                'allow_private_endpoints' => (bool) env('FINTS_ALLOW_PRIVATE_ENDPOINTS', false),
+                'allowed_hosts' => array_values(array_filter(array_map('trim', explode(',', (string) env('FINTS_ALLOWED_HOSTS', ''))))),
+                'sca_ttl_minutes' => (int) env('FINTS_SCA_TTL_MINUTES', 30),
+                'min_poll_seconds' => 2,
+                'sensitive_logging' => false,
+                'protocol_debug' => (bool) env('FINTS_PROTOCOL_DEBUG', false),
+            ],
+            'logging' => [
+                'channel' => env('FINTS_LOG_CHANNEL'),
+            ],
+        ],
     ],
 
     'e_invoice' => [

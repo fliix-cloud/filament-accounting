@@ -7,5 +7,4 @@ return [
     'positive_quantity' => 'Die Menge muss eine positive Dezimalzahl sein.',
     'iban' => 'Bitte eine gültige IBAN eingeben.',
     'bic' => 'Bitte eine gültige BIC eingeben oder das Feld leer lassen.',
-    'mandate_reference' => 'Die Mandatsreferenz ist ungültig.',
 ];

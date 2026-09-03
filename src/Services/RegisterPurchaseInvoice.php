@@ -4,6 +4,7 @@ namespace FilamentAccounting\Services;
 
 use FilamentAccounting\Contracts\AccountingActorResolver;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
+use FilamentAccounting\Documents\ExpenseCategoryResolver;
 use FilamentAccounting\Enums\DocumentDirection;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
@@ -26,22 +27,23 @@ final class RegisterPurchaseInvoice
         private readonly PostDocument $poster,
         private readonly AuditLogger $audit,
         private readonly ResolveTaxRuleVersion $taxRules,
+        private readonly ExpenseCategoryResolver $expenseCategories,
     ) {}
 
     /** @param array<string, mixed> $payload */
     public function handle(LegalEntity $entity, array $payload, bool $post = true): Document
     {
-        $draft = $this->createDraft($entity, $payload);
+        $draft = $this->createDraft($entity, $payload, true);
 
         return $this->receive($draft, $post);
     }
 
     /** @param array<string, mixed> $payload */
-    public function createDraft(LegalEntity $entity, array $payload = []): Document
+    public function createDraft(LegalEntity $entity, array $payload = [], bool $reviewed = false): Document
     {
         $this->authorizer->authorize('register_purchase_invoices', $entity);
 
-        return DB::transaction(function () use ($entity, $payload): Document {
+        return DB::transaction(function () use ($entity, $payload, $reviewed): Document {
             if (filled($payload['idempotency_key'] ?? null)) {
                 $existing = Document::query()
                     ->where('legal_entity_id', $entity->getKey())
@@ -84,7 +86,7 @@ final class RegisterPurchaseInvoice
             $lines = $payload['lines'] ?? [];
             $totals = $lines === []
                 ? ['net_minor' => 0, 'tax_minor' => 0, 'gross_minor' => 0]
-                : $this->writeLines($entity, $document, $lines, $issueDate ?? now()->toDateString(), $currency);
+                : $this->writeLines($entity, $document, $lines, $issueDate ?? now()->toDateString(), $currency, $reviewed);
             $document->fill($totals);
             $document->save();
 
@@ -125,7 +127,7 @@ final class RegisterPurchaseInvoice
             $document->save();
             $document->lines()->delete();
             $taxDate = (string) ($document->supply_date?->toDateString() ?? $issueDate);
-            $document->fill($this->writeLines($entity, $document, $payload['lines'] ?? [], $taxDate, $currency));
+            $document->fill($this->writeLines($entity, $document, $payload['lines'] ?? [], $taxDate, $currency, true));
             $document->save();
 
             return $document->fresh(['lines', 'attachments']) ?? $document;
@@ -220,7 +222,7 @@ final class RegisterPurchaseInvoice
      * @param  list<array<string, mixed>>  $lines
      * @return array{net_minor: int, tax_minor: int, gross_minor: int}
      */
-    private function writeLines(LegalEntity $entity, Document $document, array $lines, string $date, string $currency): array
+    private function writeLines(LegalEntity $entity, Document $document, array $lines, string $date, string $currency, bool $reviewed): array
     {
         if ($lines === []) {
             throw new DocumentException(__('filament-accounting::errors.document_needs_lines'));
@@ -229,6 +231,12 @@ final class RegisterPurchaseInvoice
         $net = 0;
         $tax = 0;
         foreach ($lines as $offset => $input) {
+            $classificationCode = filled($input['classification_code'] ?? null)
+                ? (string) $input['classification_code']
+                : null;
+            $ledgerAccount = $classificationCode !== null
+                ? $this->expenseCategories->resolve($entity, $classificationCode)
+                : null;
             $quantity = (string) ($input['quantity'] ?? '1');
             $unitPrice = array_key_exists('unit_price_minor', $input)
                 ? (int) $input['unit_price_minor']
@@ -260,12 +268,12 @@ final class RegisterPurchaseInvoice
                 'tax_export_mapping' => $version?->export_mapping,
                 'tax_minor' => $lineTax,
                 'gross_minor' => $lineNet + $lineTax,
-                'account_role' => $input['account_role'] ?? null,
-                'ledger_account_id' => $input['ledger_account_id'] ?? null,
+                'account_role' => null,
+                'ledger_account_id' => $ledgerAccount?->getKey(),
                 'catalog_item_id' => $input['catalog_item_id'] ?? null,
-                'classification_code' => $input['classification_code'] ?? null,
-                'classification_confirmed' => (bool) ($input['classification_confirmed'] ?? false),
-                'tax_confirmed' => (bool) ($input['tax_confirmed'] ?? false),
+                'classification_code' => $classificationCode,
+                'classification_confirmed' => $reviewed && $classificationCode !== null,
+                'tax_confirmed' => $reviewed && filled($taxCodeValue),
                 'imported_tax_code' => $input['imported_tax_code'] ?? null,
                 'service_from' => $input['service_from'] ?? null,
                 'service_to' => $input['service_to'] ?? null,

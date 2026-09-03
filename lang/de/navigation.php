@@ -1,14 +1,14 @@
 <?php
 
 return [
-    'bank_accounts' => 'Bankkonto-Zuordnungen',
+    'bank_accounts' => 'Bankkonten',
     'group' => 'Buchhaltung',
     'sections' => [
         'sales' => 'Verkauf',
         'purchases' => 'Einkauf',
         'banking' => 'Bank & Zuordnung',
-        'ledger' => 'Finanzbuchhaltung',
-        'administration' => 'Verwaltung',
+        'reports' => 'Auswertungen',
+        'settings' => 'Einstellungen',
     ],
     'overview' => 'Übersicht',
     'customers' => 'Kunden',
@@ -18,10 +18,11 @@ return [
     'purchase_invoices' => 'Eingangsrechnungen',
     'bank_transactions' => 'Bankumsätze',
     'reconciliation' => 'Zuordnung',
+    'learning_rules' => 'Lernregeln',
     'journal' => 'Journal',
     'accounts' => 'Kontenplan',
     'posting_rules' => 'Steuerfälle',
-    'tax_codes' => 'Steuerschlüssel',
+    'tax_codes' => 'Steuersätze',
     'legal_entities' => 'Mandanten',
     'audit' => 'Prüfprotokoll',
 ];

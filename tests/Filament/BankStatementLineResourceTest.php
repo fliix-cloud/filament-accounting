@@ -31,7 +31,7 @@ class BankStatementLineResourceTest extends TestCase
             'iban' => 'DE02120300000000202051',
             'currency' => 'EUR',
             'ledger_account_id' => $giro->ledger_account_id,
-            'driver_key' => 'synthetic',
+            'source' => 'synthetic',
             'external_account_id' => 'acc-2',
             'is_active' => true,
         ]);
@@ -86,7 +86,7 @@ class BankStatementLineResourceTest extends TestCase
             'iban' => 'DE02120300000000202051',
             'currency' => 'EUR',
             'ledger_account_id' => $active->ledger_account_id,
-            'driver_key' => 'synthetic',
+            'source' => 'synthetic',
             'external_account_id' => 'inactive',
             'is_active' => false,
         ]);
@@ -196,7 +196,7 @@ class BankStatementLineResourceTest extends TestCase
             fn (Action $action): string => $action->getName(),
         );
 
-        $this->assertSame(['reconcile', 'viewAssignment', 'openSource'], $actions->keys()->all());
+        $this->assertSame(['reconcile', 'viewAssignment'], $actions->keys()->all());
 
         /** @var Action $reconcile */
         $reconcile = $actions->get('reconcile');

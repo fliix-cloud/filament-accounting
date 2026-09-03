@@ -1,5 +1,10 @@
 # ADR 0001: GoBD responsibility and trust boundaries
 
+> Historical baseline: the three-package boundary in this ADR was superseded on
+> 2026-09-03 by [ADR 0003](0003-unified-accounting-package.md). Its accounting
+> and host-control principles remain relevant; its active FinTS/bridge package
+> allocation does not.
+
 - Status: Accepted as implementation baseline; external legal/audit validation pending
 - Date: 2026-09-01
 - Decision owners: Product, accounting engineering, host operations

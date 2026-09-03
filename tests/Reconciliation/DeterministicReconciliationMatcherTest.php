@@ -6,6 +6,7 @@ use FilamentAccounting\Banking\Data\BankStatementLineData;
 use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\PartyBankAccount;
+use FilamentAccounting\Models\ReconciliationLearningRule;
 use FilamentAccounting\Services\AssignStatementLine;
 use FilamentAccounting\Services\ImportBankStatementLines;
 use FilamentAccounting\Services\IssueSalesInvoice;
@@ -155,7 +156,29 @@ class DeterministicReconciliationMatcherTest extends TestCase
         )[0];
 
         $this->assertSame($nextInvoice->openItem->getKey(), $sameEntitySuggestion->targetId);
-        $this->assertContains('history', $sameEntitySuggestion->reasons);
+        $this->assertContains('learned_rule', $sameEntitySuggestion->reasons);
+        $this->assertGreaterThanOrEqual(1, ReconciliationLearningRule::query()
+            ->where('legal_entity_id', $firstEntity->getKey())
+            ->where('target_type', 'party')
+            ->where('target_id', $firstCustomer->getKey())
+            ->count());
+
+        ReconciliationLearningRule::query()
+            ->where('legal_entity_id', $firstEntity->getKey())
+            ->update(['is_active' => false]);
+        $suggestionsAfterEditing = app(SuggestReconciliationMatches::class)->handle(
+            BankStatementLine::query()->where('external_id', 'same-entity-history')->firstOrFail(),
+        );
+        foreach ($suggestionsAfterEditing as $suggestionAfterEditing) {
+            $this->assertNotContains('learned_rule', $suggestionAfterEditing->reasons);
+        }
+
+        ReconciliationLearningRule::query()
+            ->where('legal_entity_id', $firstEntity->getKey())
+            ->delete();
+        $this->assertDatabaseMissing('accounting_reconciliation_learning_rules', [
+            'legal_entity_id' => $firstEntity->getKey(),
+        ]);
 
         $secondEntity = $this->makeEntity(['legal_name' => 'Second Entity GmbH']);
         $secondCustomer = $this->makeParty($secondEntity, ['legal_name' => 'Second Customer GmbH']);
@@ -185,7 +208,7 @@ class DeterministicReconciliationMatcherTest extends TestCase
         )[0];
 
         $this->assertSame($secondInvoice->openItem->getKey(), $otherEntitySuggestion->targetId);
-        $this->assertNotContains('history', $otherEntitySuggestion->reasons);
+        $this->assertNotContains('learned_rule', $otherEntitySuggestion->reasons);
     }
 
     #[Test]
@@ -197,8 +220,8 @@ class DeterministicReconciliationMatcherTest extends TestCase
         $accountOwner = $this->makeParty($entity, [
             'legal_name' => 'Account Owner GmbH',
         ]);
-        $legacyReferenceParty = $this->makeParty($entity, [
-            'legal_name' => 'Legacy Reference GmbH',
+        $referenceOnlyParty = $this->makeParty($entity, [
+            'legal_name' => 'Reference Only GmbH',
             'external_reference' => 'DE89370400440532013000',
         ]);
 
@@ -224,12 +247,12 @@ class DeterministicReconciliationMatcherTest extends TestCase
                 'tax_code' => 'DE-19',
             ]],
         ]);
-        $legacyInvoice = app(IssueSalesInvoice::class)->handle($entity, [
-            'party_id' => $legacyReferenceParty->getKey(),
+        $referenceOnlyInvoice = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $referenceOnlyParty->getKey(),
             'issue_date' => '2026-03-01',
             'currency' => 'EUR',
             'lines' => [[
-                'description' => 'Legacy reference',
+                'description' => 'Reference only',
                 'quantity' => '1',
                 'unit_price_minor' => 1000,
                 'tax_code' => 'DE-19',
@@ -264,12 +287,12 @@ class DeterministicReconciliationMatcherTest extends TestCase
         $this->assertContains('iban', $suggestions[0]->reasons);
         $this->assertFalse($suggestions[0]->ambiguous);
 
-        $legacySuggestion = collect($suggestions)->first(
-            fn ($suggestion): bool => $suggestion->targetId === $legacyInvoice->openItem->getKey(),
+        $referenceOnlySuggestion = collect($suggestions)->first(
+            fn ($suggestion): bool => $suggestion->targetId === $referenceOnlyInvoice->openItem->getKey(),
         );
 
-        $this->assertNotNull($legacySuggestion);
-        $this->assertNotContains('iban', $legacySuggestion->reasons);
-        $this->assertGreaterThan($legacySuggestion->score, $suggestions[0]->score);
+        $this->assertNotNull($referenceOnlySuggestion);
+        $this->assertNotContains('iban', $referenceOnlySuggestion->reasons);
+        $this->assertGreaterThan($referenceOnlySuggestion->score, $suggestions[0]->score);
     }
 }

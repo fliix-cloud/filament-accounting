@@ -13,4 +13,5 @@ return [
     'tax_code' => ['singular' => 'Tax code', 'plural' => 'Tax codes'],
     'legal_entity' => ['singular' => 'Legal entity', 'plural' => 'Legal entities'],
     'audit_event' => ['singular' => 'Audit event', 'plural' => 'Audit events'],
+    'reconciliation_learning_rule' => ['singular' => 'Learning rule', 'plural' => 'Learning rules'],
 ];

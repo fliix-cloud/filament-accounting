@@ -32,4 +32,5 @@ return [
     'view_assignment' => 'View assignment',
     'preview' => 'Preview',
     'add_bank_account' => 'Add bank account',
+    'add_tax_rate_period' => 'Add future rate period',
 ];

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $uuid
  * @property int $legal_entity_id
  * @property int|null $bank_account_id
- * @property string $driver_key
+ * @property string $source
  * @property int $upserted_count
  * @property string|null $cursor
  * @property array<string, mixed>|null $meta
@@ -26,7 +26,7 @@ class BankImportRun extends AccountingModel
     protected $fillable = [
         'legal_entity_id',
         'bank_account_id',
-        'driver_key',
+        'source',
         'upserted_count',
         'cursor',
         'meta',

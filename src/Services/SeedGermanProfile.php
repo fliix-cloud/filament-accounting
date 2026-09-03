@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Services;
 
+use FilamentAccounting\Documents\ExpenseCategoryResolver;
 use FilamentAccounting\Enums\AccountRole;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\PostingRule;
@@ -13,11 +14,13 @@ final class SeedGermanProfile
 {
     public function __construct(
         private readonly SeedChartAndRoles $chart,
+        private readonly ExpenseCategoryResolver $expenseCategories,
     ) {}
 
     public function handle(LegalEntity $entity): void
     {
         $this->chart->handle($entity);
+        $this->expenseCategories->seed($entity);
         $this->taxCodes($entity);
         $this->postingRules($entity);
     }
@@ -55,6 +58,27 @@ final class SeedGermanProfile
                 'name' => 'Reverse Charge',
                 'versions' => [
                     ['from' => '2007-01-01', 'to' => null, 'rate' => 0, 'category' => 'reverse_charge'],
+                ],
+            ],
+            [
+                'code' => 'DE-IG',
+                'name' => 'Innergemeinschaftliche Lieferung (0 %)',
+                'versions' => [
+                    ['from' => '2007-01-01', 'to' => null, 'rate' => 0, 'category' => 'intra_community_supply'],
+                ],
+            ],
+            [
+                'code' => 'DE-IG-ACQ',
+                'name' => 'Innergemeinschaftlicher Erwerb',
+                'versions' => [
+                    ['from' => '2007-01-01', 'to' => null, 'rate' => 0, 'category' => 'intra_community_acquisition'],
+                ],
+            ],
+            [
+                'code' => 'DE-EXPORT',
+                'name' => 'Ausfuhr / Drittland (0 %)',
+                'versions' => [
+                    ['from' => '2007-01-01', 'to' => null, 'rate' => 0, 'category' => 'export'],
                 ],
             ],
         ];

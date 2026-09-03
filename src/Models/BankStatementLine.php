@@ -17,7 +17,7 @@ use Illuminate\Support\Carbon;
  * @property string $uuid
  * @property int $legal_entity_id
  * @property int $bank_account_id
- * @property string $driver_key
+ * @property string $source
  * @property string $external_id
  * @property string|null $source_account_external_id
  * @property int $amount_minor
@@ -50,7 +50,7 @@ class BankStatementLine extends AccountingModel
     protected $fillable = [
         'legal_entity_id',
         'bank_account_id',
-        'driver_key',
+        'source',
         'external_id',
         'source_account_external_id',
         'amount_minor',
@@ -99,6 +99,11 @@ class BankStatementLine extends AccountingModel
     public function reconciliations(): HasMany
     {
         return $this->hasMany(Reconciliation::class, 'statement_line_id');
+    }
+
+    public function sourceVersions(): HasMany
+    {
+        return $this->hasMany(BankTransactionSourceVersion::class, 'bank_transaction_id');
     }
 
     public function activePostedReconciliation(): ?Reconciliation

@@ -1,72 +1,77 @@
 # GoBD control matrix
 
-**Version:** 0.1.0
+**Version:** 0.1 unified architecture
+**Status:** Technical working baseline; legal and independent audit review outstanding
 
-**Status:** Working baseline for internal implementation; legal and audit review is outstanding.
+**Scope:** `fliix-cloud/filament-accounting` is the system of record and contains
+the accounting, FinTS application, reconciliation, document, tax, ownership, and
+audit modules. `fliix-cloud/php-fints` is a framework-free protocol dependency.
+The former development-only `filament-accounting-fints` bridge is not an active
+trust domain. See [ADR 0003](adr/0003-unified-accounting-package.md).
 
-**Scope:** `fliix-cloud/filament-accounting` is the accounting system of record. `filament-fints`, `filament-accounting-fints`, and the host environment are separate trust domains.
+“Implemented” means the repository contains the named mechanism and automated
+evidence. It does not mean a deployment is GoBD-compliant or certified.
 
-This matrix turns the master plan into uniquely identifiable controls. “Implemented” means that the repository contains the named technical mechanism and automated test; it does not mean that a deployment is GoBD-compliant or independently audited.
-
-## Scope and non-goals
-
-- Included: invoices and original evidence, journals and open items, tax/posting rule versions, bank reconciliation, audit evidence, retention metadata, and Z1/Z2/Z3 access for one legal entity at a time.
-- Country profile: German controls extend the generic international core. They must not silently change generic behavior.
-- Explicitly excluded: fixed-asset accounting, cash-register/TSE/DSFinV-K functionality, and a blanket claim of “GoBD certification.”
-- The host must satisfy the versioned [host responsibility contract](compliance/HOST_RESPONSIBILITY_CONTRACT.md). Package controls cannot compensate for missing access control, immutable backup, time synchronization, or operational evidence.
-
-## Control status legend
+## Status legend
 
 | Status | Meaning |
 | --- | --- |
-| Implemented | Mechanism and focused automated evidence exist in this repository. |
-| Partial | A useful mechanism exists, but the control objective is not yet fully met. |
-| Planned | No sufficient implementation evidence exists yet. |
-| Host | The deploying organization must implement and evidence the control. |
+| Implemented | Named technical mechanism and focused automated test exist. |
+| Partial | Useful mechanism exists; the full control objective still needs work or host evidence. |
+| Planned | Sufficient implementation evidence does not yet exist. |
+| Host | Deploying organization must implement and evidence it. |
 
 ## Product controls
 
-| Control ID | Objective / GoBD principle | Owner and implementation location | Test and retained evidence | Status | Residual risk / next action |
-| --- | --- | --- | --- | --- | --- |
-| ACC-SCP-01 | Keep the audited product scope, trust boundaries, country profile, and exclusions explicit. | Product owner; [ADR 0001](adr/0001-gobd-responsibility-and-trust-boundaries.md), this matrix, compliance profiles. | Reviewed ADR, tagged matrix, release scope. | Partial | Reference deployment and external auditor approval remain open. |
-| ACC-AUD-01 | Make critical actions sequential, tamper-evident, attributable, and chronologically verifiable per legal entity. | Engineering; `AuditLogger`, shared event/anchor validators, `FilesystemAuditAnchorStore`, `CreateAuditAnchor`, `AuditEvidenceExporter`, audit schema. | `AuditLedgerTest`, `AuditAnchorTest`; anchor/verify/export/offline-verify JSON commands; database chain head, external anchor objects, and portable evidence document. | Partial | The package creates and verifies chained external anchors online/offline, but the reference host must evidence object lock/versioning, independently obtained anchor trust, separate permissions, schedule/monitoring, backup, and restore. |
-| ACC-AUD-02 | Prevent ordinary application paths from changing or deleting recorded audit evidence. | Engineering; `AuditEvent` immutable model guard and read-only Filament resource. | Model mutation/deletion tests. | Partial | Query Builder, direct SQL, migrations, and database administrators can bypass ORM guards; verification and host database roles must cover this. |
-| ACC-IMM-01 | Preserve posted journals, issued/received documents, their lines, and corrections without in-place mutation. | Ledger/document owners; immutable model guards and reversal services. | Ledger and invoice-flow tests; reversal references. | Partial | Reconciliation, settlement, rule-version, period-transition, and database-level hardening remain incomplete. |
-| ACC-EVD-01 | Retain byte-identical original evidence with put-once semantics, capability checks, integrity verification, and restore. | Evidence-storage owner; future `EvidenceStorage` contract. | Manipulation, missing-object, export, and restore tests. | Planned | Current attachment hashes do not prevent replacement or deletion in storage. |
-| ACC-DOC-01 | Preserve invoice, party, renderer, template, terms, language, and rule snapshots at issuance/receipt. | Document owner; document snapshot and correction workflow. | Reference invoice corpus and deterministic rendering evidence. | Planned | Current master data and renderer changes may prevent exact later reproduction. |
-| ACC-EINV-01 | Preserve and validate ZUGFeRD/XRechnung originals and validation provenance. | E-invoice owner; adapters, evidence storage, validation reports. | Valid/invalid EN-16931 corpus and byte-integrity checks. | Planned | Parser success alone is not a conformity validation. |
-| ACC-BNK-01 | Preserve every imported bank source state and make reconciliation/split/settlement changes append-only or reversal-based. | Banking/reconciliation owner. | Pending→booked, reversal, split, retry, and control-total tests. | Planned | Current source and reconciliation records still contain in-place update paths. |
-| ACC-TIM-01 | Distinguish occurrence, document, receipt, capture, posting, lock, correction, and technical times. | Compliance-profile and period owners. | Late-capture and reopen/close chronology reports. | Planned | Technical timestamps alone do not evidence timely capture. |
-| ACC-EXP-01 | Provide read-only Z1, reproducible Z2, and deterministic complete Z3 access with relationships and checksums. | Export/audit-workspace owner. | Synthetic reference tenant, deterministic export and round-trip verification. | Planned | The current generic journal CSV is not a complete Z3 package. |
-| ACC-RET-01 | Apply versioned retention classification, legal holds, controlled disposal, and disposal evidence. | Product plus host records owner. | Legal-hold and disposal authorization tests; disposal certificate. | Planned | Host-only deletion and model cascades are not an executable retention contract. |
-| ACC-VER-01 | Detect integrity, sequence, relation, amount, tenant, retention, and export faults with human and machine-readable output. | Verification owner; online and offline verification commands. | Intentional manipulation suite, schema-versioned JSON output, portable audit-evidence round trip, and CI artifacts. | Partial | Online/offline audit-chain and anchor verification exists; document/storage hashes, relationships, periods, retention, and full Z3 exports remain open. |
-| ACC-IKS-01 | Enforce and evidence least privilege, separation of duties, four-eyes controls, and access recertification. | Host security owner plus package authorization owner. | Role matrix, access reviews, approval events, exception reports. | Host | Package abilities are not sufficient evidence of operational segregation. |
-| ACC-DOCS-01 | Keep general, user, system, operating, IKS, data-model, access, backup, import, change, export, and retention documentation aligned with releases. | Product and host documentation owners. | Tagged documentation manifest and release review. | Planned | Existing documents do not yet constitute complete procedural documentation. |
-
-## Cross-repository interface controls
-
-| Control ID | Objective | Owner / evidence | Status | Residual risk / next action |
+| ID | Objective | Implementation / evidence | Status | Residual risk / next action |
 | --- | --- | --- | --- | --- |
-| FINTS-SRC-01 | Store exact, versioned bank source states without float-based business amounts. | `filament-fints`; source-version and pending→booked contract tests. | Planned | Implement in a separate repository PR. |
-| FINTS-SYNC-01 | Retain immutable sync-run scope, snapshot hash, counts, currency/direction totals, and terminal status. | `filament-fints`; replayable synthetic sync evidence. | Planned | Implement in a separate repository PR. |
-| BRIDGE-PRV-01 | Transfer source/version/run/hash/mapper/entity/account/amount/correlation provenance. | `filament-accounting-fints`; versioned contract fixtures. | Planned | Implement only after both endpoint contracts are released. |
-| BRIDGE-EO-01 | Achieve idempotent effect with recoverable outbox/replay and end-to-end control totals. | Bridge owner; crash/retry/dead-letter tests and import acknowledgements. | Planned | Current normalized payload hash is not the full provenance envelope. |
+| ACC-SCP-01 | Keep scope, architecture, Germany-first profile, exclusions, and trust boundaries explicit. | ADRs 0001/0003, architecture, master plan, host responsibility contract. | Partial | External legal/audit approval and frozen reference deployment remain open. |
+| ACC-OWN-01 | Enforce one trusted Legal Entity boundary across every module. | `LegalEntityScope`, configured resolver, actor resolver, tenancy activator, `LegalEntityBankScope`; Resource/service/FinTS integration isolation tests. | Implemented | Host must bind trusted context and abilities correctly. |
+| ACC-AUD-01 | Make critical actions sequential, attributable, tamper-evident, and chronologically verifiable per Legal Entity. | `AuditLogger`, event/anchor validators, `FilesystemAuditAnchorStore`, anchor/export/verify commands; `AuditLedgerTest`, `AuditAnchorTest`. | Partial | Independently controlled immutable anchor storage, monitoring, backup and restore are host evidence. |
+| ACC-AUD-02 | Prevent ordinary application mutation/deletion of audit evidence. | `AuditEvent` model guards and non-default/read-only technical Resource; mutation tests. | Partial | Direct SQL/DBA/migration paths require database roles and independent verification. |
+| ACC-IMM-01 | Preserve posted journals and commercial documents; correct through reversal. | Immutable model guards, ledger/document/reconciliation reversal services; ledger, invoice and reconciliation tests. | Partial | Database-level enforcement and broader period-transition evidence remain. |
+| ACC-EVD-01 | Retain original document bytes and verify content identity. | Configured attachment storage, SHA-256 metadata, safe download and tenant checks; `AttachmentStorageTest`. | Partial | Host must attest put-once/object lock, versioning, retention, backup and restore. |
+| ACC-DOC-01 | Preserve commercial, party, tax/account and artifact decisions for invoices. | Document/line snapshots, original attachments, issue/register services; invoice/e-invoice tests. | Partial | Exact renderer/template reproduction and full conformance corpus remain. |
+| ACC-TAX-01 | Select versioned rates by date and require confirmation for ambiguous tax cases. | `TaxCode`/`TaxRuleVersion`, overlap/immutability guards, German seed profile, `SalesTaxSuggestionService`; tax tests. | Implemented | Recommendations are limited to documented Germany-first cases, not universal tax advice. |
+| ACC-BNK-01 | Store one canonical transaction and every material bank source state without floats. | `UnifiedBankTransactionImporter`, `BankTransactionSourceVersion`, exact minor units; pending→booked/storno/change/retry tests. | Implemented | Available raw payload depends on what the bank/protocol response exposes. |
+| ACC-BNK-02 | Avoid duplicate account/transaction truth and provision the internal bank ledger mapping automatically. | Canonical `AccountingBankAccount`/`BankStatementLine`, direct `TransactionSyncService`, `BankLedgerAccountProvisioner`; unified FinTS tests. | Implemented | The initial release schema contains only the canonical tables. |
+| ACC-REC-01 | Finalize direct, partial and real split reconciliation exactly, idempotently and by reversal. | Locked `FinalizeReconciliation`, split validation, settlement/journal links; reconciliation tests. | Implemented | Operational concurrency characteristics still depend on the selected database. |
+| ACC-REC-02 | Make local suggestions explainable and user-confirmed. | Deterministic matcher, scored reasons, `ReconciliationLearningRule`, post-confirmation storage, edit/deactivate/delete UI; matcher tests. | Implemented | No automatic posting from learning is allowed in 0.1. |
+| ACC-VER-01 | Detect journal and audit/anchor integrity failures with machine-readable evidence. | `filament-accounting:verify --json`, online/offline audit evidence verification, manipulation tests. | Partial | Complete document/storage/relation/retention/Z3 verification remains open. |
+| ACC-EXP-01 | Provide read-only Z1, reproducible Z2, and deterministic complete Z3 access. | Current read views and generic journal export. | Planned | Generic journal CSV is not a complete relational Z3 package. |
+| ACC-RET-01 | Apply versioned retention, legal holds, controlled disposal, and disposal evidence. | Operations documentation and host contract. | Planned | Executable retention lifecycle is not complete. |
+| ACC-IKS-01 | Evidence least privilege, separation of duties, four-eyes controls and access recertification. | Package abilities plus host IAM process. | Host | Package abilities alone are not operational segregation evidence. |
+| ACC-DOCS-01 | Keep architecture, operation, data model and controls aligned with a release. | ADR 0003, README, architecture, master plan, matrix, protocol delta document. | Partial | Complete organization-specific procedural documentation remains a host duty. |
+
+## Protocol and development-boundary controls
+
+| ID | Objective | Implementation / evidence | Status | Residual risk / next action |
+| --- | --- | --- | --- | --- |
+| FINTS-BND-01 | Keep the protocol dependency free of Laravel/Filament/product side effects. | `fliix-cloud/php-fints` contains `Fhp\` source/tests only; Composer architecture test and protocol `composer check`. | Implemented | Merge transition PR, expose new package name on default branch, then publish 4.2. |
+| FINTS-PAT-01 | Keep every local upstream deviation explicit and regression-tested. | [Protocol delta inventory](upstream/php-fints-delta.md), five exact source files, 134 protocol tests. | Implemented | Re-run all regression areas for every upstream sync. |
+| FINTS-SYN-01 | Synchronize upstream read-only through controlled review. | Fork `UPSTREAM.md`, sync branch procedure, common-base SHA, conflict/test update rule. | Implemented | Repository governance must enforce the documented review/release process. |
+| BRIDGE-OFF-01 | Ensure the development bridge is absent from runtime and cannot create a second writer. | No bridge dependency/provider/plugin/registry in target; architecture tests. | Implemented | Keep the bridge repository out of the public product dependency graph. |
 
 ## Host and governance controls
 
-| Control ID | Objective | Evidence owner | Status | Residual risk / next action |
+| ID | Objective | Evidence owner | Status | Required evidence |
 | --- | --- | --- | --- | --- |
-| HOST-IAM-01 | MFA, personal privileged accounts, least privilege, emergency-access logging, periodic access review. | Deploying organization. | Host | Provide identity-provider policy and review evidence. |
-| HOST-DB-01 | Separate application, migration, backup, and administration roles; deny normal application update/delete rights on immutable evidence where supported. | Deploying organization. | Host | Define the reference database roles and test direct-SQL controls. |
-| HOST-BCK-01 | Encrypted separate backup including database, originals, anchors, keys, and documentation; quarterly restore test. | Deploying organization. | Host | Select RPO/RTO and immutable/offline backup mechanism. |
-| HOST-TIM-01 | Synchronize and monitor UTC system time while retaining the legal entity’s business timezone. | Deploying organization. | Host | Store NTP monitoring and incident evidence. |
-| HOST-REL-01 | Protected branches, reviewed changes, required CI, verifiable tags, SBOM, migration/config manifest, and immutable release artifacts. | Repository/release owner. | Partial | Repository rulesets and the reproducible release manifest are not yet evidenced here. |
-| HOST-MON-01 | Alert on failed integrity checks, missing evidence, sequence gaps, import/replay faults, privileged actions, and backup/restore failures. | Deploying organization. | Host | Connect verification exit codes to monitored incident handling. |
+| HOST-IAM-01 | MFA, personal privileged accounts, least privilege, emergency access, reviews. | Deploying organization | Host | Identity policy, role mapping, approval and review records. |
+| HOST-DB-01 | Separate application/migration/backup/admin roles and constrain immutable records. | Deploying organization | Host | Database grants, migration procedure and direct-SQL control tests. |
+| HOST-STO-01 | Immutable/versioned originals and audit anchors with separate permissions. | Deploying organization | Host | Object-lock/versioning configuration, retention policy and access evidence. |
+| HOST-BCK-01 | Encrypted independent backup and tested restore of data, objects, anchors, keys and docs. | Deploying organization | Host | RPO/RTO, backup logs and periodic restore reports. |
+| HOST-TIM-01 | Synchronize/monitor UTC time while retaining business timezone. | Deploying organization | Host | NTP configuration, monitoring and incident records. |
+| HOST-REL-01 | Reviewed changes, protected branches, required CI, verifiable tags, SBOM and immutable releases. | Repository/release owner | Partial | Repository rules and reproducible signed release manifest remain to be evidenced. |
+| HOST-MON-01 | Alert and respond to integrity, evidence, sync, queue, SCA and backup failures. | Deploying organization | Host | Alert routing, runbooks, incidents and periodic exercises. |
 
-## Proposed first audit reference stack
+## Reference and update rule
 
-The initial target is intentionally narrow and remains subject to Phase 0 approval: PHP 8.4, Laravel 13, Filament 5, PostgreSQL 18, a queue worker and scheduler under supervised operation, private S3-compatible evidence storage with versioning and object lock, and the German compliance profile. Exact patch versions, operating system, storage vendor, key service, backup topology, and package versions belong in the certification release manifest rather than this living matrix.
+The proposed initial reference stack is PHP 8.4, Laravel 13, Filament 5,
+PostgreSQL 18, supervised workers/scheduler, private S3-compatible storage with
+versioning/object lock, and the Germany profile. Exact patch versions and vendors
+belong in a frozen release manifest.
 
-## Evidence update rule
-
-Every compliance-relevant pull request must update the affected row’s implementation location, automated test, evidence artifact, status, and residual risk. A control may only move to “Implemented” when all named evidence is reproducible in the frozen reference stack.
+Every compliance-relevant PR must update affected rows, tests, evidence, status,
+and residual risk. A control moves to “Implemented” only when its named evidence
+is reproducible; host obligations never become implemented merely because an
+application option exists.
