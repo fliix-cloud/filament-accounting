@@ -316,9 +316,16 @@ return new class extends Migration
 
         Schema::create('accounting_bank_transaction_source_versions', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('legal_entity_id')->constrained('accounting_legal_entities')->restrictOnDelete();
-            $table->foreignId('bank_transaction_id')->constrained('accounting_bank_statement_lines')->restrictOnDelete();
-            $table->foreignId('import_run_id')->nullable()->constrained('accounting_bank_import_runs')->nullOnDelete();
+            $table->foreignId('legal_entity_id')
+                ->constrained('accounting_legal_entities', indexName: 'acct_bank_source_entity_fk')
+                ->restrictOnDelete();
+            $table->foreignId('bank_transaction_id')
+                ->constrained('accounting_bank_statement_lines', indexName: 'acct_bank_source_transaction_fk')
+                ->restrictOnDelete();
+            $table->foreignId('import_run_id')
+                ->nullable()
+                ->constrained('accounting_bank_import_runs', indexName: 'acct_bank_source_import_run_fk')
+                ->nullOnDelete();
             $table->unsignedInteger('version');
             $table->string('source_id', 128);
             $table->string('source_fingerprint', 128);

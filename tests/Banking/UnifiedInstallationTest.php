@@ -62,4 +62,40 @@ class UnifiedInstallationTest extends TestCase
             $this->assertStringNotContainsString('->change()', $contents);
         }
     }
+
+    #[Test]
+    public function generated_foreign_key_names_fit_the_mysql_identifier_limit(): void
+    {
+        $migrationDirectory = __DIR__.'/../../database/migrations';
+        $paths = glob($migrationDirectory.'/*.php') ?: [];
+
+        foreach ($paths as $path) {
+            $tableName = null;
+            $constraintName = null;
+
+            foreach (file($path, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+                if (preg_match("/Schema::create\\('([^']+)'/", $line, $tableMatch) === 1) {
+                    $tableName = $tableMatch[1];
+                }
+
+                if ($tableName !== null && preg_match("/foreignId\\('([^']+)'\\)/", $line, $columnMatch) === 1) {
+                    $constraintName = $tableName.'_'.$columnMatch[1].'_foreign';
+                }
+
+                if ($constraintName !== null && preg_match("/indexName:\\s*'([^']+)'/", $line, $nameMatch) === 1) {
+                    $constraintName = $nameMatch[1];
+                }
+
+                if ($constraintName !== null && str_contains($line, ';')) {
+                    $this->assertLessThanOrEqual(
+                        64,
+                        strlen($constraintName),
+                        "MySQL foreign key identifier {$constraintName} exceeds 64 characters.",
+                    );
+
+                    $constraintName = null;
+                }
+            }
+        }
+    }
 }

@@ -34,7 +34,7 @@ class LedgerAccountResource extends Resource
 
     public static function getNavigationParentItem(): ?string
     {
-        return AccountingNavigation::LEDGER;
+        return AccountingNavigation::REPORTS;
     }
 
     public static function getNavigationLabel(): string

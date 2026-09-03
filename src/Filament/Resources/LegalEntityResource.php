@@ -32,7 +32,7 @@ class LegalEntityResource extends Resource
 
     public static function getNavigationParentItem(): ?string
     {
-        return AccountingNavigation::ADMINISTRATION;
+        return AccountingNavigation::SETTINGS;
     }
 
     public static function getNavigationLabel(): string

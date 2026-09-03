@@ -16,12 +16,11 @@ use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitCreditorProfi
 use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitCreditorProfileResource\Pages\ListDirectDebitCreditorProfiles;
 use FilamentAccounting\Banking\FinTs\Models\DirectDebitCreditorProfile;
 use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope as OwnerScope;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use Illuminate\Database\Eloquent\Builder;
 
 class DirectDebitCreditorProfileResource extends Resource
 {
-    protected static bool $shouldRegisterNavigation = false;
-
     protected static ?string $model = DirectDebitCreditorProfile::class;
 
     protected static ?string $slug = 'bank/direct-debit-creditors';
@@ -29,6 +28,16 @@ class DirectDebitCreditorProfileResource extends Resource
     protected static ?int $navigationSort = 42;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-office-2';
+
+    public static function getNavigationGroup(): ?string
+    {
+        return __('filament-accounting::navigation.group');
+    }
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::BANKING;
+    }
 
     public static function getNavigationLabel(): string
     {

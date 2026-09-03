@@ -5,9 +5,8 @@
 
 **Scope:** `fliix-cloud/filament-accounting` is the system of record and contains
 the accounting, FinTS application, reconciliation, document, tax, ownership, and
-audit modules. `fliix-cloud/php-fints` is a framework-free protocol dependency.
-The former development-only `filament-accounting-fints` bridge is not an active
-trust domain. See [ADR 0003](adr/0003-unified-accounting-package.md).
+audit modules. `nemiah/php-fints` is the framework-free upstream protocol dependency.
+See [ADR 0003](adr/0003-unified-accounting-package.md).
 
 “Implemented” means the repository contains the named mechanism and automated
 evidence. It does not mean a deployment is GoBD-compliant or certified.
@@ -41,16 +40,14 @@ evidence. It does not mean a deployment is GoBD-compliant or certified.
 | ACC-EXP-01 | Provide read-only Z1, reproducible Z2, and deterministic complete Z3 access. | Current read views and generic journal export. | Planned | Generic journal CSV is not a complete relational Z3 package. |
 | ACC-RET-01 | Apply versioned retention, legal holds, controlled disposal, and disposal evidence. | Operations documentation and host contract. | Planned | Executable retention lifecycle is not complete. |
 | ACC-IKS-01 | Evidence least privilege, separation of duties, four-eyes controls and access recertification. | Package abilities plus host IAM process. | Host | Package abilities alone are not operational segregation evidence. |
-| ACC-DOCS-01 | Keep architecture, operation, data model and controls aligned with a release. | ADR 0003, README, architecture, master plan, matrix, protocol delta document. | Partial | Complete organization-specific procedural documentation remains a host duty. |
+| ACC-DOCS-01 | Keep architecture, operation, data model and controls aligned with a release. | ADR 0003, README, architecture, master plan, matrix, upstream policy. | Partial | Complete organization-specific procedural documentation remains a host duty. |
 
 ## Protocol and development-boundary controls
 
 | ID | Objective | Implementation / evidence | Status | Residual risk / next action |
 | --- | --- | --- | --- | --- |
-| FINTS-BND-01 | Keep the protocol dependency free of Laravel/Filament/product side effects. | `fliix-cloud/php-fints` contains `Fhp\` source/tests only; Composer architecture test and protocol `composer check`. | Implemented | Merge transition PR, expose new package name on default branch, then publish 4.2. |
-| FINTS-PAT-01 | Keep every local upstream deviation explicit and regression-tested. | [Protocol delta inventory](upstream/php-fints-delta.md), five exact source files, 134 protocol tests. | Implemented | Re-run all regression areas for every upstream sync. |
-| FINTS-SYN-01 | Synchronize upstream read-only through controlled review. | Fork `UPSTREAM.md`, sync branch procedure, common-base SHA, conflict/test update rule. | Implemented | Repository governance must enforce the documented review/release process. |
-| BRIDGE-OFF-01 | Ensure the development bridge is absent from runtime and cannot create a second writer. | No bridge dependency/provider/plugin/registry in target; architecture tests. | Implemented | Keep the bridge repository out of the public product dependency graph. |
+| FINTS-BND-01 | Keep protocol parsing separate from Laravel/Filament/product behavior. | Direct `nemiah/php-fints` dependency, `Fhp\` namespace, Composer architecture test. | Implemented | Verify the selected upstream revision in every release gate. |
+| FINTS-UP-01 | Contribute only demonstrated, bank-neutral protocol corrections upstream. | [Upstream contribution policy](upstream/php-fints-upstream-policy.md): normative source, minimal fixture, failing upstream test, narrow fix and full regression gates. | Partial | The observed CAMT status behavior is a candidate only; no change is submitted until every evidence item is satisfied. |
 
 ## Host and governance controls
 

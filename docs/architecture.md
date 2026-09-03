@@ -2,7 +2,7 @@
 
 `fliix-cloud/filament-accounting` is the single Laravel/Filament product package.
 A host installs it through Composer and registers only
-`FilamentAccountingPlugin`. The framework-free `fliix-cloud/php-fints` library
+`FilamentAccountingPlugin`. The framework-free `nemiah/php-fints` library
 is transitive and exposes only the `Fhp\` protocol namespace.
 
 ## Runtime boundary
@@ -15,12 +15,11 @@ Host application
     ├── one filament-accounting configuration
     ├── Accounting, documents, tax, audit and reconciliation modules
     └── Banking/FinTs product integration
-        └── fliix-cloud/php-fints (Fhp\ protocol core, no framework integration)
+        └── nemiah/php-fints (Fhp\ protocol core, no framework integration)
 ```
 
-`fliix-cloud/filament-accounting-fints` is not part of the runtime. There is no
-public bank-feed driver registry, bridge listener/job chain, owner mapper, copied
-FinTS transaction, or second Filament plugin.
+The runtime has one provider, one Filament plugin, one trusted Legal Entity
+boundary, and one canonical set of accounting and banking models.
 
 ## Internal modules
 
@@ -97,5 +96,5 @@ All money is persisted as integer minor units and processed via
 amounts. E-invoice generation and validation remain PHP-only per
 [ADR 0002](adr/0002-php-only-e-invoice-validation.md).
 
-The single-package decision and development-time three-repository boundary are documented
-in [ADR 0003](adr/0003-unified-accounting-package.md).
+The product and protocol boundaries are documented in
+[ADR 0003](adr/0003-unified-accounting-package.md).

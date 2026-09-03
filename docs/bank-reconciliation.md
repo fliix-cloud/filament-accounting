@@ -1,8 +1,7 @@
 # Bank reconciliation
 
-`BankStatementLine` is the one canonical product bank transaction. FinTS writes
-directly through `UnifiedBankTransactionImporter`; no external transaction copy,
-bridge, event/listener import, or configurable driver registry exists. Stable identity:
+`BankStatementLine` is the canonical product bank transaction. FinTS writes
+directly through `UnifiedBankTransactionImporter`. Stable identity:
 
 ```text
 legal_entity_id + bank_account_id + external_id

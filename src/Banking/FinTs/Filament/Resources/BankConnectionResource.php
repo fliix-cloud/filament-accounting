@@ -45,7 +45,7 @@ class BankConnectionResource extends Resource
 
     public static function getNavigationParentItem(): ?string
     {
-        return AccountingNavigation::ADMINISTRATION;
+        return AccountingNavigation::BANKING;
     }
 
     public static function getNavigationLabel(): string

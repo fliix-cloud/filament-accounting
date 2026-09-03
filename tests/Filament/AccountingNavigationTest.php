@@ -2,8 +2,14 @@
 
 namespace FilamentAccounting\Tests\Filament;
 
+use FilamentAccounting\Banking\FinTs\Filament\Resources\BankConnectionResource;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\BankDirectDebitResource;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\BankTransferResource;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitCreditorProfileResource;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitMandateResource;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
+use FilamentAccounting\Filament\Resources\AccountingBankAccountResource;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\CatalogItemResource;
 use FilamentAccounting\Filament\Resources\CustomerResource;
@@ -53,7 +59,13 @@ class AccountingNavigationTest extends TestCase
                 SupplierResource::class,
             ],
             AccountingNavigation::BANKING => [
+                BankConnectionResource::class,
+                AccountingBankAccountResource::class,
                 BankStatementLineResource::class,
+                BankTransferResource::class,
+                DirectDebitCreditorProfileResource::class,
+                DirectDebitMandateResource::class,
+                BankDirectDebitResource::class,
                 ReconciliationPage::class,
             ],
             AccountingNavigation::REPORTS => [
@@ -72,6 +84,20 @@ class AccountingNavigationTest extends TestCase
                     $child::getNavigationGroup(),
                 );
             }
+        }
+    }
+
+    #[Test]
+    public function all_fints_management_resources_register_navigation(): void
+    {
+        foreach ([
+            BankConnectionResource::class,
+            BankTransferResource::class,
+            DirectDebitCreditorProfileResource::class,
+            DirectDebitMandateResource::class,
+            BankDirectDebitResource::class,
+        ] as $resource) {
+            $this->assertTrue($resource::shouldRegisterNavigation());
         }
     }
 }

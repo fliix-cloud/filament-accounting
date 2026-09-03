@@ -16,12 +16,6 @@ final class AccountingNavigation
 
     public const SETTINGS = 'filament-accounting.settings';
 
-    /** @deprecated Use REPORTS. */
-    public const LEDGER = self::REPORTS;
-
-    /** @deprecated Use SETTINGS. */
-    public const ADMINISTRATION = self::SETTINGS;
-
     /**
      * @return list<NavigationItem>
      */

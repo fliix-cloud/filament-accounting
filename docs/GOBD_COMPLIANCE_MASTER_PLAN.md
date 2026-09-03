@@ -5,29 +5,27 @@
 **Architecture effective:** 3 September 2026
 
 **Product repository:** `fliix-cloud/filament-accounting`
-**Protocol dependency:** `fliix-cloud/php-fints`
+**Protocol dependency:** `nemiah/php-fints`
 
 This plan defines technical readiness and evidence goals. It is not legal advice,
 an audit opinion, or a statement that an installation is “GoBD certified”. The
 deploying organization remains responsible for its procedures, permissions,
 infrastructure, retention, backups, and tax assessment.
 
-## Development boundary and decision
+## Architecture boundary
 
-Early development treated `filament-accounting`, `filament-fints`, and
-`filament-accounting-fints` as three product/trust domains. That design was never
-released and is superseded before version 0.1 by
-[ADR 0003](adr/0003-unified-accounting-package.md):
+[ADR 0003](adr/0003-unified-accounting-package.md) defines the product boundary:
 
 - the host installs one product package and registers one Filament plugin;
 - accounting, FinTS application integration, reconciliation, tax, documents,
   ownership, and audit are modules in the same Laravel package;
-- `fliix-cloud/php-fints` is a transitive, framework-free protocol dependency;
-- the former bridge is not a runtime component.
+- `nemiah/php-fints` is a transitive, framework-free protocol dependency;
+- every persisted banking and accounting record belongs to the same trusted
+  Legal Entity boundary.
 
-The protocol fork is still an independent source-integrity boundary. Its five
-maintained deviations and read-only upstream process are documented in
-[php-fints-delta.md](upstream/php-fints-delta.md).
+Protocol changes are not maintained locally. Candidate upstream changes must
+pass the evidence and verification process documented in
+[php-fints-upstream-policy.md](upstream/php-fints-upstream-policy.md).
 
 ## Product scope
 
@@ -65,7 +63,7 @@ fliix-cloud/filament-accounting
                 ├── database
                 ├── original/e-invoice storage
                 ├── independently controlled audit-anchor storage
-                └── fliix-cloud/php-fints → bank FinTS endpoint
+                └── nemiah/php-fints → bank FinTS endpoint
 ```
 
 `LegalEntity` is the product integrity and reporting boundary. It is resolved
@@ -145,8 +143,7 @@ must prove that configuration rather than relying on the package to infer it.
 
 Version 0.1 has no external predecessor installation. The package migrations
 therefore describe only the final target schema and are verified from an empty
-database. Development environments are recreated with `migrate:fresh`; no data
-conversion, duplicate writer, or transitional table set is part of the release.
+database. Development environments are recreated with `migrate:fresh`.
 
 ## Data access, retention, and operations
 

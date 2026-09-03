@@ -17,9 +17,9 @@ This repository is an **installable Composer package**, not a Laravel applicatio
 - Exact money via `brick/money` (integer minor units, no floats)
 
 Applications install and register only this package. The framework-free
-`fliix-cloud/php-fints` protocol library is a transitive dependency; the former
-`filament-accounting-fints` bridge and a public bank-driver registry are not
-used at runtime.
+[`nemiah/php-fints`](https://github.com/nemiah/phpFinTS) is the transitive,
+framework-independent protocol dependency. All Laravel,
+Filament, persistence, tenancy, and banking workflows live in this package.
 
 Installing this package does not make a host “GoBD certified”. Compliance also depends on deployment, permissions, backups, retention, and procedure.
 
@@ -74,7 +74,7 @@ There is no data-upgrade or consolidation workflow.
 
 - [Architecture](docs/architecture.md)
 - [ADR: unified accounting package](docs/adr/0003-unified-accounting-package.md)
-- [Maintained php-fints deltas](docs/upstream/php-fints-delta.md)
+- [Upstream php-fints policy](docs/upstream/php-fints-upstream-policy.md)
 - [Domain model](docs/domain-model.md)
 - [Ledger invariants](docs/ledger-invariants.md)
 - [Bank reconciliation](docs/bank-reconciliation.md)

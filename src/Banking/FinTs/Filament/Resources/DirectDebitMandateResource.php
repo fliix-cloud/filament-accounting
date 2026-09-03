@@ -22,13 +22,12 @@ use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitMandateResour
 use FilamentAccounting\Banking\FinTs\Models\DirectDebitCreditorProfile;
 use FilamentAccounting\Banking\FinTs\Models\DirectDebitMandate;
 use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope as OwnerScope;
+use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Models\PartyBankAccount;
 use Illuminate\Database\Eloquent\Builder;
 
 class DirectDebitMandateResource extends Resource
 {
-    protected static bool $shouldRegisterNavigation = false;
-
     protected static ?string $model = DirectDebitMandate::class;
 
     protected static ?string $slug = 'bank/direct-debit-mandates';
@@ -36,6 +35,16 @@ class DirectDebitMandateResource extends Resource
     protected static ?int $navigationSort = 43;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
+
+    public static function getNavigationGroup(): ?string
+    {
+        return __('filament-accounting::navigation.group');
+    }
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return AccountingNavigation::BANKING;
+    }
 
     public static function getNavigationLabel(): string
     {
