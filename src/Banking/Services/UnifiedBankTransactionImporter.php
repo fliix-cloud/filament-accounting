@@ -38,7 +38,7 @@ final class UnifiedBankTransactionImporter
             $run = BankImportRun::query()->create([
                 'legal_entity_id' => $account->legal_entity_id,
                 'bank_account_id' => $account->getKey(),
-                'driver_key' => 'fints',
+                'source' => 'fints',
                 'upserted_count' => 0,
                 'cursor' => $cursor,
                 'meta' => ['skipped' => 0],
@@ -116,7 +116,7 @@ final class UnifiedBankTransactionImporter
     ): ?BankStatementLine {
         $exact = BankStatementLine::query()
             ->where('legal_entity_id', $account->legal_entity_id)
-            ->where('driver_key', 'fints')
+            ->where('source', 'fints')
             ->where('external_id', $data->externalId)
             ->lockForUpdate()
             ->first();
@@ -128,7 +128,7 @@ final class UnifiedBankTransactionImporter
         $query = BankStatementLine::query()
             ->where('legal_entity_id', $account->legal_entity_id)
             ->where('bank_account_id', $account->getKey())
-            ->where('driver_key', 'fints')
+            ->where('source', 'fints')
             ->where('amount_minor', $data->amountMinor)
             ->where('currency', strtoupper($data->currency))
             ->where('source_status', '!=', $attributes['source_status'])
@@ -166,7 +166,7 @@ final class UnifiedBankTransactionImporter
         return [
             'legal_entity_id' => $account->legal_entity_id,
             'bank_account_id' => $account->getKey(),
-            'driver_key' => 'fints',
+            'source' => 'fints',
             'external_id' => $data->externalId,
             'source_account_external_id' => $data->sourceAccountExternalId ?? $account->external_account_id,
             'amount_minor' => $data->amountMinor,

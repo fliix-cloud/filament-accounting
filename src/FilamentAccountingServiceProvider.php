@@ -11,7 +11,6 @@ use FilamentAccounting\Banking\FinTs\Models\BankConnection;
 use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope;
 use FilamentAccounting\Banking\FinTs\Policies\BankConnectionPolicy;
 use FilamentAccounting\Banking\FinTs\Services\PhpFintsClientFactory;
-use FilamentAccounting\Commands\ConsolidateLegacyCommand;
 use FilamentAccounting\Commands\CreateAuditAnchorCommand;
 use FilamentAccounting\Commands\ExportAuditEvidenceCommand;
 use FilamentAccounting\Commands\InstallCommand;
@@ -51,7 +50,6 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
             ->hasCommands([
                 CreateAuditAnchorCommand::class,
                 CleanupScaCommand::class,
-                ConsolidateLegacyCommand::class,
                 ExportAuditEvidenceCommand::class,
                 InstallCommand::class,
                 SeedProfileCommand::class,

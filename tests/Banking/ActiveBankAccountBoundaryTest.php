@@ -28,7 +28,7 @@ class ActiveBankAccountBoundaryTest extends TestCase
             'iban' => 'DE02120300000000202051',
             'currency' => 'EUR',
             'ledger_account_id' => $active->ledger_account_id,
-            'driver_key' => 'synthetic',
+            'source' => 'synthetic',
             'external_account_id' => 'inactive-account',
             'is_active' => true,
         ]);

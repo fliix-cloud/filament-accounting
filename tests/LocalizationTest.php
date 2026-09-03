@@ -25,7 +25,6 @@ class LocalizationTest extends TestCase
             'filament-accounting::actions.assign_and_post',
             'filament-accounting::actions.split_transaction',
             'filament-accounting::actions.add_bank_account',
-            'filament-accounting::fields.mandate_reference',
             'filament-accounting::fields.bank_account_enabled',
             'filament-accounting::fields.tax_suggestion',
             'filament-accounting::fields.amount_mismatch_confirm',

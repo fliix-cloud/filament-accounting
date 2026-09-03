@@ -8,7 +8,7 @@ use PHPUnit\Framework\Attributes\Test;
 class NoFintsReferenceTest extends TestCase
 {
     #[Test]
-    public function runtime_code_contains_no_legacy_product_namespaces_or_bridge_registries(): void
+    public function runtime_code_contains_no_superseded_product_namespaces_or_bridge_registries(): void
     {
         $hits = [];
 

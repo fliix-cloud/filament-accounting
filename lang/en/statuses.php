@@ -52,17 +52,4 @@ return [
         'matched' => 'Amounts match',
         'mismatch' => 'Amount mismatch',
     ],
-    'mandate_scheme' => [
-        'CORE' => 'CORE',
-        'B2B' => 'B2B',
-    ],
-    'mandate_type' => [
-        'one_off' => 'One-off',
-        'recurring' => 'Recurring',
-    ],
-    'mandate_status' => [
-        'active' => 'Active',
-        'revoked' => 'Revoked',
-        'closed' => 'Closed',
-    ],
 ];

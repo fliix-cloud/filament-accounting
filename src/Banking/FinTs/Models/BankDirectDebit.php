@@ -22,8 +22,8 @@ use Illuminate\Support\Str;
  * @property int $bank_connection_id
  * @property int $legal_entity_id
  * @property int $accounting_bank_account_id
- * @property int|null $creditor_profile_id
- * @property int|null $direct_debit_mandate_id
+ * @property int $creditor_profile_id
+ * @property int $direct_debit_mandate_id
  * @property string $idempotency_key
  * @property string|null $sepa_message_id
  * @property string|null $payment_information_id

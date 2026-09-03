@@ -54,10 +54,6 @@ final class FinalizeReconciliation
             if (! $line->bankAccount->is_active) {
                 throw new ReconciliationException(__('filament-accounting::errors.bank_account_inactive'));
             }
-            if (! $line->bankAccount?->ledger_mapping_confirmed) {
-                throw new ReconciliationException(__('filament-accounting::errors.bank_ledger_mapping_unconfirmed'));
-            }
-
             if ($idempotencyKey !== null) {
                 $existing = Reconciliation::query()
                     ->where('legal_entity_id', $line->legal_entity_id)

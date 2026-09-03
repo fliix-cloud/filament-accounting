@@ -12,12 +12,12 @@ an audit opinion, or a statement that an installation is “GoBD certified”. T
 deploying organization remains responsible for its procedures, permissions,
 infrastructure, retention, backups, and tax assessment.
 
-## Historical boundary and decision
+## Development boundary and decision
 
-Earlier versions of this plan treated `filament-accounting`, `filament-fints`,
-and `filament-accounting-fints` as three active product/trust domains. That was
-the reviewed historical baseline and remains visible in Git history. From version
-0.1 it is superseded by [ADR 0003](adr/0003-unified-accounting-package.md):
+Early development treated `filament-accounting`, `filament-fints`, and
+`filament-accounting-fints` as three product/trust domains. That design was never
+released and is superseded before version 0.1 by
+[ADR 0003](adr/0003-unified-accounting-package.md):
 
 - the host installs one product package and registers one Filament plugin;
 - accounting, FinTS application integration, reconciliation, tax, documents,
@@ -86,7 +86,7 @@ active settlements rather than a mutable payment flag. Finalization locks the
 bank transaction and target state and is idempotent.
 
 All business amounts use integer minor units and exact decimal conversion. There
-are no float-based posting or migration calculations. Tax and posting decisions
+are no float-based posting or data-conversion calculations. Tax and posting decisions
 are versioned; a used tax-rate version cannot be changed in place.
 
 Period close/reopen, manual posting, reversal, and other privileged operations
@@ -141,18 +141,12 @@ anchors must be written to independently controlled immutable/versioned storage,
 with separate permissions and retained schedule/monitoring evidence. The host
 must prove that configuration rather than relying on the package to infer it.
 
-## Legacy consolidation evidence
+## Fresh schema evidence
 
-The required process is documented in [UPGRADE.md](../UPGRADE.md). The dry run
-reports tables, counts, explicit owner mappings, expected target counts, existing
-reconciliation/settlement counts, transaction evidence hash, and blockers. It
-does not infer ownership from names or IBANs.
-
-The apply step runs transactionally and idempotently, preserves stable source
-IDs, exact amounts, source evidence, and existing accounting relationships,
-records before/after evidence with a SHA-256 hash, emits audit evidence, and
-retains every legacy table. Legacy tables leave the active writer path but are
-not dropped or silently rewritten as accounting history.
+Version 0.1 has no external predecessor installation. The package migrations
+therefore describe only the final target schema and are verified from an empty
+database. Development environments are recreated with `migrate:fresh`; no data
+conversion, duplicate writer, or transitional table set is part of the release.
 
 ## Data access, retention, and operations
 
@@ -176,7 +170,7 @@ Every release candidate must retain:
 2. `composer validate --strict --no-check-publish` output;
 3. full PHPUnit results without live bank credentials or paid services;
 4. PHPStan and formatting results;
-5. fresh-install and legacy-consolidation results;
+5. fresh-install schema and seed results;
 6. bank source-version, idempotency, SCA, payment, mandate, tenant, tax,
    reconciliation, document, ledger, and audit evidence tests;
 7. configuration and host responsibility attestations;

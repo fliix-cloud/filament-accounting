@@ -66,15 +66,15 @@ Configure `FINTS_PRODUCT_ID` before creating a bank connection. The integrated
 commands are `filament-accounting:sync-institutes`,
 `filament-accounting:sync-bank`, and `filament-accounting:cleanup-sca`.
 
-Existing three-package installations must follow [UPGRADE.md](UPGRADE.md) and
-run the blocker-reporting dry run before applying the idempotent consolidation.
+The project is pre-release. Development databases use the final schema directly;
+after schema changes, recreate them with `php artisan migrate:fresh --seed`.
+There is no data-upgrade or consolidation workflow.
 
 ## Documentation
 
 - [Architecture](docs/architecture.md)
 - [ADR: unified accounting package](docs/adr/0003-unified-accounting-package.md)
 - [Maintained php-fints deltas](docs/upstream/php-fints-delta.md)
-- [Upgrade from the former three-package setup](UPGRADE.md)
 - [Domain model](docs/domain-model.md)
 - [Ledger invariants](docs/ledger-invariants.md)
 - [Bank reconciliation](docs/bank-reconciliation.md)

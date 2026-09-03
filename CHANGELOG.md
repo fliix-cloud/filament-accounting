@@ -24,9 +24,8 @@
 
 - Integrated FinTS connections, accounts, balances, transactions, SCA, SEPA
   transfers, direct debits, mandates, commands, views, routes, and translations.
-- Safe, repeatable `filament-accounting:consolidate-legacy` dry-run/apply workflow
-  with blockers, exact amount conversion, evidence hashes, and retained tables.
-- ADR 0003, upgrade guide, protocol patch inventory, and unified GoBD documents.
+- A fresh-install target schema expressed by three create-only migrations.
+- ADR 0003, protocol patch inventory, and unified GoBD documents.
 
 ### Removed
 

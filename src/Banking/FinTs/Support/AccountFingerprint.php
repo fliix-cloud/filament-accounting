@@ -15,7 +15,7 @@ final class AccountFingerprint
         }
 
         return hash('sha256', implode('|', [
-            'legacy',
+            'account',
             (string) $account->getBlz(),
             (string) $account->getAccountNumber(),
             (string) $account->getSubAccount(),

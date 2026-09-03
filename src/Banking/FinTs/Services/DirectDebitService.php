@@ -118,9 +118,7 @@ class DirectDebitService
     private function lockAndValidateMandate(BankDirectDebit $debit, BankConnection $connection): void
     {
         if ($debit->direct_debit_mandate_id === null) {
-            // Legacy records created before mandate entities were introduced remain
-            // resumable/submittable from their immutable snapshot fields.
-            return;
+            throw new FintsValidationException(__('filament-accounting::banking/fints/validation.mandate_active'));
         }
 
         $mandate = DirectDebitMandate::query()

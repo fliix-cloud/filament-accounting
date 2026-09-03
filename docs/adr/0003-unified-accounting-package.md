@@ -7,12 +7,12 @@
 
 ## Context
 
-Accounting and FinTS were previously exposed through three installable
-Laravel/Filament packages. Both endpoint packages had bank-account and
-transaction concepts, while `filament-accounting-fints` copied state through a
-driver/bridge layer. Hosts had to compose two plugins, multiple providers and
-configuration files, an owner mapper, and a runtime bridge even though the
-product always uses accounting and FinTS together.
+During development, Accounting and FinTS were split across three repositories.
+Both endpoint packages had bank-account and transaction concepts, while
+`filament-accounting-fints` copied state through a driver/bridge layer. This
+design was never released or installed outside the development demo. The target
+product always uses accounting and FinTS together, so the split was removed
+before version 0.1.
 
 The FinTS protocol implementation itself has a different maintenance boundary.
 It is framework-independent, has upstream provenance in `nemiah/phpFinTS`, and
@@ -62,25 +62,18 @@ auto-posts in version 0.1.
 - Protocol and framework releases stay independently reviewable.
 - The protocol repository must be renamed/published before a stable dependency
   can replace the temporary commit-pinned Composer package declaration.
-- Existing installations require a dry-run consolidation. Legacy tables are
-  retained, marked outside the active write path, and never dropped by the
-  consolidation command.
+- Version 0.1 starts from one final, fresh-install schema. Development databases
+  are recreated; no data conversion or compatibility path is part of the product.
 - No software-only statement of GoBD certification is made. Storage immutability,
   access control, backups, retention, monitoring, and procedural documentation
   remain host responsibilities.
 
-## Migration
+## Development reset
 
-1. Back up the database and evidence storage.
-2. Deploy the unified package and run its migrations.
-3. Run `php artisan filament-accounting:consolidate-legacy --dry-run --json`.
-4. Resolve every reported ownership or mandate mapping blocker explicitly.
-5. Run `php artisan filament-accounting:consolidate-legacy --json`.
-6. Run `php artisan filament-accounting:verify --json` and retain both reports.
-7. Remove the old provider/plugin/bridge registrations only after application
-   verification. Do not delete legacy tables during this release.
-
-Detailed mappings and rollback guidance are in [UPGRADE.md](../../UPGRADE.md).
+The project is pre-release and has no external installations. After schema
+changes, recreate the development database with `php artisan migrate:fresh
+--seed`, then run `php artisan filament-accounting:verify`. Package migrations
+describe only the target schema and do not alter or convert earlier prototypes.
 
 ## Alternatives considered
 
@@ -95,9 +88,7 @@ Detailed mappings and rollback guidance are in [UPGRADE.md](../../UPGRADE.md).
 
 ## Reversal strategy
 
-Before final cutover, rollback means redeploying the previous package set and
-restoring the pre-migration database snapshot. After the unified writer is in
-use, do not point the old bridge at the same data: it would reintroduce two
-writers. A later architectural reversal requires a new ADR, an explicit export
-contract, and tested replay from canonical source versions. Retained legacy
-tables are evidence and migration fallback inputs, not an active rollback writer.
+Before version 0.1, an architectural reversal is a source-code decision followed
+by another fresh development database. After a public release, any data upgrade
+or architectural reversal requires a new ADR and a separately reviewed schema
+transition; none is implemented pre-emptively in the initial release.

@@ -29,24 +29,6 @@ use PHPUnit\Framework\Attributes\Test;
 class ReconciliationTest extends TestCase
 {
     #[Test]
-    public function reconciliation_is_blocked_until_the_specific_bank_ledger_mapping_is_confirmed(): void
-    {
-        $entity = $this->makeEntity();
-        $this->actingAs($this->makeUser());
-        $bank = $this->makeBankAccount($entity);
-        $bank->update(['ledger_mapping_confirmed' => false]);
-        app(ImportBankStatementLines::class)->handle($bank, [
-            new BankStatementLineData('unmapped-bank', 100, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
-        ]);
-
-        $this->expectException(ReconciliationException::class);
-        app(FinalizeReconciliation::class)->handle(
-            BankStatementLine::query()->where('external_id', 'unmapped-bank')->firstOrFail(),
-            [['purpose' => SplitPurpose::Suspense->value, 'amount_minor' => 100, 'reason' => 'mapping test']],
-        );
-    }
-
-    #[Test]
     public function direct_assignment_settles_one_target_and_a_smaller_payment_is_not_a_split(): void
     {
         $entity = $this->makeEntity();
@@ -452,7 +434,7 @@ class ReconciliationTest extends TestCase
         $line = BankStatementLine::query()->create([
             'legal_entity_id' => $entity->getKey(),
             'bank_account_id' => $bank->getKey(),
-            'driver_key' => 'synthetic',
+            'source' => 'synthetic',
             'external_id' => 'pending-1',
             'amount_minor' => 100,
             'currency' => 'EUR',

@@ -36,14 +36,12 @@ foreach ($pkg in @("filament-accounting")) {
     }
 }
 
-php artisan migrate --force
+php artisan migrate:fresh --force
 php artisan db:seed --force --class=Database\\Seeders\\AccountingDemoSeeder
-php artisan filament-accounting:consolidate-legacy --dry-run
 php artisan filament-accounting:verify
 
 Write-Host ""
 Write-Host "Demo ready at $demo"
 Write-Host "Panel: /admin (existing Filament login)"
 Write-Host "FinTS banking and canonical Accounting bank transactions use the same plugin."
-Write-Host "Run filament-accounting:consolidate-legacy only after its dry run has no blockers."
-Write-Host "Rerun is non-destructive."
+Write-Host "The demo database was recreated from the package's target schema."

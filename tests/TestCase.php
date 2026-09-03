@@ -149,8 +149,7 @@ abstract class TestCase extends Orchestra
             'iban' => 'DE89370400440532013000',
             'currency' => $entity->base_currency,
             'ledger_account_id' => $ledgerAccountId,
-            'ledger_mapping_confirmed' => true,
-            'driver_key' => 'synthetic',
+            'source' => 'synthetic',
             'external_account_id' => 'acc-1',
             'is_active' => true,
         ]);

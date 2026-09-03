@@ -7,10 +7,7 @@ use FilamentAccounting\Banking\Data\BankStatementLineData;
 use FilamentAccounting\Banking\Services\UnifiedBankTransactionImporter;
 use FilamentAccounting\Models\AccountingBankAccount;
 
-/**
- * @deprecated Use UnifiedBankTransactionImporter. Kept as a source-compatible
- *             façade for pre-0.1 integrations during the consolidation window.
- */
+/** Application-facing entry point for canonical bank statement imports. */
 final class ImportBankStatementLines
 {
     public function __construct(

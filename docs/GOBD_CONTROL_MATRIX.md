@@ -6,8 +6,8 @@
 **Scope:** `fliix-cloud/filament-accounting` is the system of record and contains
 the accounting, FinTS application, reconciliation, document, tax, ownership, and
 audit modules. `fliix-cloud/php-fints` is a framework-free protocol dependency.
-The former `filament-accounting-fints` bridge is historical migration input, not
-an active trust domain. See [ADR 0003](adr/0003-unified-accounting-package.md).
+The former development-only `filament-accounting-fints` bridge is not an active
+trust domain. See [ADR 0003](adr/0003-unified-accounting-package.md).
 
 “Implemented” means the repository contains the named mechanism and automated
 evidence. It does not mean a deployment is GoBD-compliant or certified.
@@ -34,24 +34,23 @@ evidence. It does not mean a deployment is GoBD-compliant or certified.
 | ACC-DOC-01 | Preserve commercial, party, tax/account and artifact decisions for invoices. | Document/line snapshots, original attachments, issue/register services; invoice/e-invoice tests. | Partial | Exact renderer/template reproduction and full conformance corpus remain. |
 | ACC-TAX-01 | Select versioned rates by date and require confirmation for ambiguous tax cases. | `TaxCode`/`TaxRuleVersion`, overlap/immutability guards, German seed profile, `SalesTaxSuggestionService`; tax tests. | Implemented | Recommendations are limited to documented Germany-first cases, not universal tax advice. |
 | ACC-BNK-01 | Store one canonical transaction and every material bank source state without floats. | `UnifiedBankTransactionImporter`, `BankTransactionSourceVersion`, exact minor units; pending→booked/storno/change/retry tests. | Implemented | Available raw payload depends on what the bank/protocol response exposes. |
-| ACC-BNK-02 | Avoid duplicate account/transaction truth and provision the internal bank ledger mapping automatically. | Canonical `AccountingBankAccount`/`BankStatementLine`, direct `TransactionSyncService`, `BankLedgerAccountProvisioner`; unified FinTS tests. | Implemented | Physical legacy table names remain intentionally for migration compatibility. |
+| ACC-BNK-02 | Avoid duplicate account/transaction truth and provision the internal bank ledger mapping automatically. | Canonical `AccountingBankAccount`/`BankStatementLine`, direct `TransactionSyncService`, `BankLedgerAccountProvisioner`; unified FinTS tests. | Implemented | The initial release schema contains only the canonical tables. |
 | ACC-REC-01 | Finalize direct, partial and real split reconciliation exactly, idempotently and by reversal. | Locked `FinalizeReconciliation`, split validation, settlement/journal links; reconciliation tests. | Implemented | Operational concurrency characteristics still depend on the selected database. |
 | ACC-REC-02 | Make local suggestions explainable and user-confirmed. | Deterministic matcher, scored reasons, `ReconciliationLearningRule`, post-confirmation storage, edit/deactivate/delete UI; matcher tests. | Implemented | No automatic posting from learning is allowed in 0.1. |
-| ACC-MIG-01 | Consolidate three-package data without heuristics, loss, or destructive cleanup. | Dry-run/apply command, explicit owner/mandate blockers, stable IDs, exact amounts, source versions, evidence hash, retained tables; `LegacyBankingConsolidationTest`. | Implemented | Production cutover still requires backups and operator comparison of retained reports. |
 | ACC-VER-01 | Detect journal and audit/anchor integrity failures with machine-readable evidence. | `filament-accounting:verify --json`, online/offline audit evidence verification, manipulation tests. | Partial | Complete document/storage/relation/retention/Z3 verification remains open. |
 | ACC-EXP-01 | Provide read-only Z1, reproducible Z2, and deterministic complete Z3 access. | Current read views and generic journal export. | Planned | Generic journal CSV is not a complete relational Z3 package. |
 | ACC-RET-01 | Apply versioned retention, legal holds, controlled disposal, and disposal evidence. | Operations documentation and host contract. | Planned | Executable retention lifecycle is not complete. |
 | ACC-IKS-01 | Evidence least privilege, separation of duties, four-eyes controls and access recertification. | Package abilities plus host IAM process. | Host | Package abilities alone are not operational segregation evidence. |
-| ACC-DOCS-01 | Keep architecture, operation, migration, data model and controls aligned with a release. | ADR 0003, README, UPGRADE, architecture, master plan, matrix, protocol delta document. | Partial | Complete organization-specific procedural documentation remains a host duty. |
+| ACC-DOCS-01 | Keep architecture, operation, data model and controls aligned with a release. | ADR 0003, README, architecture, master plan, matrix, protocol delta document. | Partial | Complete organization-specific procedural documentation remains a host duty. |
 
-## Protocol and transition controls
+## Protocol and development-boundary controls
 
 | ID | Objective | Implementation / evidence | Status | Residual risk / next action |
 | --- | --- | --- | --- | --- |
 | FINTS-BND-01 | Keep the protocol dependency free of Laravel/Filament/product side effects. | `fliix-cloud/php-fints` contains `Fhp\` source/tests only; Composer architecture test and protocol `composer check`. | Implemented | Merge transition PR, expose new package name on default branch, then publish 4.2. |
 | FINTS-PAT-01 | Keep every local upstream deviation explicit and regression-tested. | [Protocol delta inventory](upstream/php-fints-delta.md), five exact source files, 134 protocol tests. | Implemented | Re-run all regression areas for every upstream sync. |
 | FINTS-SYN-01 | Synchronize upstream read-only through controlled review. | Fork `UPSTREAM.md`, sync branch procedure, common-base SHA, conflict/test update rule. | Implemented | Repository governance must enforce the documented review/release process. |
-| BRIDGE-OFF-01 | Ensure the former bridge is absent from runtime and cannot create a second writer. | No bridge dependency/provider/plugin/registry in target; architecture tests; separate deprecation documentation. | Implemented | Host cutover must remove old queue workers and registrations. |
+| BRIDGE-OFF-01 | Ensure the development bridge is absent from runtime and cannot create a second writer. | No bridge dependency/provider/plugin/registry in target; architecture tests. | Implemented | Keep the bridge repository out of the public product dependency graph. |
 
 ## Host and governance controls
 

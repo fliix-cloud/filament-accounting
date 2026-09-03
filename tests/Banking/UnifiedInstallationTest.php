@@ -2,9 +2,7 @@
 
 namespace FilamentAccounting\Tests\Banking;
 
-use FilamentAccounting\Models\AccountingBankAccount;
 use FilamentAccounting\Tests\TestCase;
-use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -15,50 +13,53 @@ class UnifiedInstallationTest extends TestCase
     {
         foreach ([
             'accounting_bank_accounts',
+            'accounting_bank_import_runs',
             'accounting_bank_statement_lines',
             'accounting_bank_transaction_source_versions',
+            'accounting_reconciliations',
+            'accounting_reconciliation_splits',
+            'accounting_reconciliation_learning_rules',
             'fints_bank_connections',
             'fints_bank_transfers',
             'fints_bank_direct_debits',
+            'fints_direct_debit_creditor_profiles',
             'fints_direct_debit_mandates',
             'fints_sca_sessions',
+            'fints_sync_runs',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Missing unified table {$table}.");
         }
 
         $this->assertFalse(Schema::hasTable('fints_bank_accounts'));
         $this->assertFalse(Schema::hasTable('fints_bank_transactions'));
+        $this->assertTrue(Schema::hasColumn('accounting_bank_accounts', 'source'));
+        foreach (['driver_key', 'ledger_mapping_confirmed'] as $column) {
+            $this->assertFalse(Schema::hasColumn('accounting_bank_accounts', $column));
+        }
+        $this->assertTrue(Schema::hasColumn('accounting_bank_import_runs', 'source'));
+        $this->assertTrue(Schema::hasColumn('accounting_bank_statement_lines', 'source'));
+        $this->assertFalse(Schema::hasColumn('accounting_party_bank_accounts', 'mandate_reference'));
     }
 
     #[Test]
-    public function an_accounting_only_database_is_extended_without_losing_its_accounts(): void
+    public function package_migrations_describe_only_the_fresh_target_schema(): void
     {
-        $account = $this->makeBankAccount($this->makeEntity());
+        $migrationDirectory = __DIR__.'/../../database/migrations';
+        $paths = glob($migrationDirectory.'/*.php') ?: [];
+        sort($paths);
 
-        Schema::disableForeignKeyConstraints();
-        foreach ([
-            'fints_sync_runs',
-            'fints_sca_sessions',
-            'fints_bank_direct_debits',
-            'fints_bank_transfers',
-            'fints_direct_debit_mandates',
-            'fints_direct_debit_creditor_profiles',
-            'fints_bank_connections',
-            'accounting_bank_transaction_source_versions',
-            'accounting_legacy_consolidation_runs',
-        ] as $table) {
-            Schema::dropIfExists($table);
+        $this->assertSame([
+            '2026_08_30_000001_create_filament_accounting_tables.php',
+            '2026_08_31_000002_create_accounting_party_bank_accounts.php',
+            '2026_09_01_000003_create_filament_accounting_banking_tables.php',
+        ], array_map('basename', $paths));
+
+        foreach ($paths as $path) {
+            $contents = (string) file_get_contents($path);
+            $this->assertStringNotContainsString('Schema::table(', $contents);
+            $this->assertStringNotContainsString('Schema::hasTable(', $contents);
+            $this->assertStringNotContainsString('Schema::hasColumn(', $contents);
+            $this->assertStringNotContainsString('->change()', $contents);
         }
-        Schema::enableForeignKeyConstraints();
-
-        $migration = require __DIR__.'/../../database/migrations/2026_09_03_000010_unify_fints_banking.php';
-        $this->assertInstanceOf(Migration::class, $migration);
-        $migration->up();
-
-        $this->assertTrue(AccountingBankAccount::query()->whereKey($account->getKey())->exists());
-        $this->assertTrue(Schema::hasTable('fints_bank_connections'));
-        $this->assertTrue(Schema::hasTable('accounting_bank_transaction_source_versions'));
-        $this->assertFalse(Schema::hasTable('fints_bank_accounts'));
-        $this->assertFalse(Schema::hasTable('fints_bank_transactions'));
     }
 }

@@ -30,7 +30,7 @@ src/
 ├── Authorization/   host abilities and trusted authorization boundary
 ├── Banking/
 │   ├── FinTs/       connections, SCA, sync, payments, mandates and I/O adapters
-│   └── Services/    canonical bank import, ledger provisioning, legacy cutover
+│   └── Services/    canonical bank import and ledger provisioning
 ├── Compliance/      product profiles; version 0.1 is Germany-first
 ├── Documents/       invoice intake, storage, categories and document services
 ├── EInvoicing/      structured invoice adapters
@@ -61,8 +61,7 @@ account idempotently from `BankLedgerAccountProvisioner`. Bank connection,
 availability, user activation, balances, and sync timestamps remain on the same
 product record. Users do not choose ledger mappings.
 
-`BankStatementLine` is the canonical bank transaction, even though the existing
-table name remains for migration safety. Source identity is stable per Legal
+`BankStatementLine` is the canonical bank transaction. Source identity is stable per Legal
 Entity/account/source ID. A retry with identical evidence is a no-op. A material
 bank change creates a source version; posted values are preserved and flagged
 for review rather than overwritten.
@@ -98,5 +97,5 @@ All money is persisted as integer minor units and processed via
 amounts. E-invoice generation and validation remain PHP-only per
 [ADR 0002](adr/0002-php-only-e-invoice-validation.md).
 
-The consolidation decision and historical three-package boundary are documented
+The single-package decision and development-time three-repository boundary are documented
 in [ADR 0003](adr/0003-unified-accounting-package.md).

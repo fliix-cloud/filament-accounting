@@ -53,7 +53,7 @@ class UnifiedFinTsIntegrationTest extends TestCase
         $this->assertSame($entity->getKey(), $account->legal_entity_id);
         $this->assertSame($connection->getKey(), $account->bank_connection_id);
         $this->assertNotNull($account->ledger_account_id);
-        $this->assertTrue($account->ledger_mapping_confirmed);
+        $this->assertSame('fints', $account->source);
 
         $account->is_enabled = false;
         $account->save();

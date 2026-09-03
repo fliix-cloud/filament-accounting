@@ -21,18 +21,16 @@ use Illuminate\Support\Carbon;
  * @property string $uuid
  * @property int $legal_entity_id
  * @property int|null $bank_connection_id
- * @property int|null $legacy_fints_bank_account_id
  * @property string $display_name
  * @property string|null $iban
  * @property string|null $bic
  * @property string $currency
  * @property int $ledger_account_id
- * @property string $driver_key
+ * @property string $source
  * @property string $external_account_id
  * @property bool $is_active
  * @property bool $is_available
  * @property bool $is_enabled
- * @property bool $ledger_mapping_confirmed
  * @property string|null $fingerprint
  * @property string|null $account_number
  * @property string|null $sub_account
@@ -59,13 +57,12 @@ class AccountingBankAccount extends AccountingModel
     protected $fillable = [
         'legal_entity_id',
         'bank_connection_id',
-        'legacy_fints_bank_account_id',
         'display_name',
         'iban',
         'bic',
         'currency',
         'ledger_account_id',
-        'driver_key',
+        'source',
         'external_account_id',
         'fingerprint',
         'account_number',
@@ -83,7 +80,6 @@ class AccountingBankAccount extends AccountingModel
         'last_balance_sync_at',
         'last_transaction_sync_at',
         'is_active',
-        'ledger_mapping_confirmed',
     ];
 
     protected static function booted(): void
@@ -93,11 +89,10 @@ class AccountingBankAccount extends AccountingModel
                 return;
             }
 
-            $account->driver_key = 'fints';
+            $account->source = 'fints';
             $account->is_available ??= true;
             $account->is_enabled ??= true;
             $account->is_active = $account->is_available && $account->is_enabled;
-            $account->ledger_mapping_confirmed = true;
 
             if ($account->ledger_account_id !== null) {
                 return;
@@ -116,7 +111,6 @@ class AccountingBankAccount extends AccountingModel
         static::saving(function (self $account): void {
             if ($account->bank_connection_id !== null) {
                 $account->is_active = $account->is_available && $account->is_enabled;
-                $account->ledger_mapping_confirmed = true;
             }
         });
     }
@@ -134,7 +128,6 @@ class AccountingBankAccount extends AccountingModel
             'balance_at' => 'datetime',
             'last_balance_sync_at' => 'datetime',
             'last_transaction_sync_at' => 'datetime',
-            'ledger_mapping_confirmed' => 'boolean',
         ];
     }
 

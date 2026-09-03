@@ -77,7 +77,7 @@ class AccountSyncService
             $account->fill([
                 'legal_entity_id' => $connection->legal_entity_id,
                 'display_name' => $sepa->getIban() ?: $sepa->getAccountNumber() ?: $fingerprint,
-                'driver_key' => 'fints',
+                'source' => 'fints',
                 'external_account_id' => $fingerprint,
                 'iban' => $sepa->getIban(),
                 'bic' => $sepa->getBic(),

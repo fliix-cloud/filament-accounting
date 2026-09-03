@@ -8,8 +8,8 @@ bridge, event/listener import, or configurable driver registry exists. Stable id
 legal_entity_id + bank_account_id + external_id
 ```
 
-`driver_key = fints` remains internal provenance during migration, not a public
-extension point. Import is idempotent. Each material source state is retained in
+`source = fints` is internal provenance, not a public extension point. Import is
+idempotent. Each material source state is retained in
 `BankTransactionSourceVersion`. Posted reconciliations are not silently rewritten
 when amount, currency, or identity later changes; the line is flagged for review.
 
