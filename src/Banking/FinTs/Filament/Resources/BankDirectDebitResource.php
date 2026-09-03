@@ -152,7 +152,9 @@ class BankDirectDebitResource extends Resource
         return $table
             ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('created_at')->dateTime(),
+                TextColumn::make('created_at')
+                    ->label(__('filament-accounting::banking/fints/fields.created_at'))
+                    ->dateTime(),
                 TextColumn::make('mandate_id')->label(__('filament-accounting::banking/fints/fields.mandate')),
                 TextColumn::make('debtor_name')->label(__('filament-accounting::banking/fints/fields.debtor_name')),
                 TextColumn::make('amount')->numeric(2),

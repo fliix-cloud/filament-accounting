@@ -19,6 +19,7 @@ return [
     'tan_medium' => 'TAN medium',
     'tan_medium_help' => 'Filled from the bank after Discover TAN methods. Only shown when the selected method requires a device.',
     'status' => 'Status',
+    'created_at' => 'Created at',
     'iban' => 'IBAN',
     'bic' => 'BIC',
     'alias' => 'Local alias',

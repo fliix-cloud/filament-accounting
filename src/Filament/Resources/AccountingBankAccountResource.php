@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Filament\Resources;
 
+use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
@@ -9,6 +10,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use FilamentAccounting\Banking\FinTs\Support\ProductRegistration;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\AccountingBankAccountResource\Pages\EditAccountingBankAccount;
@@ -39,6 +41,16 @@ class AccountingBankAccountResource extends Resource
         return __('filament-accounting::navigation.bank_accounts');
     }
 
+    public static function getModelLabel(): string
+    {
+        return __('filament-accounting::resources.accounting_bank_account.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('filament-accounting::resources.accounting_bank_account.plural');
+    }
+
     protected static function ability(): string
     {
         return 'manage_bank_connections';
@@ -66,15 +78,36 @@ class AccountingBankAccountResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
-            TextColumn::make('display_name')->label(__('filament-accounting::fields.display_name'))->searchable(),
-            TextColumn::make('iban')->label(__('filament-accounting::fields.iban')),
-            TextColumn::make('booked_balance_minor')
-                ->label(__('filament-accounting::fields.booked_balance'))
-                ->formatStateUsing(fn (?int $state, AccountingBankAccount $record): ?string => $record->formattedBalance($state)),
-            IconColumn::make('is_available')->boolean()->label(__('filament-accounting::fields.bank_account_available')),
-            IconColumn::make('is_enabled')->boolean()->label(__('filament-accounting::fields.bank_account_enabled')),
-        ]);
+        return $table
+            ->columns([
+                TextColumn::make('display_name')->label(__('filament-accounting::fields.display_name'))->searchable(),
+                TextColumn::make('iban')->label(__('filament-accounting::fields.iban')),
+                TextColumn::make('booked_balance_minor')
+                    ->label(__('filament-accounting::fields.booked_balance'))
+                    ->formatStateUsing(fn (?int $state, AccountingBankAccount $record): ?string => $record->formattedBalance($state)),
+                IconColumn::make('is_available')->boolean()->label(__('filament-accounting::fields.bank_account_available')),
+                IconColumn::make('is_enabled')->boolean()->label(__('filament-accounting::fields.bank_account_enabled')),
+            ])
+            ->recordActions([
+                Action::make('syncTransactions')
+                    ->label(__('filament-accounting::banking/fints/actions.sync_transactions'))
+                    ->icon('heroicon-o-arrow-path')
+                    ->visible(fn (AccountingBankAccount $record): bool => $record->bank_connection_id !== null)
+                    ->disabled(fn (AccountingBankAccount $record): bool => ! ProductRegistration::isConfigured() || ! $record->isUsable())
+                    ->tooltip(fn (): ?string => ProductRegistration::isConfigured()
+                        ? null
+                        : __('filament-accounting::banking/fints/notifications.product_id_missing'))
+                    ->action(fn (AccountingBankAccount $record, ListAccountingBankAccounts $livewire) => $livewire->syncBankAccountTransactions($record)),
+                Action::make('syncBalance')
+                    ->label(__('filament-accounting::banking/fints/actions.sync_balances'))
+                    ->icon('heroicon-o-scale')
+                    ->visible(fn (AccountingBankAccount $record): bool => $record->bank_connection_id !== null)
+                    ->disabled(fn (AccountingBankAccount $record): bool => ! ProductRegistration::isConfigured() || ! $record->isUsable())
+                    ->tooltip(fn (): ?string => ProductRegistration::isConfigured()
+                        ? null
+                        : __('filament-accounting::banking/fints/notifications.product_id_missing'))
+                    ->action(fn (AccountingBankAccount $record, ListAccountingBankAccounts $livewire) => $livewire->syncBankAccountBalance($record)),
+            ]);
     }
 
     public static function getPages(): array

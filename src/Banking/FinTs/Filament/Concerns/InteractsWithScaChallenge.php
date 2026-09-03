@@ -163,10 +163,12 @@ trait InteractsWithScaChallenge
 
         if ($outcome->isDone()) {
             $this->closeScaModal();
-            Notification::make()
-                ->title($this->scaCompletedNotification($operation))
-                ->success()
-                ->send();
+            if ($this->shouldNotifyScaCompleted($operation)) {
+                Notification::make()
+                    ->title($this->scaCompletedNotification($operation))
+                    ->success()
+                    ->send();
+            }
             $this->afterScaCompleted($outcome);
 
             return;
@@ -180,6 +182,13 @@ trait InteractsWithScaChallenge
     protected function afterScaCompleted(ScaOutcome $outcome): void
     {
         unset($outcome);
+    }
+
+    protected function shouldNotifyScaCompleted(ScaOperationType $operation): bool
+    {
+        unset($operation);
+
+        return true;
     }
 
     protected function scaSession(): ?StrongAuthenticationSession

@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages;
 
+use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\RenderHook;
@@ -9,6 +10,8 @@ use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Filament\View\PanelsRenderHook;
+use FilamentAccounting\Banking\FinTs\Filament\Concerns\InteractsWithBankAccountSync;
+use FilamentAccounting\Banking\FinTs\Support\ProductRegistration;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Models\AccountingBankAccount;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,6 +20,8 @@ use Livewire\Attributes\Url;
 
 class ListBankStatementLines extends ListRecords
 {
+    use InteractsWithBankAccountSync;
+
     protected static string $resource = BankStatementLineResource::class;
 
     #[Url(as: 'account')]
@@ -71,8 +76,8 @@ class ListBankStatementLines extends ListRecords
         $pending = $account?->pendingStatementLinesSummary() ?? ['count' => 0, 'sum_minor' => 0];
 
         return [
-            'booked_balance' => null,
-            'available_amount' => null,
+            'booked_balance' => $account?->formattedBalance($account->booked_balance_minor),
+            'available_amount' => $account?->formattedBalance($account->available_amount_minor),
             'pending_count' => $pending['count'],
             'pending_amount' => $account?->formattedPendingStatementLinesAmount(),
             'pending_amount_color' => match (true) {
@@ -80,6 +85,26 @@ class ListBankStatementLines extends ListRecords
                 $pending['sum_minor'] > 0 => '#009E73',
                 default => null,
             },
+        ];
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('syncTransactionsAndBalance')
+                ->label(__('filament-accounting::banking/fints/actions.sync_transactions_and_balance'))
+                ->icon('heroicon-o-arrow-path')
+                ->visible(fn (): bool => $this->selectedAccount()?->bank_connection_id !== null)
+                ->disabled(fn (): bool => ! ProductRegistration::isConfigured() || ! $this->selectedAccount()?->isUsable())
+                ->tooltip(fn (): ?string => ProductRegistration::isConfigured()
+                    ? null
+                    : __('filament-accounting::banking/fints/notifications.product_id_missing'))
+                ->action(function (): void {
+                    $account = $this->selectedAccount();
+                    if ($account instanceof AccountingBankAccount) {
+                        $this->syncBankAccountTransactionsAndBalance($account);
+                    }
+                }),
         ];
     }
 

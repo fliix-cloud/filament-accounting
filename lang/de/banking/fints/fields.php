@@ -19,6 +19,7 @@ return [
     'tan_medium' => 'TAN-Medium',
     'tan_medium_help' => 'Wird nach „TAN-Verfahren ermitteln“ von der Bank gefüllt. Nur sichtbar, wenn das gewählte Verfahren ein Gerät benötigt.',
     'status' => 'Status',
+    'created_at' => 'Erstellt am',
     'iban' => 'IBAN',
     'bic' => 'BIC',
     'alias' => 'Lokaler Alias',

@@ -3,6 +3,7 @@
 namespace FilamentAccounting\Tests\Banking\FinTs;
 
 use FilamentAccounting\Banking\FinTs\Contracts\FintsClientFactory;
+use FilamentAccounting\Banking\FinTs\Enums\BankConnectionStatus;
 use FilamentAccounting\Banking\FinTs\Enums\ScaOperationType;
 use FilamentAccounting\Banking\FinTs\Enums\ScaSessionState;
 use FilamentAccounting\Banking\FinTs\Exceptions\ScaExpiredException;
@@ -49,6 +50,8 @@ class StrongAuthenticationSecurityTest extends TestCase
         $this->assertNull($resumed->session?->fresh()->encrypted_fints_state);
         $this->assertNull($resumed->session?->fresh()->encrypted_action);
         $this->assertSame('fake-fints-state:0', $client->lastPersistedInstance);
+        $this->assertSame(BankConnectionStatus::Active, $connection->fresh()?->status);
+        $this->assertNotNull($connection->fresh()?->last_successful_connection_at);
     }
 
     #[Test]
@@ -74,6 +77,26 @@ class StrongAuthenticationSecurityTest extends TestCase
                 $this->assertStringNotContainsString($tan, $value);
             }
         }
+    }
+
+    #[Test]
+    public function a_successful_fints_operation_marks_the_connection_active(): void
+    {
+        $connection = $this->connection($this->makeEntity());
+        $client = $this->bindFakeClient(new FakeFintsClient(['done']));
+
+        $outcome = app(StrongAuthenticationCoordinator::class)->execute(
+            $connection,
+            new FakeAction,
+            ScaOperationType::Login,
+            $client,
+        );
+
+        $connection->refresh();
+
+        $this->assertTrue($outcome->isDone());
+        $this->assertSame(BankConnectionStatus::Active, $connection->status);
+        $this->assertNotNull($connection->last_successful_connection_at);
     }
 
     #[Test]

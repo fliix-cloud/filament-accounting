@@ -17,6 +17,7 @@ use Fhp\Protocol\DialogInitialization;
 use FilamentAccounting\Banking\FinTs\Contracts\FintsClient;
 use FilamentAccounting\Banking\FinTs\Contracts\FintsClientFactory;
 use FilamentAccounting\Banking\FinTs\Data\ScaOutcome;
+use FilamentAccounting\Banking\FinTs\Enums\BankConnectionStatus;
 use FilamentAccounting\Banking\FinTs\Enums\ChallengeType;
 use FilamentAccounting\Banking\FinTs\Enums\PaymentStatus;
 use FilamentAccounting\Banking\FinTs\Enums\ScaOperationType;
@@ -249,6 +250,7 @@ class StrongAuthenticationCoordinator
             }
 
             $this->finishBusiness($type, $action, $connection, $related);
+            $this->markConnectionSuccessful($connection);
 
             if ($session) {
                 $session->state = ScaSessionState::Done;
@@ -263,6 +265,15 @@ class StrongAuthenticationCoordinator
         }
 
         throw ErrorMapper::map(new \RuntimeException('FinTS action ended in an unknown state.'));
+    }
+
+    private function markConnectionSuccessful(BankConnection $connection): void
+    {
+        $connection->status = BankConnectionStatus::Active;
+        $connection->last_error_message = null;
+        $connection->last_error_code = null;
+        $connection->last_successful_connection_at = now();
+        $connection->save();
     }
 
     private function actionNeedsUser(BaseAction $action): bool

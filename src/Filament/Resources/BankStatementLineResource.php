@@ -270,7 +270,9 @@ class BankStatementLineResource extends Resource
                     return __('filament-accounting::fields.select_account');
                 }
 
-                return __('filament-tables::table.empty.heading');
+                return __('filament-tables::table.empty.heading', [
+                    'model' => static::getPluralModelLabel(),
+                ]);
             })
             ->emptyStateDescription(function ($livewire): ?string {
                 if ($livewire instanceof ListBankStatementLines && ! $livewire->hasSelectedAccount()) {

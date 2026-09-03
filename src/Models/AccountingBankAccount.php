@@ -190,9 +190,12 @@ class AccountingBankAccount extends AccountingModel
     public function pickerLabel(): string
     {
         $iban = $this->formattedIban();
+        $displayName = trim((string) $this->display_name);
+        $normalizedDisplayName = strtoupper((string) preg_replace('/\s+/', '', $displayName));
+        $normalizedIban = strtoupper((string) preg_replace('/\s+/', '', (string) $this->iban));
 
-        return filled($this->display_name)
-            ? $this->display_name.' · '.$iban
+        return filled($displayName) && $normalizedDisplayName !== $normalizedIban
+            ? $displayName.' · '.$iban
             : $iban;
     }
 

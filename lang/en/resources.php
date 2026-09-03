@@ -7,6 +7,7 @@ return [
     'sales_invoice' => ['singular' => 'Sales invoice', 'plural' => 'Sales invoices'],
     'purchase_invoice' => ['singular' => 'Purchase invoice', 'plural' => 'Purchase invoices'],
     'bank_statement_line' => ['singular' => 'Bank transaction', 'plural' => 'Bank transactions'],
+    'accounting_bank_account' => ['singular' => 'Bank account', 'plural' => 'Bank accounts'],
     'journal_entry' => ['singular' => 'Journal entry', 'plural' => 'Journal entries'],
     'ledger_account' => ['singular' => 'Ledger account', 'plural' => 'Ledger accounts'],
     'posting_rule' => ['singular' => 'Posting rule', 'plural' => 'Posting rules'],
