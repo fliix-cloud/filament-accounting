@@ -4,14 +4,11 @@ namespace FilamentAccounting\Tests\Filament;
 
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
-use FilamentAccounting\Filament\Resources\AuditEventResource;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\CatalogItemResource;
 use FilamentAccounting\Filament\Resources\CustomerResource;
 use FilamentAccounting\Filament\Resources\JournalEntryResource;
-use FilamentAccounting\Filament\Resources\LedgerAccountResource;
 use FilamentAccounting\Filament\Resources\LegalEntityResource;
-use FilamentAccounting\Filament\Resources\PostingRuleResource;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
 use FilamentAccounting\Filament\Resources\SupplierResource;
@@ -31,8 +28,8 @@ class AccountingNavigationTest extends TestCase
             AccountingNavigation::SALES,
             AccountingNavigation::PURCHASES,
             AccountingNavigation::BANKING,
-            AccountingNavigation::LEDGER,
-            AccountingNavigation::ADMINISTRATION,
+            AccountingNavigation::REPORTS,
+            AccountingNavigation::SETTINGS,
         ], $items->keys()->all());
 
         foreach ($items as $item) {
@@ -59,14 +56,11 @@ class AccountingNavigationTest extends TestCase
                 BankStatementLineResource::class,
                 ReconciliationPage::class,
             ],
-            AccountingNavigation::LEDGER => [
+            AccountingNavigation::REPORTS => [
                 JournalEntryResource::class,
-                LedgerAccountResource::class,
-                PostingRuleResource::class,
             ],
-            AccountingNavigation::ADMINISTRATION => [
+            AccountingNavigation::SETTINGS => [
                 LegalEntityResource::class,
-                AuditEventResource::class,
             ],
         ];
 

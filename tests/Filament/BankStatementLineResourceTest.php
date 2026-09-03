@@ -196,7 +196,7 @@ class BankStatementLineResourceTest extends TestCase
             fn (Action $action): string => $action->getName(),
         );
 
-        $this->assertSame(['reconcile', 'viewAssignment', 'openSource'], $actions->keys()->all());
+        $this->assertSame(['reconcile', 'viewAssignment'], $actions->keys()->all());
 
         /** @var Action $reconcile */
         $reconcile = $actions->get('reconcile');

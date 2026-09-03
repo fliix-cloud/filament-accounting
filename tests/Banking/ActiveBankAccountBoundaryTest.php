@@ -18,7 +18,7 @@ use PHPUnit\Framework\Attributes\Test;
 class ActiveBankAccountBoundaryTest extends TestCase
 {
     #[Test]
-    public function accounting_resources_only_expose_active_bank_accounts_and_their_transactions(): void
+    public function account_settings_show_disabled_accounts_but_transactions_remain_active_only(): void
     {
         $entity = $this->makeEntity();
         $active = $this->makeBankAccount($entity);
@@ -47,7 +47,10 @@ class ActiveBankAccountBoundaryTest extends TestCase
 
         $inactive->update(['is_active' => false]);
 
-        $this->assertSame([$active->id], AccountingBankAccountResource::getEloquentQuery()->pluck('id')->all());
+        $this->assertEqualsCanonicalizing(
+            [$active->id, $inactive->id],
+            AccountingBankAccountResource::getEloquentQuery()->pluck('id')->all(),
+        );
         $this->assertSame([], BankStatementLineResource::getEloquentQuery()->pluck('id')->all());
         $this->assertNull(app(ReconciliationAssistantQuery::class)->statementLine(
             (string) $inactive->statementLines()->sole()->uuid,

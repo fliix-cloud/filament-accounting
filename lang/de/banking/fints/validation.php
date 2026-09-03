@@ -1,0 +1,26 @@
+<?php
+
+return [
+    'iban' => 'Die IBAN ist ungültig.',
+    'bic' => 'Die BIC ist ungültig.',
+    'amount' => 'Der Betrag muss größer als null sein.',
+    'mandate' => 'Mandatsreferenz und Unterschriftsdatum sind erforderlich.',
+    'mandate_reference' => 'Die Mandatsreferenz ist ungültig. Sie darf maximal 35 Zeichen lang sein und nicht mit „/“ beginnen oder enden bzw. „//“ enthalten.',
+    'mandate_active' => 'Das ausgewählte Mandat ist nicht aktiv oder gehört nicht zum aktuellen Bankinhaber.',
+    'creditor_profile' => 'Das ausgewählte Gläubigerprofil ist ungültig.',
+    'creditor_identifier' => 'Die Gläubiger-Identifikationsnummer ist ungültig.',
+    'sequence_type' => 'Die Sequenzart passt nicht zum aktuellen Stand des Mandats.',
+    'b2b_bank_confirmation' => 'Für ein B2B-Firmenlastschriftmandat muss die Bestätigung/Hinterlegung bei der Bank des Zahlungspflichtigen dokumentiert sein.',
+    'collection_date' => 'Ein gültiges Einzugsdatum ist erforderlich und darf nicht in der Vergangenheit liegen.',
+    'direct_debit_currency' => 'SEPA-Lastschriften können nur in EUR eingereicht werden.',
+    'sepa_identifier' => 'Die SEPA-Auftragsreferenz ist ungültig oder länger als 35 Zeichen.',
+    'account_holder_name' => 'Hinterlegen Sie vor der Überweisung den Kontoinhaber am Auftraggeberkonto.',
+    'endpoint_required' => 'Eine FinTS-Endpunkt-URL ist erforderlich.',
+    'endpoint_invalid' => 'Die FinTS-Endpunkt-URL ist ungültig.',
+    'endpoint_https' => 'FinTS-Endpunkte müssen HTTPS verwenden.',
+    'endpoint_scheme' => 'Das URL-Schema des FinTS-Endpunkts ist nicht erlaubt.',
+    'endpoint_host' => 'Der FinTS-Host steht nicht auf der Freigabeliste.',
+    'endpoint_private' => 'Private oder Loopback-FinTS-Endpunkte sind nicht erlaubt.',
+    'endpoint_credentials' => 'Die FinTS-URL darf keine eingebetteten Zugangsdaten enthalten.',
+    'pin_required' => 'Eine PIN ist erforderlich.',
+];

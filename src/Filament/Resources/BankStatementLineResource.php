@@ -22,7 +22,6 @@ use FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages\ViewBa
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\Reconciliation;
 use FilamentAccounting\Models\ReconciliationSplit;
-use FilamentAccounting\Support\BankSourceLinkRegistry;
 use FilamentAccounting\Support\MoneyFormatter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -265,12 +264,6 @@ class BankStatementLineResource extends Resource
                     ->label(__('filament-accounting::actions.view_assignment'))
                     ->visible(fn (BankStatementLine $record): bool => $record->activePostedReconciliation() instanceof Reconciliation)
                     ->url(fn (BankStatementLine $record): string => ReconciliationPage::getUrl(['line' => $record->uuid])),
-                Action::make('openSource')
-                    ->label(__('filament-accounting::actions.open_source'))
-                    ->icon('heroicon-o-arrow-top-right-on-square')
-                    ->visible(fn (BankStatementLine $record): bool => app(BankSourceLinkRegistry::class)->url($record) !== null)
-                    ->url(fn (BankStatementLine $record): ?string => app(BankSourceLinkRegistry::class)->url($record))
-                    ->openUrlInNewTab(),
             ])
             ->emptyStateHeading(function ($livewire): string {
                 if ($livewire instanceof ListBankStatementLines && ! $livewire->hasSelectedAccount()) {

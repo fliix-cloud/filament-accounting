@@ -12,7 +12,6 @@ use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
-use FilamentAccounting\Banking\SyntheticBankFeedDriver;
 use FilamentAccounting\FilamentAccountingPlugin;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -54,8 +53,6 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->plugin(FilamentAccountingPlugin::make()->bankFeeds([
-                new SyntheticBankFeedDriver,
-            ]));
+            ->plugin(FilamentAccountingPlugin::make());
     }
 }

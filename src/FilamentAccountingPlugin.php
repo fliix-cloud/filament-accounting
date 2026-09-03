@@ -5,30 +5,31 @@ namespace FilamentAccounting;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
 use Filament\Support\Colors\Color;
-use FilamentAccounting\Contracts\BankFeedDriver;
-use FilamentAccounting\Contracts\BankFeedDriverRegistry;
+use FilamentAccounting\Banking\FinTs\Filament\Pages\StrongAuthentication;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\BankConnectionResource;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\BankDirectDebitResource;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\BankTransferResource;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitCreditorProfileResource;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitMandateResource;
+use FilamentAccounting\Banking\FinTs\Filament\Widgets\BankBalancesWidget;
+use FilamentAccounting\Banking\FinTs\Filament\Widgets\PendingScaWidget;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Pages\AccountingOverview;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
 use FilamentAccounting\Filament\Resources\AccountingBankAccountResource;
-use FilamentAccounting\Filament\Resources\AuditEventResource;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\CatalogItemResource;
 use FilamentAccounting\Filament\Resources\CustomerResource;
 use FilamentAccounting\Filament\Resources\JournalEntryResource;
-use FilamentAccounting\Filament\Resources\LedgerAccountResource;
 use FilamentAccounting\Filament\Resources\LegalEntityResource;
-use FilamentAccounting\Filament\Resources\PostingRuleResource;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
+use FilamentAccounting\Filament\Resources\ReconciliationLearningRuleResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
 use FilamentAccounting\Filament\Resources\SupplierResource;
 use FilamentAccounting\Filament\Resources\TaxCodeResource;
 
 class FilamentAccountingPlugin implements Plugin
 {
-    /** @var array<int, BankFeedDriver> */
-    protected array $bankFeedDrivers = [];
-
     protected bool $hasDashboard = true;
 
     protected bool $hasCustomers = true;
@@ -45,15 +46,7 @@ class FilamentAccountingPlugin implements Plugin
 
     protected bool $hasJournal = true;
 
-    protected bool $hasChart = true;
-
-    protected bool $hasTaxAndRules = true;
-
-    protected bool $hasReports = true;
-
     protected bool $hasSettings = true;
-
-    protected bool $hasAudit = true;
 
     public static function make(): static
     {
@@ -74,16 +67,6 @@ class FilamentAccountingPlugin implements Plugin
     public function getId(): string
     {
         return 'filament-accounting';
-    }
-
-    /**
-     * @param  array<int, BankFeedDriver>  $drivers
-     */
-    public function bankFeeds(array $drivers): static
-    {
-        $this->bankFeedDrivers = $drivers;
-
-        return $this;
     }
 
     public function customers(bool $condition = true): static
@@ -142,37 +125,9 @@ class FilamentAccountingPlugin implements Plugin
         return $this;
     }
 
-    public function chart(bool $condition = true): static
-    {
-        $this->hasChart = $condition;
-
-        return $this;
-    }
-
-    public function taxAndRules(bool $condition = true): static
-    {
-        $this->hasTaxAndRules = $condition;
-
-        return $this;
-    }
-
-    public function reports(bool $condition = true): static
-    {
-        $this->hasReports = $condition;
-
-        return $this;
-    }
-
     public function settings(bool $condition = true): static
     {
         $this->hasSettings = $condition;
-
-        return $this;
-    }
-
-    public function audit(bool $condition = true): static
-    {
-        $this->hasAudit = $condition;
 
         return $this;
     }
@@ -224,28 +179,23 @@ class FilamentAccountingPlugin implements Plugin
         if ($this->enabled('bank_reconciliation') && $this->hasBankReconciliation) {
             $resources[] = AccountingBankAccountResource::class;
             $resources[] = BankStatementLineResource::class;
+            $resources[] = BankTransferResource::class;
+            $resources[] = BankDirectDebitResource::class;
+            $resources[] = ReconciliationLearningRuleResource::class;
             $pages[] = ReconciliationPage::class;
+            $pages[] = StrongAuthentication::class;
         }
 
         if ($this->enabled('journal') && $this->hasJournal) {
             $resources[] = JournalEntryResource::class;
         }
 
-        if ($this->enabled('chart_of_accounts') && $this->hasChart) {
-            $resources[] = LedgerAccountResource::class;
-        }
-
-        if ($this->enabled('tax_and_posting_rules') && $this->hasTaxAndRules) {
-            $resources[] = TaxCodeResource::class;
-            $resources[] = PostingRuleResource::class;
-        }
-
         if ($this->enabled('settings') && $this->hasSettings) {
             $resources[] = LegalEntityResource::class;
-        }
-
-        if ($this->enabled('audit') && $this->hasAudit) {
-            $resources[] = AuditEventResource::class;
+            $resources[] = BankConnectionResource::class;
+            $resources[] = DirectDebitCreditorProfileResource::class;
+            $resources[] = DirectDebitMandateResource::class;
+            $resources[] = TaxCodeResource::class;
         }
 
         $panel
@@ -255,17 +205,14 @@ class FilamentAccountingPlugin implements Plugin
             ])
             ->navigationItems(AccountingNavigation::items())
             ->pages($pages)
-            ->resources($resources);
+            ->resources($resources)
+            ->widgets([
+                BankBalancesWidget::class,
+                PendingScaWidget::class,
+            ]);
     }
 
-    public function boot(Panel $panel): void
-    {
-        $registry = app(BankFeedDriverRegistry::class);
-
-        foreach ($this->bankFeedDrivers as $driver) {
-            $registry->register($driver);
-        }
-    }
+    public function boot(Panel $panel): void {}
 
     protected function enabled(string $feature): bool
     {
