@@ -5,8 +5,9 @@ Germany is registered as compliance profile `DE` (`GermanComplianceProfile`). Do
 The profile seeds:
 
 - A generic chart mapped through **semantic account roles** (not proprietary SKR content)
-- Versioned VAT codes (19%, 7%, exempt, reverse charge)
-- Posting rules with familiar German labels (Steuerfälle)
+- Versioned VAT codes (19%, 7%, 0%, historical 16%/5%, intra-community,
+  reverse charge, and export treatments)
+- Internal posting rules and twelve understandable purchase expense categories
 
 Relevant primary sources (verify current text before relying on them):
 
@@ -22,10 +23,11 @@ The generic journal CSV exporter is **not** DATEV-compatible. DATEV export remai
 
 ## GoBD readiness roadmap
 
-The repository-spanning implementation and audit roadmap is maintained in the
+The unified product implementation and audit roadmap is maintained in the
 [GoBD readiness and audit master plan](GOBD_COMPLIANCE_MASTER_PLAN.md). It is the
-source of truth for the `ACC-*`, `FINTS-*`, and `BRIDGE-*` work packages across
-`filament-accounting`, `filament-fints`, and `filament-accounting-fints`.
+source of truth for the `ACC-*`, protocol-boundary, transition, and host controls.
+The historical three-package boundary was superseded by
+[ADR 0003](adr/0003-unified-accounting-package.md).
 
 Merging the roadmap does not establish compliance. Each control must be implemented,
 tested, evidenced in a defined reference installation, and independently reviewed

@@ -7,3 +7,10 @@
 - Owners are resolved from trusted context, never from untrusted request parameters.
 - Idempotency keys, row locks, and unique constraints protect against duplicate issue/post/finalize.
 - Do not log full invoices, bank credentials, or raw sensitive payloads.
+- FinTS endpoints are HTTPS-only by default and reject private/unapproved hosts.
+- PIN, user identifiers, dialog state, SCA challenge data, and resumable payment
+  state remain encrypted; ambiguous submissions are never retried automatically.
+- SCA challenge responses are Legal Entity and ability scoped, non-cacheable,
+  `nosniff`, same-origin, and sandbox SVG content through CSP.
+- FinTS queue jobs carry scalar IDs and activate the trusted Legal Entity context
+  before loading bank records.
