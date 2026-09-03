@@ -7,12 +7,14 @@ use Fhp\FinTs;
 use Fhp\Model\NoPsd2TanMode;
 use Fhp\Model\TanMedium;
 use Fhp\Model\TanMode;
+use Fhp\Segment\CAZ\HICAZSv1;
 use Fhp\Segment\SPA\HISPAS;
 use FilamentAccounting\Banking\FinTs\Contracts\FintsClient;
+use FilamentAccounting\Banking\FinTs\Contracts\ProvidesCamtStatementSchemas;
 use FilamentAccounting\Banking\FinTs\Data\PersistedFintsState;
 use FilamentAccounting\Banking\FinTs\Support\ErrorMapper;
 
-final class PhpFintsClient implements FintsClient
+final class PhpFintsClient implements FintsClient, ProvidesCamtStatementSchemas
 {
     public function __construct(
         private readonly FinTs $fints,
@@ -155,6 +157,23 @@ final class PhpFintsClient implements FintsClient
             }
 
             return array_values($hispas->getParameter()->getUnterstuetzteSEPADatenformate());
+        } catch (\Throwable $e) {
+            throw ErrorMapper::map($e);
+        }
+    }
+
+    public function supportedCamtStatementSchemas(): array
+    {
+        try {
+            $hicazs = $this->fints->getBpd()->getLatestSupportedParameters('HICAZS');
+            if (! $hicazs instanceof HICAZSv1) {
+                return [];
+            }
+
+            return array_values(array_filter(
+                $hicazs->getParameter()->getUnterstuetzteCamtMessages()->camtDescriptor,
+                fn (string $descriptor): bool => str_contains(strtolower($descriptor), 'camt.052'),
+            ));
         } catch (\Throwable $e) {
             throw ErrorMapper::map($e);
         }

@@ -4,7 +4,6 @@ namespace FilamentAccounting\Banking\FinTs\Services;
 
 use Fhp\Action\GetBalance;
 use Fhp\Action\GetSEPAAccounts;
-use Fhp\Action\GetStatementOfAccount;
 use Fhp\Action\SendSEPADirectDebit;
 use Fhp\Action\SendSEPARealtimeTransfer;
 use Fhp\Action\SendSEPATransfer;
@@ -56,6 +55,7 @@ class StrongAuthenticationCoordinator
     public function __construct(
         private readonly FintsClientFactory $factory,
         private readonly FintsDialogStore $dialogs,
+        private readonly StatementActionFactory $statementActions,
     ) {}
 
     public function execute(
@@ -241,7 +241,7 @@ class StrongAuthenticationCoordinator
 
         if ($action->isDone()) {
             if ($action instanceof DialogInitialization && $session instanceof StrongAuthenticationSession) {
-                $followUp = $this->followUpAction($type, $related);
+                $followUp = $this->followUpAction($type, $related, $client);
                 if ($followUp !== null) {
                     $client->execute($followUp);
 
@@ -291,12 +291,12 @@ class StrongAuthenticationCoordinator
             && $e->userMessage() === __('filament-accounting::banking/fints/errors.login_required');
     }
 
-    private function followUpAction(ScaOperationType $type, ?Model $related): ?BaseAction
+    private function followUpAction(ScaOperationType $type, ?Model $related, FintsClient $client): ?BaseAction
     {
         return match ($type) {
             ScaOperationType::SyncAccounts => GetSEPAAccounts::create(),
             ScaOperationType::SyncBalances => $this->balanceFollowUp($related),
-            ScaOperationType::SyncTransactions => $this->statementFollowUp($related),
+            ScaOperationType::SyncTransactions => $this->statementFollowUp($related, $client),
             ScaOperationType::Transfer => $this->transferFollowUp($related),
             ScaOperationType::DirectDebit => $this->directDebitFollowUp($related),
             default => null,
@@ -314,7 +314,7 @@ class StrongAuthenticationCoordinator
             : null;
     }
 
-    private function statementFollowUp(?Model $related): ?BaseAction
+    private function statementFollowUp(?Model $related, FintsClient $client): ?BaseAction
     {
         if (! $related instanceof BankSyncRun) {
             return null;
@@ -328,12 +328,11 @@ class StrongAuthenticationCoordinator
         $to = $related->to_date ? Carbon::parse($related->to_date) : Carbon::today();
         $from = $related->from_date ? Carbon::parse($related->from_date) : $to->copy()->subDays(90);
 
-        return GetStatementOfAccount::create(
+        return $this->statementActions->create(
+            $client,
             $account->toSepaAccount(),
             $from->toDateTime(),
             $to->toDateTime(),
-            false,
-            true,
         );
     }
 
@@ -429,11 +428,11 @@ class StrongAuthenticationCoordinator
             return;
         }
 
-        if ($type === ScaOperationType::SyncTransactions && $action instanceof GetStatementOfAccount) {
+        if ($type === ScaOperationType::SyncTransactions && $this->statementActions->supports($action)) {
             $account = $related instanceof BankSyncRun ? $related->account : null;
             if ($account instanceof BankAccount && $related instanceof BankSyncRun) {
                 $sync = app(TransactionSyncService::class);
-                $result = $sync->importStatementDetailed($account, $action->getStatement());
+                $result = $sync->importStatementDetailed($account, $this->statementActions->result($action));
                 $sync->markSyncCompleted($account, $related, $result);
             }
         }

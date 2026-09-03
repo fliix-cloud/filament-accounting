@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.052.001.08">
+  <BkToCstmrAcctRpt>
+    <Rpt>
+      <Id>pending-report</Id>
+      <CreDtTm>2026-09-03T12:00:00Z</CreDtTm>
+      <Ntry>
+        <Amt Ccy="EUR">7.89</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts><Cd>PDNG</Cd></Sts>
+        <ValDt><Dt>2026-09-04</Dt></ValDt>
+        <NtryDtls><TxDtls><RmtInf><Ustrd>Vorgemerkter Umsatz</Ustrd></RmtInf></TxDtls></NtryDtls>
+      </Ntry>
+    </Rpt>
+  </BkToCstmrAcctRpt>
+</Document>

@@ -2,7 +2,6 @@
 
 namespace FilamentAccounting\Banking\FinTs\Services;
 
-use Fhp\Action\GetStatementOfAccount;
 use Fhp\Model\StatementOfAccount\StatementOfAccount;
 use Fhp\Model\StatementOfAccount\Transaction;
 use FilamentAccounting\Banking\Data\BankStatementLineData;
@@ -30,6 +29,7 @@ class TransactionSyncService
         private readonly FintsClientFactory $factory,
         private readonly StrongAuthenticationCoordinator $sca,
         private readonly UnifiedBankTransactionImporter $importer,
+        private readonly StatementActionFactory $statementActions,
     ) {}
 
     public function sync(
@@ -63,12 +63,11 @@ class TransactionSyncService
             'started_at' => now(),
         ]);
         $client = $this->factory->make($connection);
-        $action = GetStatementOfAccount::create(
+        $action = $this->statementActions->create(
+            $client,
             $account->toSepaAccount(),
             Carbon::parse($from)->toDateTime(),
             Carbon::parse($to)->toDateTime(),
-            false,
-            true,
         );
         $outcome = $this->sca->execute(
             $connection,
@@ -87,7 +86,7 @@ class TransactionSyncService
             return $outcome;
         }
 
-        $result = $this->importStatementDetailed($account, $action->getStatement());
+        $result = $this->importStatementDetailed($account, $this->statementActions->result($action));
         $this->markSyncCompleted($account, $run, $result);
 
         return $outcome;

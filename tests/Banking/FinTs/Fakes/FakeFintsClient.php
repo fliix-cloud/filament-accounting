@@ -10,9 +10,10 @@ use Fhp\Model\VopPollingInfo;
 use Fhp\Model\VopVerificationResult;
 use Fhp\Syntax\Bin;
 use FilamentAccounting\Banking\FinTs\Contracts\FintsClient;
+use FilamentAccounting\Banking\FinTs\Contracts\ProvidesCamtStatementSchemas;
 use FilamentAccounting\Banking\FinTs\Data\PersistedFintsState;
 
-final class FakeFintsClient implements FintsClient
+final class FakeFintsClient implements FintsClient, ProvidesCamtStatementSchemas
 {
     /** @var list<string> */
     private array $script;
@@ -32,6 +33,9 @@ final class FakeFintsClient implements FintsClient
     public bool $openDialog = false;
 
     public ?string $lastPersistedInstance = null;
+
+    /** @var list<string> */
+    public array $camtStatementSchemas = [];
 
     /** @param list<string> $script */
     public function __construct(array $script = ['done'])
@@ -110,6 +114,11 @@ final class FakeFintsClient implements FintsClient
     public function supportedSepaPainSchemas(): array
     {
         return [];
+    }
+
+    public function supportedCamtStatementSchemas(): array
+    {
+        return $this->camtStatementSchemas;
     }
 
     public function persist(bool $minimal = false): string
