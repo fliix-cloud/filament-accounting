@@ -6,6 +6,7 @@ use FilamentAccounting\Banking\Data\BankStatementLineData;
 use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\PartyBankAccount;
+use FilamentAccounting\Models\ReconciliationLearningRule;
 use FilamentAccounting\Services\AssignStatementLine;
 use FilamentAccounting\Services\ImportBankStatementLines;
 use FilamentAccounting\Services\IssueSalesInvoice;
@@ -155,7 +156,29 @@ class DeterministicReconciliationMatcherTest extends TestCase
         )[0];
 
         $this->assertSame($nextInvoice->openItem->getKey(), $sameEntitySuggestion->targetId);
-        $this->assertContains('history', $sameEntitySuggestion->reasons);
+        $this->assertContains('learned_rule', $sameEntitySuggestion->reasons);
+        $this->assertGreaterThanOrEqual(1, ReconciliationLearningRule::query()
+            ->where('legal_entity_id', $firstEntity->getKey())
+            ->where('target_type', 'party')
+            ->where('target_id', $firstCustomer->getKey())
+            ->count());
+
+        ReconciliationLearningRule::query()
+            ->where('legal_entity_id', $firstEntity->getKey())
+            ->update(['is_active' => false]);
+        $suggestionsAfterEditing = app(SuggestReconciliationMatches::class)->handle(
+            BankStatementLine::query()->where('external_id', 'same-entity-history')->firstOrFail(),
+        );
+        foreach ($suggestionsAfterEditing as $suggestionAfterEditing) {
+            $this->assertNotContains('learned_rule', $suggestionAfterEditing->reasons);
+        }
+
+        ReconciliationLearningRule::query()
+            ->where('legal_entity_id', $firstEntity->getKey())
+            ->delete();
+        $this->assertDatabaseMissing('accounting_reconciliation_learning_rules', [
+            'legal_entity_id' => $firstEntity->getKey(),
+        ]);
 
         $secondEntity = $this->makeEntity(['legal_name' => 'Second Entity GmbH']);
         $secondCustomer = $this->makeParty($secondEntity, ['legal_name' => 'Second Customer GmbH']);
@@ -185,7 +208,7 @@ class DeterministicReconciliationMatcherTest extends TestCase
         )[0];
 
         $this->assertSame($secondInvoice->openItem->getKey(), $otherEntitySuggestion->targetId);
-        $this->assertNotContains('history', $otherEntitySuggestion->reasons);
+        $this->assertNotContains('learned_rule', $otherEntitySuggestion->reasons);
     }
 
     #[Test]
