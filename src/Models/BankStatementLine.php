@@ -101,6 +101,11 @@ class BankStatementLine extends AccountingModel
         return $this->hasMany(Reconciliation::class, 'statement_line_id');
     }
 
+    public function sourceVersions(): HasMany
+    {
+        return $this->hasMany(BankTransactionSourceVersion::class, 'bank_transaction_id');
+    }
+
     public function activePostedReconciliation(): ?Reconciliation
     {
         return $this->reconciliations
