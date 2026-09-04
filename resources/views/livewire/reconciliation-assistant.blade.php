@@ -1,45 +1,56 @@
 <div @class(['fac-assistant', 'fac-assistant-modal' => $this->context === 'modal'])>
     <style>
-        .fac-assistant { --fac-border: rgb(var(--gray-200), 1); display: grid; gap: 1rem; color: rgb(var(--gray-950)); }
+        .fac-assistant { --fac-border: rgb(var(--gray-200), 1); --fac-surface: #fff; --fac-subtle: rgb(var(--gray-50)); display: grid; gap: 1rem; color: rgb(var(--gray-950)); min-width: 0; }
         .dark .fac-assistant { --fac-border: rgb(var(--gray-700), 1); color: rgb(var(--gray-50)); }
         .fac-assistant-modal { padding: 0 .125rem .25rem; }
-        .fac-card { border: 1px solid var(--fac-border); border-radius: .65rem; background: rgb(var(--gray-50)); padding: .85rem; }
-        .dark .fac-card { background: rgb(var(--gray-900)); }
-        .fac-transaction-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem 1rem; }
+        .fac-workspace { align-items: start; display: grid; gap: 1rem; grid-template-columns: 17.5rem minmax(0, 1fr); min-width: 0; }
+        .fac-workspace-wide { grid-template-columns: minmax(0, 1fr); }
+        .fac-sidebar { min-width: 0; position: sticky; top: .5rem; }
+        .fac-workflow { display: grid; gap: 1rem; min-width: 0; }
+        .fac-card { background: var(--fac-surface); border: 1px solid var(--fac-border); border-radius: .75rem; box-shadow: 0 1px 2px rgb(0 0 0 / .04); padding: 1rem; }
+        .dark .fac-assistant { --fac-surface: rgb(var(--gray-900)); --fac-subtle: rgb(var(--gray-950)); }
+        .fac-transaction-card { border-left: 4px solid rgb(var(--primary-500)); padding: .9rem 1rem; }
+        .fac-transaction-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .85rem 1.5rem; }
         .fac-detail { min-width: 0; }
         .fac-detail-wide { grid-column: span 2; }
-        .fac-label { display: block; color: rgb(var(--gray-500)); font-size: .75rem; font-weight: 600; letter-spacing: .025em; text-transform: uppercase; }
-        .fac-value { display: block; margin-top: .2rem; overflow-wrap: anywhere; }
-        .fac-amount { align-items: center; display: inline-flex; font-size: 1.25rem; font-variant-numeric: tabular-nums; font-weight: 700; gap: .35rem; }
+        .fac-label { display: block; color: rgb(var(--gray-500)); font-size: .68rem; font-weight: 700; letter-spacing: .045em; line-height: 1.35; text-transform: uppercase; }
+        .fac-value { display: block; font-size: .875rem; line-height: 1.4; margin-top: .2rem; overflow-wrap: break-word; }
+        .fac-amount { align-items: center; display: inline-flex; flex: 0 0 auto; font-size: 1.35rem; font-variant-numeric: tabular-nums; font-weight: 750; gap: .4rem; white-space: nowrap; }
         .fac-amount-incoming { color: rgb(var(--success-700)); }
         .dark .fac-amount-incoming { color: rgb(var(--success-400)); }
         .fac-amount-outgoing { color: #2563eb; }
         .dark .fac-amount-outgoing { color: #60a5fa; }
-        .fac-transaction-summary { align-items: center; display: flex; gap: 1rem; justify-content: space-between; }
+        .fac-transaction-summary { align-items: center; display: grid; gap: 1rem 2rem; grid-template-columns: minmax(0, 1fr) auto; }
         .fac-summary-line { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .3rem; }
-        .fac-summary-counterparty { font-weight: 600; }
+        .fac-summary-counterparty { font-size: 1rem; font-weight: 700; }
         .fac-details { border-top: 1px solid var(--fac-border); margin-top: .75rem; padding-top: .65rem; }
-        .fac-details > summary, .fac-row-details > summary { color: rgb(var(--primary-600)); cursor: pointer; font-size: .75rem; font-weight: 600; list-style-position: inside; }
+        .fac-details > summary, .fac-row-details > summary { color: rgb(var(--primary-600)); cursor: pointer; font-size: .75rem; font-weight: 650; list-style-position: inside; width: max-content; }
         .dark .fac-details > summary, .dark .fac-row-details > summary { color: rgb(var(--primary-400)); }
-        .fac-type-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
-        .fac-type { align-items: center; background: #fff; border: 1px solid #d1d5db; border-radius: .5rem; display: flex; gap: .55rem; min-height: 4.25rem; padding: .6rem .65rem; text-align: left; transition: background .15s, border-color .15s; }
+        .fac-assignment-nav { background: var(--fac-subtle); }
+        .fac-section-heading { font-size: 1rem; font-weight: 700; line-height: 1.3; }
+        .fac-section-copy { color: rgb(var(--gray-500)); font-size: .8rem; line-height: 1.45; margin-top: .2rem; }
+        .fac-type-grid { display: grid; gap: .45rem; margin-top: .8rem; }
+        .fac-type { align-items: flex-start; background: var(--fac-surface); border: 1px solid var(--fac-border); border-radius: .6rem; display: flex; gap: .7rem; min-width: 0; padding: .75rem; text-align: left; transition: background .15s, border-color .15s, box-shadow .15s; width: 100%; }
         .fac-type:hover { border-color: rgb(var(--primary-400)); }
-        .fac-type[aria-selected="true"] { background: #eff6ff; border-color: #2563eb; border-width: 2px; color: #1e3a8a; }
+        .fac-type:focus-visible, .fac-category:focus-within, .fac-field:focus-within { outline: 3px solid rgb(var(--primary-500) / .3); outline-offset: 2px; }
+        .fac-type[aria-selected="true"] { background: #eff6ff; border-color: #2563eb; box-shadow: inset 3px 0 #2563eb; color: #1e3a8a; }
         .dark .fac-type { background: #1f2937; border-color: #4b5563; }
         .dark .fac-type[aria-selected="true"] { background: #172554; border-color: #60a5fa; color: #dbeafe; }
-        .fac-type-icon { flex: 0 0 auto; height: 1.5rem; width: 1.5rem; }
-        .fac-type-copy { display: grid; gap: .25rem; }
-        .fac-type-copy small, .fac-muted, .fac-reasons, .fac-date-line { color: rgb(var(--gray-500)); font-size: .75rem; }
+        .fac-type-icon { flex: 0 0 auto; height: 1.25rem; margin-top: .1rem; width: 1.25rem; }
+        .fac-type-copy { display: grid; gap: .15rem; min-width: 0; }
+        .fac-type-copy strong { font-size: .82rem; line-height: 1.3; }
+        .fac-type-copy small, .fac-muted, .fac-reasons, .fac-date-line { color: rgb(var(--gray-500)); font-size: .75rem; line-height: 1.4; }
         .fac-type[aria-selected="true"] .fac-type-copy small { color: #1d4ed8; }
         .dark .fac-type[aria-selected="true"] .fac-type-copy small { color: #bfdbfe; }
         .fac-date-line, .fac-reasons { display: block; }
-        .fac-toolbar { align-items: end; display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
-        .fac-toolbar-search { flex: 1 1 18rem; }
+        .fac-toolbar { align-items: end; display: grid; gap: .75rem 1rem; grid-template-columns: minmax(16rem, 1fr) auto auto; margin: 1rem 0; }
         .fac-check { align-items: center; display: inline-flex; gap: .4rem; min-height: 2.5rem; }
-        .fac-table-wrap { overflow-x: auto; }
-        .fac-table { border-collapse: collapse; min-width: 48rem; width: 100%; }
-        .fac-table th { color: rgb(var(--gray-500)); font-size: .7rem; font-weight: 600; letter-spacing: .025em; padding: .55rem; text-align: left; text-transform: uppercase; }
-        .fac-table td { border-top: 1px solid var(--fac-border); font-size: .82rem; padding: .55rem .45rem; vertical-align: top; }
+        .fac-table-wrap { border: 1px solid var(--fac-border); border-radius: .65rem; overflow-x: auto; }
+        .fac-table { border-collapse: collapse; min-width: 50rem; width: 100%; }
+        .fac-table th { background: var(--fac-subtle); color: rgb(var(--gray-500)); font-size: .67rem; font-weight: 700; letter-spacing: .035em; padding: .65rem .75rem; text-align: left; text-transform: uppercase; white-space: nowrap; }
+        .fac-table td { border-top: 1px solid var(--fac-border); font-size: .82rem; line-height: 1.4; padding: .75rem; vertical-align: top; }
+        .fac-table tbody tr:hover { background: rgb(var(--gray-50) / .75); }
+        .dark .fac-table tbody tr:hover { background: rgb(var(--gray-800) / .45); }
         .fac-table .fac-number { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
         .fac-open-amount { font-weight: 700; }
         .fac-selected-row { background: rgb(var(--primary-50)); }
@@ -62,7 +73,7 @@
         .dark .fac-error { color: rgb(var(--danger-400)); }
         .fac-empty { color: rgb(var(--gray-500)); padding: 1.5rem; text-align: center; }
         .fac-category-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
-        .fac-category { border: 1px solid var(--fac-border); border-radius: .65rem; display: grid; gap: .5rem; padding: .8rem; }
+        .fac-category { background: var(--fac-surface); border: 1px solid var(--fac-border); border-radius: .65rem; display: grid; gap: .5rem; padding: .8rem; }
         .fac-category-selected { border-color: rgb(var(--primary-500)); box-shadow: 0 0 0 2px rgb(var(--primary-500) / .15); }
         .fac-category-meta { display: flex; flex-wrap: wrap; gap: .35rem; }
         .fac-split-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
@@ -70,10 +81,12 @@
         .fac-split-row { border: 1px solid var(--fac-border); border-radius: .65rem; padding: .8rem; }
         .fac-split-grid { align-items: end; display: grid; grid-template-columns: 1fr 1.35fr .75fr 1fr auto; gap: .75rem; }
         .fac-field { display: grid; gap: .3rem; }
-        .fac-footer { align-items: center; background: rgb(var(--gray-50)); border-top: 1px solid var(--fac-border); display: flex; flex-wrap: wrap; gap: .65rem; justify-content: flex-end; margin: 0 -.25rem -.25rem; padding: .8rem .25rem .25rem; }
-        .dark .fac-footer { background: rgb(var(--gray-900) / .94); }
-        @media (max-width: 75rem) { .fac-transaction-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fac-type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fac-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fac-split-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (max-width: 42rem) { .fac-transaction-grid, .fac-type-grid, .fac-category-grid, .fac-split-summary, .fac-split-grid { grid-template-columns: 1fr; } .fac-detail-wide { grid-column: auto; } .fac-transaction-summary { align-items: flex-start; flex-direction: column; gap: .5rem; } .fac-amount { font-size: 1.05rem; } }
+        .fac-comment-card { padding: .8rem 1rem; }
+        .fac-workspace-footer { background: var(--fac-surface); border: 1px solid var(--fac-border); border-radius: .75rem; bottom: 0; box-shadow: 0 -4px 12px rgb(0 0 0 / .08); grid-column: 1 / -1; overflow: hidden; position: sticky; z-index: 10; }
+        .fac-workspace-footer .fac-comment-card { border: 0; border-bottom: 1px solid var(--fac-border); border-radius: 0; box-shadow: none; }
+        .fac-footer { align-items: center; background: var(--fac-surface); display: flex; flex-wrap: wrap; gap: .65rem; justify-content: center; padding: .85rem; }
+        @media (max-width: 68rem) { .fac-workspace { grid-template-columns: 1fr; } .fac-sidebar { position: static; } .fac-type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fac-toolbar { grid-template-columns: minmax(0, 1fr) auto auto; } .fac-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fac-split-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 42rem) { .fac-transaction-grid, .fac-type-grid, .fac-category-grid, .fac-split-summary, .fac-split-grid, .fac-toolbar { grid-template-columns: 1fr; } .fac-detail-wide { grid-column: auto; } .fac-transaction-summary { align-items: flex-start; grid-template-columns: 1fr; } .fac-amount { font-size: 1.1rem; } .fac-check { min-height: auto; } .fac-footer > * { flex: 1 1 auto; } }
     </style>
 
     @if (! $statementLine)
@@ -81,10 +94,10 @@
             <p>{{ __('filament-accounting::fields.select_line') }}</p>
         </div>
     @else
-        <section class="fac-card" aria-labelledby="fac-transaction-heading">
+        <section class="fac-card fac-transaction-card" aria-labelledby="fac-transaction-heading">
             <div class="fac-transaction-summary">
                 <div>
-                    <h2 id="fac-transaction-heading" style="font-size: 1rem; font-weight: 700;">{{ __('filament-accounting::fields.transaction_details') }}</h2>
+                    <h2 id="fac-transaction-heading" class="fac-section-heading">{{ __('filament-accounting::fields.transaction_details') }}</h2>
                     <div class="fac-summary-line">
                         <span class="fac-summary-counterparty">{{ $statementLine->counterparty_name ?: __('filament-accounting::fields.not_available') }}</span>
                         <span class="fac-badge">{{ __('filament-accounting::statuses.reconciliation.'.$statementLine->derivedBadge()->value) }}</span>
@@ -118,9 +131,40 @@
             </details>
         </section>
 
-        @if ($postedReconciliation)
+        <div @class(['fac-workspace', 'fac-workspace-wide' => $statementLine->source_status->value !== 'booked' || $postedReconciliation])>
+        @if ($statementLine->source_status->value === 'booked' && ! $postedReconciliation)
+            <aside class="fac-sidebar">
+                <section class="fac-card fac-assignment-nav" aria-labelledby="fac-assignment-type-heading">
+                    <h2 id="fac-assignment-type-heading" class="fac-section-heading">{{ __('filament-accounting::fields.choose_assignment_type') }}</h2>
+                    <div class="fac-type-grid" role="tablist" aria-label="{{ __('filament-accounting::fields.choose_assignment_type') }}">
+                        @foreach ([
+                            'sales_invoice' => 'heroicon-o-document-currency-euro',
+                            'purchase_invoice' => 'heroicon-o-receipt-percent',
+                            'posting_rule' => 'heroicon-o-scale',
+                            'split' => 'heroicon-o-view-columns',
+                        ] as $type => $icon)
+                            <button type="button" class="fac-type" role="tab" aria-selected="{{ $this->assignmentType === $type ? 'true' : 'false' }}" wire:click="selectAssignmentType('{{ $type }}')">
+                                <x-filament::icon :icon="$icon" class="fac-type-icon" />
+                                <span class="fac-type-copy"><strong>{{ __('filament-accounting::fields.assignment_types.'.$type) }}</strong><small>{{ __('filament-accounting::fields.assignment_type_help.'.$type) }}</small></span>
+                            </button>
+                        @endforeach
+                    </div>
+                    @if ($validationErrors['assignmentType'] ?? null)<span class="fac-error">{{ $validationErrors['assignmentType'] }}</span>@endif
+                </section>
+            </aside>
+        @endif
+        <main class="fac-workflow">
+
+        @if ($statementLine->source_status->value !== 'booked')
             <section class="fac-card">
-                <h2 style="font-size: 1rem; font-weight: 700;">{{ __('filament-accounting::fields.posted_assignment') }}</h2>
+                <div class="fac-alert" style="margin-bottom: 0;">
+                    <x-filament::icon icon="heroicon-o-clock" style="height: 1.25rem; width: 1.25rem;" />
+                    <div><strong>{{ __('filament-accounting::fields.pending_transaction') }}</strong><p>{{ __('filament-accounting::fields.assignment_unavailable_pending') }}</p></div>
+                </div>
+            </section>
+        @elseif ($postedReconciliation)
+            <section class="fac-card">
+                <h2 class="fac-section-heading">{{ __('filament-accounting::fields.posted_assignment') }}</h2>
                 <p class="fac-muted" style="margin-top: .25rem;">{{ ($postedReconciliation->match_meta['mode'] ?? null) === 'split' ? __('filament-accounting::fields.split_assignment_summary') : __('filament-accounting::fields.direct_assignment_summary') }}</p>
                 <div style="display: grid; gap: .65rem; margin-top: .8rem;">
                     @foreach ($postedAllocations as $allocation)
@@ -137,40 +181,10 @@
                 </div>
             </section>
         @else
-            @if ($statementLine->source_status->value !== 'booked')
-                <section class="fac-card">
-                    <div class="fac-alert">
-                        <x-filament::icon icon="heroicon-o-exclamation-triangle" style="height: 1.25rem; width: 1.25rem;" />
-                        <div><strong>{{ __('filament-accounting::fields.pending_transaction') }}</strong><p>{{ __('filament-accounting::fields.pending_transaction_help') }}</p></div>
-                    </div>
-                    <label class="fac-field"><span>{{ __('filament-accounting::fields.exception_reason') }}</span><x-filament::input.wrapper><x-filament::input type="text" wire:model.live="exceptionReason" /></x-filament::input.wrapper></label>
-                    @if ($validationErrors['exceptionReason'] ?? null)<span class="fac-error">{{ $validationErrors['exceptionReason'] }}</span>@endif
-                </section>
-            @endif
-
-            <section aria-labelledby="fac-assignment-type-heading">
-                <h2 id="fac-assignment-type-heading" style="font-size: 1rem; font-weight: 700; margin-bottom: .65rem;">{{ __('filament-accounting::fields.choose_assignment_type') }}</h2>
-                <div class="fac-type-grid" role="tablist" aria-label="{{ __('filament-accounting::fields.choose_assignment_type') }}">
-                    @foreach ([
-                        'sales_invoice' => 'heroicon-o-document-currency-euro',
-                        'purchase_invoice' => 'heroicon-o-receipt-percent',
-                        'posting_rule' => 'heroicon-o-scale',
-                        'ledger_account' => 'heroicon-o-book-open',
-                        'split' => 'heroicon-o-view-columns',
-                    ] as $type => $icon)
-                        <button type="button" class="fac-type" role="tab" aria-selected="{{ $this->assignmentType === $type ? 'true' : 'false' }}" wire:click="selectAssignmentType('{{ $type }}')">
-                            <x-filament::icon :icon="$icon" class="fac-type-icon" />
-                            <span class="fac-type-copy"><strong>{{ __('filament-accounting::fields.assignment_types.'.$type) }}</strong><small>{{ __('filament-accounting::fields.assignment_type_help.'.$type) }}</small></span>
-                        </button>
-                    @endforeach
-                </div>
-                @if ($validationErrors['assignmentType'] ?? null)<span class="fac-error">{{ $validationErrors['assignmentType'] }}</span>@endif
-            </section>
-
             @if (in_array($this->assignmentType, ['sales_invoice', 'purchase_invoice'], true))
                 <section class="fac-card">
-                    <h2 style="font-size: 1rem; font-weight: 700;">{{ __('filament-accounting::fields.assignment_types.'.$this->assignmentType) }}</h2>
-                    <p class="fac-muted">{{ __('filament-accounting::fields.invoice_selection_help') }}</p>
+                    <h2 class="fac-section-heading">{{ __('filament-accounting::fields.assignment_types.'.$this->assignmentType) }}</h2>
+                    <p class="fac-section-copy">{{ __('filament-accounting::fields.invoice_selection_help') }}</p>
                     @if (($statementLine->isIncoming() && $this->assignmentType === 'purchase_invoice') || (! $statementLine->isIncoming() && $this->assignmentType === 'sales_invoice'))
                         <div class="fac-alert" style="margin-top: .8rem;"><x-filament::icon icon="heroicon-o-information-circle" style="height: 1.25rem; width: 1.25rem;" /><span>{{ __('filament-accounting::errors.unsupported_invoice_direction') }}</span></div>
                     @endif
@@ -190,48 +204,44 @@
                 </section>
             @elseif ($this->assignmentType === 'posting_rule')
                 <section class="fac-card">
-                    <h2 style="font-size: 1rem; font-weight: 700;">{{ __('filament-accounting::fields.assignment_types.posting_rule') }}</h2>
-                    <p class="fac-muted">{{ __('filament-accounting::fields.posting_rule_selection_help') }}</p>
+                    <h2 class="fac-section-heading">{{ __('filament-accounting::fields.assignment_types.posting_rule') }}</h2>
+                    <p class="fac-section-copy">{{ __('filament-accounting::fields.posting_rule_selection_help') }}</p>
                     <label class="fac-field" style="margin: .8rem 0;"><span>{{ __('filament-accounting::fields.search_categories') }}</span><x-filament::input.wrapper><x-filament::input type="search" wire:model.live.debounce.300ms="postingRuleSearch" /></x-filament::input.wrapper></label>
                     <div class="fac-category-grid">
-                        @forelse ($postingRules as $rule)
-                            <article @class(['fac-category', 'fac-category-selected' => $this->selectedPostingRuleVersionId === $rule['id']])>
-                                <div><strong>{{ $rule['code'] }} · {{ $rule['label'] }}</strong><p class="fac-muted">{{ $rule['explanation'] }}</p></div>
-                                <div class="fac-category-meta">
-                                    @if ($rule['profile'])<span class="fac-badge">{{ $rule['profile'] }}</span>@endif
-                                    @if ($rule['tax_code'])<span class="fac-badge">{{ $rule['tax_code'] }}@if ($rule['tax_rate_bp'] !== null) · {{ number_format($rule['tax_rate_bp'] / 100, 2) }} % @endif</span>@endif
+                        @forelse ($categories as $category)
+                            <article @class(['fac-category', 'fac-category-selected' => $this->selectedCategoryKey === $category['key']])>
+                                <div>
+                                    <strong>{{ $category['name'] }}</strong>
+                                    @if ($category['explanation'])<p class="fac-muted">{{ $category['explanation'] }}</p>@endif
+                                    @if ($category['account_code'])<p class="fac-muted">{{ __('filament-accounting::fields.ledger_account_number', ['number' => $category['account_code']]) }}</p>@endif
                                 </div>
-                                <x-filament::button type="button" size="sm" :color="$this->selectedPostingRuleVersionId === $rule['id'] ? 'success' : 'gray'" wire:click="selectPostingRule({{ $rule['id'] }})">{{ $this->selectedPostingRuleVersionId === $rule['id'] ? __('filament-accounting::fields.selected') : __('filament-accounting::actions.select') }}</x-filament::button>
+                                <div class="fac-category-meta">
+                                    @if ($category['allows_tax'] && $category['tax_rate_bp'] !== null)
+                                        <span class="fac-badge">{{ __('filament-accounting::fields.default_tax_rate', ['rate' => number_format($category['tax_rate_bp'] / 100, 2, ',', '.')]) }}</span>
+                                    @elseif (! $category['allows_tax'])
+                                        <span class="fac-badge">{{ __('filament-accounting::fields.not_taxable') }}</span>
+                                    @endif
+                                </div>
+                                <x-filament::button type="button" size="sm" :color="$this->selectedCategoryKey === $category['key'] ? 'success' : 'gray'" wire:click="selectCategory('{{ $category['key'] }}')">{{ $this->selectedCategoryKey === $category['key'] ? __('filament-accounting::fields.selected') : __('filament-accounting::actions.select') }}</x-filament::button>
                             </article>
                         @empty
                             <p class="fac-empty">{{ __('filament-accounting::fields.no_posting_rules') }}</p>
                         @endforelse
                     </div>
-                    @if ($validationErrors['selectedPostingRuleVersionId'] ?? null)<span class="fac-error">{{ $validationErrors['selectedPostingRuleVersionId'] }}</span>@endif
-                </section>
-            @elseif ($this->assignmentType === 'ledger_account')
-                <section class="fac-card">
-                    <h2 style="font-size: 1rem; font-weight: 700;">{{ __('filament-accounting::fields.assignment_types.ledger_account') }}</h2>
-                    <p class="fac-muted">{{ __('filament-accounting::fields.ledger_account_selection_help') }}</p>
-                    <div class="fac-category-grid" style="margin-top: .8rem;">
-                        @forelse ($ledgerAccounts as $account)
-                            <article @class(['fac-category', 'fac-category-selected' => $this->selectedLedgerAccountId === $account['id']])>
-                                <div>
-                                    <strong>{{ $account['code'] }} · {{ $account['name'] }}</strong>
-                                    <p class="fac-muted">{{ $account['type'] }}</p>
-                                </div>
-                                <x-filament::button type="button" size="sm" :color="$this->selectedLedgerAccountId === $account['id'] ? 'success' : 'gray'" wire:click="selectLedgerAccount({{ $account['id'] }})">{{ $this->selectedLedgerAccountId === $account['id'] ? __('filament-accounting::fields.selected') : __('filament-accounting::actions.select') }}</x-filament::button>
-                            </article>
-                        @empty
-                            <p class="fac-empty">{{ __('filament-accounting::fields.no_ledger_accounts') }}</p>
-                        @endforelse
-                    </div>
-                    @if ($validationErrors['selectedLedgerAccountId'] ?? null)<span class="fac-error">{{ $validationErrors['selectedLedgerAccountId'] }}</span>@endif
+                    @if ($validationErrors['selectedCategoryKey'] ?? null)<span class="fac-error">{{ $validationErrors['selectedCategoryKey'] }}</span>@endif
+                    @if (is_array($selectedCategory) && $selectedCategory['allows_tax'])
+                        <label class="fac-field" style="margin-top: 1rem; max-width: 30rem;">
+                            <span>{{ __('filament-accounting::fields.tax_rate') }}</span>
+                            <x-filament::input.wrapper><x-filament::input.select wire:model.live="selectedTaxRuleVersionId">@foreach ($taxRates as $taxRate)<option value="{{ $taxRate['id'] }}">{{ number_format($taxRate['rate_bp'] / 100, 2, ',', '.') }} % – {{ $taxRate['name'] }}</option>@endforeach</x-filament::input.select></x-filament::input.wrapper>
+                            <span class="fac-muted">{{ __('filament-accounting::fields.tax_rate_override_help') }}</span>
+                            @if ($validationErrors['selectedTaxRuleVersionId'] ?? null)<span class="fac-error">{{ $validationErrors['selectedTaxRuleVersionId'] }}</span>@endif
+                        </label>
+                    @endif
                 </section>
             @else
                 <section class="fac-card">
-                    <h2 style="font-size: 1rem; font-weight: 700;">{{ __('filament-accounting::fields.assignment_types.split') }}</h2>
-                    <p class="fac-muted">{{ __('filament-accounting::fields.split_transaction_help') }}</p>
+                    <h2 class="fac-section-heading">{{ __('filament-accounting::fields.assignment_types.split') }}</h2>
+                    <p class="fac-section-copy">{{ __('filament-accounting::fields.split_transaction_help') }}</p>
                     <div class="fac-split-summary" style="margin-top: .8rem;">
                         <div><span class="fac-label">{{ __('filament-accounting::fields.total_amount') }}</span><strong class="fac-value">{{ \FilamentAccounting\Support\MoneyFormatter::format($statementLine->amount_minor, $statementLine->currency) }}</strong></div>
                         <div><span class="fac-label">{{ __('filament-accounting::fields.allocated_amount') }}</span><strong class="fac-value">{{ \FilamentAccounting\Support\MoneyFormatter::format($allocatedMinor, $statementLine->currency) }}</strong></div>
@@ -245,13 +255,32 @@
                         @foreach ($this->allocations as $index => $allocation)
                             @php
                                 $type = $allocation['type'] ?? 'sales_invoice';
-                                $targets = $type === 'sales_invoice' ? $salesInvoices : ($type === 'purchase_invoice' ? $purchaseInvoices : ($type === 'ledger_account' ? $ledgerAccounts : $postingRules));
-                                $target = collect($targets)->firstWhere('id', (int) ($allocation['target_id'] ?? 0));
+                                $targets = $type === 'sales_invoice' ? $salesInvoices : ($type === 'purchase_invoice' ? $purchaseInvoices : $categories);
+                                $target = $type === 'posting_rule'
+                                    ? collect($targets)->firstWhere('key', $allocation['target_id'] ?? null)
+                                    : collect($targets)->firstWhere('id', (int) ($allocation['target_id'] ?? 0));
                             @endphp
                             <article class="fac-split-row" wire:key="reconciliation-allocation-{{ $index }}">
                                 <div class="fac-split-grid">
-                                    <label class="fac-field"><span>{{ __('filament-accounting::fields.assignment_type') }}</span><x-filament::input.wrapper><x-filament::input.select wire:change="changeAllocationType({{ $index }}, $event.target.value)">@foreach (['sales_invoice', 'purchase_invoice', 'posting_rule', 'ledger_account'] as $splitType)<option value="{{ $splitType }}" @selected($type === $splitType)>{{ __('filament-accounting::fields.assignment_types.'.$splitType) }}</option>@endforeach</x-filament::input.select></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.type"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.type"] }}</span>@endif</label>
-                                    <label class="fac-field"><span>{{ __('filament-accounting::fields.target') }}</span><x-filament::input.wrapper><x-filament::input.select wire:model.live="allocations.{{ $index }}.target_id"><option value="">{{ __('filament-accounting::fields.select_target') }}</option>@foreach ($targets as $candidate)<option value="{{ $candidate['id'] }}">@if ($type === 'posting_rule'){{ $candidate['code'] }} · {{ $candidate['label'] }}@elseif ($type === 'ledger_account'){{ $candidate['code'] }} · {{ $candidate['name'] }}@else{{ $candidate['number'] ?: $candidate['supplier_invoice_number'] }} · {{ $candidate['party'] }} · {{ \FilamentAccounting\Support\MoneyFormatter::format($candidate['remaining_minor'], $candidate['currency']) }}@endif</option>@endforeach</x-filament::input.select></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.target_id"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.target_id"] }}</span>@endif</label>
+                                    <label class="fac-field"><span>{{ __('filament-accounting::fields.assignment_type') }}</span><x-filament::input.wrapper><x-filament::input.select wire:change="changeAllocationType({{ $index }}, $event.target.value)">@foreach (['sales_invoice', 'purchase_invoice', 'posting_rule'] as $splitType)<option value="{{ $splitType }}" @selected($type === $splitType)>{{ __('filament-accounting::fields.assignment_types.'.$splitType) }}</option>@endforeach</x-filament::input.select></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.type"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.type"] }}</span>@endif</label>
+                                    <label class="fac-field">
+                                        <span>{{ __('filament-accounting::fields.target') }}</span>
+                                        <x-filament::input.wrapper>
+                                            @if ($type === 'posting_rule')
+                                                <x-filament::input.select wire:change="changeAllocationTarget({{ $index }}, $event.target.value)">
+                                                    <option value="">{{ __('filament-accounting::fields.select_target') }}</option>
+                                                    @foreach ($targets as $candidate)<option value="{{ $candidate['key'] }}" @selected(($allocation['target_id'] ?? null) === $candidate['key'])>{{ $candidate['name'] }}</option>@endforeach
+                                                </x-filament::input.select>
+                                            @else
+                                                <x-filament::input.select wire:model.live="allocations.{{ $index }}.target_id">
+                                                    <option value="">{{ __('filament-accounting::fields.select_target') }}</option>
+                                                    @foreach ($targets as $candidate)<option value="{{ $candidate['id'] }}">{{ $candidate['number'] ?: $candidate['supplier_invoice_number'] }} · {{ $candidate['party'] }} · {{ \FilamentAccounting\Support\MoneyFormatter::format($candidate['remaining_minor'], $candidate['currency']) }}</option>@endforeach
+                                                </x-filament::input.select>
+                                            @endif
+                                        </x-filament::input.wrapper>
+                                        @if ($validationErrors["allocations.{$index}.target_id"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.target_id"] }}</span>@endif
+                                    </label>
+                                    @if ($type === 'posting_rule' && is_array($target) && $target['allows_tax'])<label class="fac-field"><span>{{ __('filament-accounting::fields.tax_rate') }}</span><x-filament::input.wrapper><x-filament::input.select wire:model.live="allocations.{{ $index }}.tax_rule_version_id">@foreach ($taxRates as $taxRate)<option value="{{ $taxRate['id'] }}">{{ number_format($taxRate['rate_bp'] / 100, 2, ',', '.') }} % – {{ $taxRate['name'] }}</option>@endforeach</x-filament::input.select></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.tax_rule_version_id"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.tax_rule_version_id"] }}</span>@endif</label>@endif
                                     <label class="fac-field"><span>{{ __('filament-accounting::fields.amount') }} ({{ $statementLine->currency }})</span><x-filament::input.wrapper><x-filament::input type="text" inputmode="decimal" wire:model.live.debounce.300ms="allocations.{{ $index }}.amount" /></x-filament::input.wrapper>@if ($validationErrors["allocations.{$index}.amount"] ?? null)<span class="fac-error">{{ $validationErrors["allocations.{$index}.amount"] }}</span>@endif</label>
                                     <label class="fac-field"><span>{{ __('filament-accounting::fields.reason_optional') }}</span><x-filament::input.wrapper><x-filament::input type="text" wire:model="allocations.{{ $index }}.reason" /></x-filament::input.wrapper>@if (is_array($target) && isset($target['remaining_minor']))<span class="fac-muted">{{ __('filament-accounting::fields.open_amount') }}: {{ \FilamentAccounting\Support\MoneyFormatter::format($target['remaining_minor'], $target['currency']) }}</span>@endif</label>
                                     <div style="display: flex; gap: .35rem;"><x-filament::button type="button" size="sm" color="gray" wire:click="useRemaining({{ $index }})">{{ __('filament-accounting::actions.use_remaining') }}</x-filament::button><x-filament::icon-button type="button" color="danger" icon="heroicon-o-trash" label="{{ __('filament-accounting::actions.remove_allocation') }}" wire:click="removeAllocation({{ $index }})" /></div>
@@ -263,18 +292,22 @@
                 </section>
             @endif
 
-            @if ($this->assignmentType !== 'split')
-                <section class="fac-card">
-                    <label class="fac-field"><span>{{ __('filament-accounting::fields.reason_optional') }}</span><x-filament::input.wrapper><x-filament::input type="text" wire:model="allocationReason" /></x-filament::input.wrapper></label>
-                </section>
-            @endif
-
-            @error('assistant')<div class="fac-alert fac-alert-danger" role="alert"><x-filament::icon icon="heroicon-o-exclamation-circle" style="height: 1.25rem; width: 1.25rem;" /><span>{{ $message }}</span></div>@enderror
-
-            <footer class="fac-footer">
-                <x-filament::button type="button" color="gray" wire:click="cancel">{{ __('filament-accounting::actions.cancel') }}</x-filament::button>
-                <x-filament::button type="button" icon="heroicon-o-check-circle" wire:click="finalize" wire:loading.attr="disabled" wire:target="finalize" :disabled="! $canFinalize">{{ __('filament-accounting::actions.assign_and_post') }}</x-filament::button>
-            </footer>
         @endif
+        </main>
+        @if ($statementLine->source_status->value === 'booked' && ! $postedReconciliation)
+            <div class="fac-workspace-footer">
+                @if ($this->assignmentType !== 'split')
+                    <section class="fac-comment-card">
+                        <label class="fac-field"><span>{{ __('filament-accounting::fields.reason_optional') }}</span><x-filament::input.wrapper><x-filament::input type="text" wire:model="allocationReason" /></x-filament::input.wrapper></label>
+                    </section>
+                @endif
+                @error('assistant')<div class="fac-alert fac-alert-danger" role="alert" style="margin: .75rem .75rem 0;"><x-filament::icon icon="heroicon-o-exclamation-circle" style="height: 1.25rem; width: 1.25rem;" /><span>{{ $message }}</span></div>@enderror
+                <footer class="fac-footer">
+                    <x-filament::button type="button" color="gray" wire:click="cancel">{{ __('filament-accounting::actions.cancel') }}</x-filament::button>
+                    <x-filament::button type="button" icon="heroicon-o-check-circle" wire:click="finalize" wire:loading.attr="disabled" wire:target="finalize" :disabled="! $canFinalize">{{ __('filament-accounting::actions.assign_and_post') }}</x-filament::button>
+                </footer>
+            </div>
+        @endif
+        </div>
     @endif
 </div>

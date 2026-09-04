@@ -60,7 +60,7 @@ $panel->plugin(
 );
 ```
 
-Resolve the current `LegalEntity` from trusted application context (`ConfiguredLegalEntityResolver`, config `ACCOUNTING_LEGAL_ENTITY_ID`, or a host binding). Never take it from an untrusted request parameter.
+The package uses one `LegalEntity` per application instance. `SingleLegalEntityResolver` resolves that company directly from the database; record ownership is never taken from an untrusted request parameter.
 
 Configure `FINTS_PRODUCT_ID` before creating a bank connection. The integrated
 commands are `filament-accounting:sync-institutes`,

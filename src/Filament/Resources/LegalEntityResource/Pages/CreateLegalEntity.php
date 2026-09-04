@@ -15,9 +15,11 @@ use FilamentAccounting\Banking\FinTs\Filament\Resources\BankConnectionResource;
 use FilamentAccounting\Enums\LegalEntityState;
 use FilamentAccounting\Filament\Resources\LegalEntityResource;
 use FilamentAccounting\Models\LegalEntity;
-use FilamentAccounting\Ownership\ConfiguredLegalEntityResolver;
+use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 use FilamentAccounting\Services\SeedGermanProfile;
+use FilamentAccounting\Support\ReferenceData;
 use FilamentAccounting\Support\Sepa;
+use Illuminate\Support\Facades\DB;
 
 class CreateLegalEntity extends CreateRecord
 {
@@ -26,6 +28,17 @@ class CreateLegalEntity extends CreateRecord
     protected static string $resource = LegalEntityResource::class;
 
     protected bool $connectFints = false;
+
+    public function mount(): void
+    {
+        if (LegalEntity::query()->exists()) {
+            $this->redirect(LegalEntityResource::getUrl(), navigate: true);
+
+            return;
+        }
+
+        parent::mount();
+    }
 
     /** @return list<Step> */
     public function getSteps(): array
@@ -44,13 +57,32 @@ class CreateLegalEntity extends CreateRecord
                 ->schema([
                     Select::make('country_code')
                         ->label(__('filament-accounting::fields.country'))
-                        ->options(['DE' => 'Deutschland'])
+                        ->options(ReferenceData::countries())
+                        ->searchable()
                         ->default('DE')
                         ->required(),
-                    TextInput::make('base_currency')
+                    Select::make('base_currency')
                         ->label(__('filament-accounting::fields.base_currency'))
+                        ->options(ReferenceData::currencies())
+                        ->searchable()
                         ->default('EUR')
-                        ->maxLength(3)
+                        ->required(),
+                    Select::make('locale')
+                        ->label(__('filament-accounting::fields.locale'))
+                        ->options(ReferenceData::locales())
+                        ->searchable()
+                        ->default('de_DE')
+                        ->required(),
+                    Select::make('timezone')
+                        ->label(__('filament-accounting::fields.timezone'))
+                        ->options(ReferenceData::timezones())
+                        ->searchable()
+                        ->default('Europe/Berlin')
+                        ->required(),
+                    Select::make('compliance_profile_key')
+                        ->label(__('filament-accounting::fields.compliance_profile'))
+                        ->options(ReferenceData::complianceProfiles())
+                        ->default('DE')
                         ->required(),
                     TextInput::make('fiscal_year_start_month')
                         ->label(__('filament-accounting::fields.fiscal_year_start'))
@@ -121,17 +153,33 @@ class CreateLegalEntity extends CreateRecord
         unset($data['connect_fints']);
 
         return array_merge($data, [
-            'country_code' => 'DE',
+            'country_code' => strtoupper((string) ($data['country_code'] ?? 'DE')),
             'base_currency' => strtoupper((string) ($data['base_currency'] ?? 'EUR')),
-            'locale' => 'de_DE',
-            'timezone' => 'Europe/Berlin',
+            'locale' => (string) ($data['locale'] ?? 'de_DE'),
+            'timezone' => (string) ($data['timezone'] ?? 'Europe/Berlin'),
             'accounting_basis' => 'accrual',
             'vat_method' => 'standard',
-            'compliance_profile_key' => 'DE',
+            'compliance_profile_key' => (string) ($data['compliance_profile_key'] ?? 'DE'),
             'state' => LegalEntityState::Active,
             'invoice_template_key' => 'default',
             'invoice_template_version' => '1',
         ]);
+    }
+
+    protected function handleRecordCreation(array $data): LegalEntity
+    {
+        return DB::transaction(function () use ($data): LegalEntity {
+            abort_if(
+                LegalEntity::query()->lockForUpdate()->exists(),
+                409,
+                __('filament-accounting::errors.legal_entity_already_exists'),
+            );
+
+            /** @var LegalEntity $record */
+            $record = parent::handleRecordCreation($data);
+
+            return $record;
+        });
     }
 
     protected function afterCreate(): void
@@ -141,7 +189,7 @@ class CreateLegalEntity extends CreateRecord
             return;
         }
 
-        app(ConfiguredLegalEntityResolver::class)->bind($record);
+        app(SingleLegalEntityResolver::class)->bind($record);
         app(SeedGermanProfile::class)->handle($record);
     }
 
@@ -151,6 +199,6 @@ class CreateLegalEntity extends CreateRecord
             return BankConnectionResource::getUrl('create');
         }
 
-        return LegalEntityResource::getUrl('edit', ['record' => $this->record]);
+        return LegalEntityResource::getUrl();
     }
 }

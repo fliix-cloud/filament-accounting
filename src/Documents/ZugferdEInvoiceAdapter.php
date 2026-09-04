@@ -5,6 +5,7 @@ namespace FilamentAccounting\Documents;
 use FilamentAccounting\Contracts\EInvoiceAdapter;
 use FilamentAccounting\Documents\Data\EInvoiceParseResult;
 use FilamentAccounting\Support\ExactMoney;
+use FilamentAccounting\Support\RichText;
 use horstoeko\zugferd\ZugferdDocumentBuilder;
 use horstoeko\zugferd\ZugferdDocumentReader;
 use horstoeko\zugferd\ZugferdProfiles;
@@ -158,6 +159,11 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
                 'seller_city' => $sellerCity,
                 'seller_country' => $sellerCountry,
             ],
+            sellerAddressLine1: $lineOne,
+            sellerAddressLine2: implode(' ', array_filter([$lineTwo, $lineThree])),
+            sellerPostalCode: $sellerPostcode,
+            sellerCity: $sellerCity,
+            sellerCountryCode: $sellerCountry,
         );
     }
 
@@ -223,7 +229,7 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
         $taxGroups = [];
         foreach ($snapshot['lines'] ?? [] as $line) {
             $builder->addNewPosition((string) $position);
-            $builder->setDocumentPositionProductDetails((string) ($line['description'] ?? 'Item'));
+            $builder->setDocumentPositionProductDetails(RichText::plainText((string) ($line['description'] ?? 'Item')));
             $quantity = (float) ($line['quantity'] ?? 1);
             $builder->setDocumentPositionQuantity($quantity, (string) ($line['unit'] ?? 'C62'));
             $unitPrice = isset($line['unit_price_minor'])

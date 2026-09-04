@@ -7,6 +7,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -17,9 +18,11 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
+use FilamentAccounting\Enums\PaymentStatus;
+use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
-use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\CreateSalesInvoice;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\EditSalesInvoice;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\ListSalesInvoices;
@@ -32,6 +35,8 @@ use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Services\IssueSalesInvoice;
 use FilamentAccounting\Support\ExactMoney;
 use FilamentAccounting\Support\MoneyFormatter;
+use FilamentAccounting\Support\ReferenceData;
+use FilamentAccounting\Support\RichText;
 use FilamentAccounting\Tax\SalesTaxSuggestionService;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -47,9 +52,9 @@ class SalesInvoiceResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::SALES;
+        return null;
     }
 
     public static function getNavigationLabel(): string
@@ -100,7 +105,7 @@ class SalesInvoiceResource extends Resource
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
             DatePicker::make('due_date')->label(__('filament-accounting::fields.due_date'))
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
-            TextInput::make('currency')->label(__('filament-accounting::fields.currency'))->maxLength(3)->required()
+            Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable()->required()
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
             Repeater::make('lines')
                 ->label(__('filament-accounting::fields.lines'))
@@ -124,7 +129,7 @@ class SalesInvoiceResource extends Resource
                                 return;
                             }
 
-                            $set('description', $item->name);
+                            $set('description', RichText::catalogLine($item->name, $item->description));
                             $set('quantity', $item->default_quantity);
                             $set('unit', $item->unit);
                             $set('unit_price', ExactMoney::ofMinor((int) $item->default_unit_price_minor, (string) $item->currency)->decimalString());
@@ -152,9 +157,16 @@ class SalesInvoiceResource extends Resource
                             $set('tax_requires_confirmation', $suggestion->requiresConfirmation);
                             $set('tax_confirmed', ! $suggestion->requiresConfirmation);
                         }),
-                    TextInput::make('description')->label(__('filament-accounting::fields.description'))->required(),
+                    RichEditor::make('description')
+                        ->label(__('filament-accounting::fields.description'))
+                        ->toolbarButtons([['bold', 'italic'], ['bulletList', 'orderedList']])
+                        ->required()
+                        ->columnSpanFull(),
                     TextInput::make('quantity')->label(__('filament-accounting::fields.quantity'))->required(),
-                    TextInput::make('unit')->label(__('filament-accounting::fields.unit')),
+                    Select::make('unit')
+                        ->label(__('filament-accounting::fields.unit'))
+                        ->options(fn (Get $get): array => ReferenceData::catalogUnits($get('unit')))
+                        ->searchable(),
                     TextInput::make('unit_price')->label(__('filament-accounting::fields.unit_price'))->numeric()->required(),
                     Select::make('tax_code')
                         ->label(__('filament-accounting::fields.tax_treatment'))
@@ -187,14 +199,21 @@ class SalesInvoiceResource extends Resource
                 TextColumn::make('number')->label(__('filament-accounting::fields.number'))->searchable(),
                 TextColumn::make('party.legal_name')->label(__('filament-accounting::fields.customer')),
                 TextColumn::make('issue_date')->date()->label(__('filament-accounting::fields.issue_date')),
-                TextColumn::make('document_status')->badge()->label(__('filament-accounting::fields.document_status')),
-                TextColumn::make('posting_status')->badge()->label(__('filament-accounting::fields.posting_status')),
+                TextColumn::make('document_status')->badge()->label(__('filament-accounting::fields.document_status'))
+                    ->formatStateUsing(fn (DocumentStatus $state): string => $state->getLabel())
+                    ->color(fn (DocumentStatus $state): string => $state->getColor()),
+                TextColumn::make('posting_status')->badge()->label(__('filament-accounting::fields.posting_status'))
+                    ->formatStateUsing(fn (PostingStatus $state): string => $state->getLabel())
+                    ->color(fn (PostingStatus $state): string => $state->getColor()),
                 TextColumn::make('gross_minor')
                     ->label(__('filament-accounting::fields.gross'))
                     ->formatStateUsing(fn ($state, Document $record): string => MoneyFormatter::format((int) $state, $record->currency)),
                 TextColumn::make('payment_status')
                     ->label(__('filament-accounting::fields.payment_status'))
-                    ->state(fn (Document $record): string => __('filament-accounting::statuses.payment.'.$record->paymentStatus()->value)),
+                    ->badge()
+                    ->state(fn (Document $record): PaymentStatus => $record->paymentStatus())
+                    ->formatStateUsing(fn (PaymentStatus $state): string => $state->getLabel())
+                    ->color(fn (PaymentStatus $state): string => $state->getColor()),
                 TextColumn::make('settlements_count')
                     ->label(__('filament-accounting::fields.assigned_transactions')),
             ])

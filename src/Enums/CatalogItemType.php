@@ -2,8 +2,15 @@
 
 namespace FilamentAccounting\Enums;
 
-enum CatalogItemType: string
+use Filament\Support\Contracts\HasLabel;
+
+enum CatalogItemType: string implements HasLabel
 {
     case Product = 'product';
     case Service = 'service';
+
+    public function getLabel(): string
+    {
+        return __('filament-accounting::fields.catalog_types.'.$this->value);
+    }
 }

@@ -4,6 +4,7 @@ namespace FilamentAccounting\Documents;
 
 use FilamentAccounting\Contracts\InvoiceRenderer;
 use FilamentAccounting\Support\ExactMoney;
+use FilamentAccounting\Support\RichText;
 
 final class FpdfInvoiceRenderer implements InvoiceRenderer
 {
@@ -62,12 +63,15 @@ final class FpdfInvoiceRenderer implements InvoiceRenderer
         $pdf->SetFont('Helvetica', '', 9);
         foreach ((array) ($snapshot['lines'] ?? []) as $index => $line) {
             $line = (array) $line;
+            $startY = $pdf->GetY();
+            $pdf->SetXY(18, $startY);
             $pdf->Cell(12, 7, (string) ($index + 1), 0, 0, 'R');
-            $description = mb_strimwidth((string) ($line['description'] ?? ''), 0, 54, '...');
-            $pdf->Cell(88, 7, $this->encode($description), 0, 0);
+            $descriptionBottom = $this->writeRichDescription($pdf, (string) ($line['description'] ?? ''), 30, $startY, 88);
+            $pdf->SetXY(118, $startY);
             $pdf->Cell(20, 7, (string) ($line['quantity'] ?? '1'), 0, 0, 'R');
             $pdf->Cell(25, 7, $this->money((int) ($line['net_minor'] ?? 0), $currency), 0, 0, 'R');
-            $pdf->Cell(27, 7, number_format(((int) ($line['tax_rate_bp'] ?? 0)) / 100, 2, ',', '.').' %', 0, 1, 'R');
+            $pdf->Cell(27, 7, number_format(((int) ($line['tax_rate_bp'] ?? 0)) / 100, 2, ',', '.').' %', 0, 0, 'R');
+            $pdf->SetXY(18, max($startY + 7, $descriptionBottom) + 1.5);
         }
 
         $pdf->Ln(5);
@@ -114,6 +118,89 @@ final class FpdfInvoiceRenderer implements InvoiceRenderer
     private function money(int $minor, string $currency): string
     {
         return number_format((float) ExactMoney::ofMinor($minor, $currency)->decimalString(), 2, ',', '.').' '.$currency;
+    }
+
+    private function writeRichDescription(\FPDF $pdf, string $html, float $x, float $y, float $width): float
+    {
+        $document = new \DOMDocument;
+        $previous = libxml_use_internal_errors(true);
+        $document->loadHTML(
+            '<?xml encoding="UTF-8"><body>'.(RichText::sanitize($html) ?? '').'</body>',
+            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET,
+        );
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        $tokens = [];
+        $body = $document->getElementsByTagName('body')->item(0);
+        if ($body instanceof \DOMNode) {
+            foreach ($body->childNodes as $node) {
+                $this->collectRichTokens($node, '', $tokens);
+            }
+        }
+
+        $pdf->SetXY($x, $y);
+        $pdf->SetRightMargin($pdf->GetPageWidth() - ($x + $width));
+        $atLineStart = true;
+        foreach ($tokens as $token) {
+            if ($token['newline']) {
+                if (! $atLineStart) {
+                    $pdf->Ln(4.5);
+                    $pdf->SetX($x);
+                }
+                $atLineStart = true;
+
+                continue;
+            }
+
+            $pdf->SetFont('Helvetica', $token['style'], 9);
+            $pdf->Write(4.5, $this->encode($token['text']));
+            $atLineStart = false;
+        }
+
+        $bottom = $pdf->GetY() + ($atLineStart ? 0 : 4.5);
+        $pdf->SetRightMargin(18);
+        $pdf->SetFont('Helvetica', '', 9);
+
+        return $bottom;
+    }
+
+    /** @param list<array{text: string, style: string, newline: bool}> $tokens */
+    private function collectRichTokens(\DOMNode $node, string $style, array &$tokens): void
+    {
+        if ($node instanceof \DOMText) {
+            $text = preg_replace('/\s+/u', ' ', $node->nodeValue ?? '') ?? '';
+            if ($text !== '') {
+                $tokens[] = ['text' => $text, 'style' => $style, 'newline' => false];
+            }
+
+            return;
+        }
+
+        $name = strtolower($node->nodeName);
+        if (in_array($name, ['p', 'li'], true) && $tokens !== []) {
+            $tokens[] = ['text' => '', 'style' => '', 'newline' => true];
+        }
+        if ($name === 'br') {
+            $tokens[] = ['text' => '', 'style' => '', 'newline' => true];
+
+            return;
+        }
+        if ($name === 'li') {
+            $tokens[] = ['text' => '• ', 'style' => '', 'newline' => false];
+        }
+
+        $nextStyle = $style;
+        if (in_array($name, ['strong', 'b'], true) && ! str_contains($nextStyle, 'B')) {
+            $nextStyle .= 'B';
+        }
+        if (in_array($name, ['em', 'i'], true) && ! str_contains($nextStyle, 'I')) {
+            $nextStyle .= 'I';
+        }
+
+        foreach ($node->childNodes as $child) {
+            $this->collectRichTokens($child, $nextStyle, $tokens);
+        }
     }
 
     private function encode(string $value): string

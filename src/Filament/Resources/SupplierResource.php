@@ -3,6 +3,7 @@
 namespace FilamentAccounting\Filament\Resources;
 
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
@@ -18,6 +19,7 @@ use FilamentAccounting\Filament\Resources\SupplierResource\Pages\EditSupplier;
 use FilamentAccounting\Filament\Resources\SupplierResource\Pages\ListSuppliers;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Support\ReferenceData;
 use Illuminate\Database\Eloquent\Builder;
 
 class SupplierResource extends Resource
@@ -28,13 +30,13 @@ class SupplierResource extends Resource
 
     protected static ?string $slug = 'accounting/suppliers';
 
-    protected static ?int $navigationSort = 21;
+    protected static ?int $navigationSort = 20;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-truck';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::PURCHASES;
+        return AccountingNavigation::section('master_data');
     }
 
     public static function getNavigationLabel(): string
@@ -71,9 +73,9 @@ class SupplierResource extends Resource
             TextInput::make('display_name')->label(__('filament-accounting::fields.display_name')),
             TextInput::make('email')->label(__('filament-accounting::fields.email'))->email(),
             TextInput::make('phone')->label(__('filament-accounting::fields.phone')),
-            TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->maxLength(2),
+            Select::make('country_code')->label(__('filament-accounting::fields.country'))->options(ReferenceData::countries())->searchable(),
             TextInput::make('payment_terms_days')->label(__('filament-accounting::fields.payment_terms_days'))->numeric()->minValue(0)->default(14),
-            TextInput::make('default_currency')->label(__('filament-accounting::fields.default_currency'))->maxLength(3)->default('EUR'),
+            Select::make('default_currency')->label(__('filament-accounting::fields.default_currency'))->options(ReferenceData::currencies())->searchable()->default('EUR'),
             Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),
             Section::make(__('filament-accounting::fields.addresses'))
                 ->schema([

@@ -10,9 +10,11 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
+use FilamentAccounting\Enums\PaymentStatus;
+use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
-use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\CreatePurchaseInvoice;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\EditPurchaseInvoice;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ListPurchaseInvoices;
@@ -22,6 +24,7 @@ use FilamentAccounting\Models\Party;
 use FilamentAccounting\Models\TaxCode;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Support\MoneyFormatter;
+use FilamentAccounting\Support\ReferenceData;
 use Illuminate\Database\Eloquent\Builder;
 
 class PurchaseInvoiceResource extends Resource
@@ -36,9 +39,9 @@ class PurchaseInvoiceResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-inbox-arrow-down';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::PURCHASES;
+        return null;
     }
 
     public static function getNavigationLabel(): string
@@ -85,7 +88,7 @@ class PurchaseInvoiceResource extends Resource
             DatePicker::make('issue_date')->label(__('filament-accounting::fields.issue_date'))->required(),
             DatePicker::make('receipt_date')->label(__('filament-accounting::fields.receipt_date')),
             DatePicker::make('supply_date')->label(__('filament-accounting::fields.supply_date')),
-            TextInput::make('currency')->label(__('filament-accounting::fields.currency'))->maxLength(3)->required(),
+            Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable()->required(),
             Repeater::make('lines')
                 ->label(__('filament-accounting::fields.lines'))
                 ->schema([
@@ -129,14 +132,21 @@ class PurchaseInvoiceResource extends Resource
             TextColumn::make('number')->label(__('filament-accounting::fields.number'))->searchable(),
             TextColumn::make('supplier_invoice_number')->label(__('filament-accounting::fields.supplier_invoice_number')),
             TextColumn::make('party.legal_name')->label(__('filament-accounting::fields.supplier')),
-            TextColumn::make('document_status')->badge()->label(__('filament-accounting::fields.document_status')),
-            TextColumn::make('posting_status')->badge()->label(__('filament-accounting::fields.posting_status')),
+            TextColumn::make('document_status')->badge()->label(__('filament-accounting::fields.document_status'))
+                ->formatStateUsing(fn (DocumentStatus $state): string => $state->getLabel())
+                ->color(fn (DocumentStatus $state): string => $state->getColor()),
+            TextColumn::make('posting_status')->badge()->label(__('filament-accounting::fields.posting_status'))
+                ->formatStateUsing(fn (PostingStatus $state): string => $state->getLabel())
+                ->color(fn (PostingStatus $state): string => $state->getColor()),
             TextColumn::make('gross_minor')
                 ->label(__('filament-accounting::fields.gross'))
                 ->formatStateUsing(fn ($state, Document $record): string => MoneyFormatter::format((int) $state, $record->currency)),
             TextColumn::make('payment_status')
                 ->label(__('filament-accounting::fields.payment_status'))
-                ->state(fn (Document $record): string => __('filament-accounting::statuses.payment.'.$record->paymentStatus()->value)),
+                ->badge()
+                ->state(fn (Document $record): PaymentStatus => $record->paymentStatus())
+                ->formatStateUsing(fn (PaymentStatus $state): string => $state->getLabel())
+                ->color(fn (PaymentStatus $state): string => $state->getColor()),
             TextColumn::make('settlements_count')
                 ->label(__('filament-accounting::fields.assigned_transactions')),
         ]);

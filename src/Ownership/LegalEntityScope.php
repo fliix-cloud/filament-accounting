@@ -40,8 +40,10 @@ final class LegalEntityScope
     }
 
     /**
-     * @param  Builder<Model>  $query
-     * @return Builder<Model>
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
      */
     public function constrain(Builder $query, string $column = 'legal_entity_id'): Builder
     {

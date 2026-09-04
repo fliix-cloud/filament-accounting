@@ -24,6 +24,7 @@ use FilamentAccounting\Models\Reconciliation;
 use FilamentAccounting\Models\ReconciliationSplit;
 use FilamentAccounting\Models\Settlement;
 use FilamentAccounting\Models\TaxCode;
+use FilamentAccounting\Models\TaxRuleVersion;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Reconciliation\StoreReconciliationLearningRules;
 use FilamentAccounting\Support\LineMoneyCalculator;
@@ -83,7 +84,7 @@ final class FinalizeReconciliation
                 throw new ReconciliationException(__('filament-accounting::errors.already_reconciled'));
             }
 
-            if ($line->source_status !== StatementLineStatus::Booked && $reason === null) {
+            if ($line->source_status !== StatementLineStatus::Booked) {
                 throw new ReconciliationException(__('filament-accounting::errors.pending_cannot_finalize'));
             }
 
@@ -125,6 +126,7 @@ final class FinalizeReconciliation
                     'open_item_id' => $input['open_item_id'] ?? null,
                     'posting_rule_version_id' => $input['posting_rule_version_id'] ?? null,
                     'ledger_account_id' => $input['ledger_account_id'] ?? null,
+                    'tax_rule_version_id' => $input['tax_rule_version_id'] ?? null,
                     'reason' => $input['reason'] ?? null,
                 ]);
                 $split->save();
@@ -134,6 +136,7 @@ final class FinalizeReconciliation
                 'splits.openItem',
                 'splits.postingRuleVersion',
                 'splits.ledgerAccount',
+                'splits.taxRuleVersion.taxCode',
             ]) ?? $reconciliation);
             $entry = $this->ledger->post(new PostJournalCommand(
                 legalEntityId: (int) $entity->getKey(),
@@ -291,6 +294,7 @@ final class FinalizeReconciliation
             $openItemId = $this->targetId($input['open_item_id'] ?? null);
             $postingRuleVersionId = $this->targetId($input['posting_rule_version_id'] ?? null);
             $ledgerAccountId = $this->targetId($input['ledger_account_id'] ?? null);
+            $taxRuleVersionId = $this->targetId($input['tax_rule_version_id'] ?? null);
             $reason = filled($input['reason'] ?? null) ? trim((string) $input['reason']) : null;
 
             $this->validateTargetShape($purpose, $openItemId, $postingRuleVersionId, $ledgerAccountId, $reason);
@@ -302,6 +306,7 @@ final class FinalizeReconciliation
                 $postingRuleVersionId,
                 $ledgerAccountId,
             );
+            $this->validateTaxRuleSelection($line, $purpose, $taxRuleVersionId);
 
             if ($purpose === SplitPurpose::SettleOpenItem && $openItemId !== null) {
                 if (in_array($openItemId, $openItemTargets, true)) {
@@ -324,6 +329,7 @@ final class FinalizeReconciliation
                 'open_item_id' => $openItemId,
                 'posting_rule_version_id' => $postingRuleVersionId,
                 'ledger_account_id' => $ledgerAccountId,
+                'tax_rule_version_id' => $taxRuleVersionId,
                 'reason' => $reason,
                 'selection_source' => $selectionSource,
                 'suggestion_score' => $suggestionScore,
@@ -442,6 +448,38 @@ final class FinalizeReconciliation
         }
     }
 
+    private function validateTaxRuleSelection(BankStatementLine $line, SplitPurpose $purpose, ?int $taxRuleVersionId): void
+    {
+        if ($taxRuleVersionId === null) {
+            return;
+        }
+
+        if (! in_array($purpose, [SplitPurpose::PostingRule, SplitPurpose::LedgerAccount], true)) {
+            throw new ReconciliationException(__('filament-accounting::errors.invalid_tax_rule'));
+        }
+
+        $date = ($line->booking_date ?? now())->toDateString();
+        $direction = $line->isIncoming() ? 'incoming' : 'outgoing';
+        $valid = TaxRuleVersion::query()
+            ->whereKey($taxRuleVersionId)
+            ->whereDate('valid_from', '<=', $date)
+            ->where(function ($query) use ($date): void {
+                $query->whereNull('valid_to')->orWhereDate('valid_to', '>=', $date);
+            })
+            ->whereHas('taxCode', function ($query) use ($line, $direction): void {
+                $query->where('legal_entity_id', $line->legal_entity_id)
+                    ->where('is_active', true)
+                    ->where(function ($query) use ($direction): void {
+                        $query->whereNull('direction')->orWhere('direction', 'both')->orWhere('direction', $direction);
+                    });
+            })
+            ->exists();
+
+        if (! $valid) {
+            throw new ReconciliationException(__('filament-accounting::errors.invalid_tax_rule'));
+        }
+    }
+
     /**
      * @return list<JournalLineDraft>
      */
@@ -464,8 +502,9 @@ final class FinalizeReconciliation
                 continue;
             }
 
-            if ($split->purpose === SplitPurpose::PostingRule) {
-                array_push($drafts, ...$this->postingRuleJournalLines($entity, $line, $split));
+            if ($split->purpose === SplitPurpose::PostingRule
+                || ($split->purpose === SplitPurpose::LedgerAccount && $split->tax_rule_version_id !== null)) {
+                array_push($drafts, ...$this->categoryJournalLines($entity, $line, $split));
 
                 continue;
             }
@@ -484,13 +523,13 @@ final class FinalizeReconciliation
     }
 
     /** @return list<JournalLineDraft> */
-    private function postingRuleJournalLines(
+    private function categoryJournalLines(
         LegalEntity $entity,
         BankStatementLine $line,
         ReconciliationSplit $split,
     ): array {
         $version = $split->postingRuleVersion;
-        if (! $version instanceof PostingRuleVersion) {
+        if ($split->purpose === SplitPurpose::PostingRule && ! $version instanceof PostingRuleVersion) {
             throw new ReconciliationException(__('filament-accounting::errors.invalid_allocation_target'));
         }
 
@@ -498,23 +537,27 @@ final class FinalizeReconciliation
         $gross = abs((int) $split->amount_minor);
         $incoming = (int) $split->amount_minor > 0;
         $counterpartAccountId = $this->counterpartAccount($entity, $line, $split);
-        $taxCodeValue = filled($version->tax_code) ? (string) $version->tax_code : null;
+        $taxRule = $split->taxRuleVersion;
+        $selectedTaxCode = $taxRule instanceof TaxRuleVersion ? $taxRule->taxCode : null;
+        $taxCodeValue = $selectedTaxCode instanceof TaxCode ? (string) $selectedTaxCode->code : null;
 
-        if ($taxCodeValue === null) {
+        if (! $taxRule instanceof TaxRuleVersion && $version instanceof PostingRuleVersion && filled($version->tax_code)) {
+            $taxCodeValue = (string) $version->tax_code;
+            $date = ($line->booking_date ?? now())->toDateString();
+            $taxRule = TaxCode::query()
+                ->where('legal_entity_id', $entity->getKey())
+                ->where('code', $taxCodeValue)
+                ->where('is_active', true)
+                ->first()?->versionOn($date);
+        }
+
+        if ($taxCodeValue === null && ! $taxRule instanceof TaxRuleVersion) {
             return [$incoming
                 ? JournalLineDraft::credit($counterpartAccountId, $gross, $currency, $split->reason)
                 : JournalLineDraft::debit($counterpartAccountId, $gross, $currency, $split->reason)];
         }
 
-        $date = ($line->booking_date ?? now())->toDateString();
-        $taxCode = TaxCode::query()
-            ->where('legal_entity_id', $entity->getKey())
-            ->where('code', $taxCodeValue)
-            ->where('is_active', true)
-            ->first();
-        $taxRule = $taxCode?->versionOn($date);
-
-        if ($taxRule === null) {
+        if (! $taxRule instanceof TaxRuleVersion) {
             throw new ReconciliationException(__('filament-accounting::errors.invalid_tax_rule'));
         }
 

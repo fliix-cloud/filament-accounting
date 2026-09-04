@@ -27,5 +27,11 @@ final readonly class EInvoiceParseResult
         public array $errors = [],
         public array $warnings = [],
         public array $meta = [],
+        public ?string $sellerAddressLine1 = null,
+        public ?string $sellerAddressLine2 = null,
+        public ?string $sellerPostalCode = null,
+        public ?string $sellerCity = null,
+        public ?string $sellerCountryCode = null,
+        public ?string $sellerEmail = null,
     ) {}
 }

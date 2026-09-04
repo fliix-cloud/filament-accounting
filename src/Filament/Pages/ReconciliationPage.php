@@ -23,11 +23,6 @@ class ReconciliationPage extends Page
     #[Url]
     public ?string $line = null;
 
-    public static function getNavigationParentItem(): ?string
-    {
-        return AccountingNavigation::BANKING;
-    }
-
     public static function getNavigationLabel(): string
     {
         return __('filament-accounting::navigation.reconciliation');
@@ -35,7 +30,7 @@ class ReconciliationPage extends Page
 
     public static function getNavigationGroup(): ?string
     {
-        return __('filament-accounting::navigation.group');
+        return AccountingNavigation::section('banking');
     }
 
     public function getTitle(): string|Htmlable

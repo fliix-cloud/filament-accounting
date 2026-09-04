@@ -21,6 +21,7 @@ use FilamentAccounting\Filament\Resources\PostingRuleResource\Pages\ListPostingR
 use FilamentAccounting\Models\PostingRule;
 use FilamentAccounting\Models\TaxCode;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Support\ReferenceData;
 use Illuminate\Database\Eloquent\Builder;
 
 class PostingRuleResource extends Resource
@@ -35,9 +36,9 @@ class PostingRuleResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::REPORTS;
+        return AccountingNavigation::section('settings');
     }
 
     public static function getNavigationLabel(): string
@@ -71,7 +72,7 @@ class PostingRuleResource extends Resource
             TextInput::make('code')->label(__('filament-accounting::fields.code'))->required(),
             TextInput::make('label')->label(__('filament-accounting::fields.label'))->required(),
             Textarea::make('explanation')->label(__('filament-accounting::fields.explanation')),
-            TextInput::make('compliance_profile_key')->label(__('filament-accounting::fields.compliance_profile')),
+            Select::make('compliance_profile_key')->label(__('filament-accounting::fields.compliance_profile'))->options(ReferenceData::complianceProfiles()),
             Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),
             Repeater::make('versions')
                 ->relationship()

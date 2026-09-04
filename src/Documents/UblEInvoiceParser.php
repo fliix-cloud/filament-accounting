@@ -59,6 +59,12 @@ final class UblEInvoiceParser
                 ?: $this->value($xpath, ".//*[local-name()='PartyLegalEntity']/*[local-name()='RegistrationName']", $supplier))
             : null;
         $sellerVatId = $supplier ? $this->value($xpath, ".//*[local-name()='PartyTaxScheme']/*[local-name()='CompanyID']", $supplier) : null;
+        $sellerAddressLine1 = $supplier ? $this->value($xpath, ".//*[local-name()='PostalAddress']/*[local-name()='StreetName']", $supplier) : null;
+        $sellerAddressLine2 = $supplier ? $this->value($xpath, ".//*[local-name()='PostalAddress']/*[local-name()='AdditionalStreetName']", $supplier) : null;
+        $sellerPostalCode = $supplier ? $this->value($xpath, ".//*[local-name()='PostalAddress']/*[local-name()='PostalZone']", $supplier) : null;
+        $sellerCity = $supplier ? $this->value($xpath, ".//*[local-name()='PostalAddress']/*[local-name()='CityName']", $supplier) : null;
+        $sellerCountry = $supplier ? $this->value($xpath, ".//*[local-name()='PostalAddress']//*[local-name()='IdentificationCode']", $supplier) : null;
+        $sellerEmail = $supplier ? $this->value($xpath, ".//*[local-name()='Contact']/*[local-name()='ElectronicMail']", $supplier) : null;
         $net = $this->minor($this->value($xpath, "//*[local-name()='LegalMonetaryTotal']/*[local-name()='TaxExclusiveAmount']"), $currency);
         if ($net === 0) {
             $net = $this->minor($this->value($xpath, "//*[local-name()='LegalMonetaryTotal']/*[local-name()='LineExtensionAmount']"), $currency);
@@ -86,6 +92,12 @@ final class UblEInvoiceParser
             valid: $validationErrors === [],
             errors: $validationErrors,
             meta: ['filename' => $filename],
+            sellerAddressLine1: $sellerAddressLine1 ?: null,
+            sellerAddressLine2: $sellerAddressLine2 ?: null,
+            sellerPostalCode: $sellerPostalCode ?: null,
+            sellerCity: $sellerCity ?: null,
+            sellerCountryCode: $sellerCountry ?: null,
+            sellerEmail: $sellerEmail ?: null,
         );
     }
 

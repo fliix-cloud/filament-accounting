@@ -4,11 +4,11 @@
 Owner ≠ Actor ≠ Membership
 ```
 
-`LegalEntity` is the accounting reporting and integrity boundary. The current entity is resolved from trusted application context:
+`LegalEntity` is the accounting reporting and integrity boundary. Every application instance contains exactly one company, resolved directly from the database:
 
-- `ConfiguredLegalEntityResolver` (bound entity, `ACCOUNTING_LEGAL_ENTITY_ID`, or UUID)
+- `SingleLegalEntityResolver` (the single company configured for the application instance)
 - `AuthenticatedUserAccountingActorResolver`
-- `NullAccountingTenancyContextActivator` (hosts replace this for multi-database tenancy)
+- `NullAccountingTenancyContextActivator` (queue compatibility hook; no tenant switching)
 - `DefaultAccountingAuthorizer` (Laravel Gate)
 - `LegalEntityScope` — query helper, **not** a hidden Auth global scope
 
@@ -19,4 +19,4 @@ mandates, documents, reconciliations, settlements, journals, and learning rules
 all resolve to this same boundary. The former FinTS owner morph is migrated to
 `legal_entity_id`; no `LegalEntityOwnerMapper` remains.
 
-Queued work must carry durable scalar identity and activate tenancy before querying tenant tables. This package does not rely on cross-database foreign keys.
+Queued work carries the company ID as a durable integrity check. The application does not expose tenant switching or multi-company selection.

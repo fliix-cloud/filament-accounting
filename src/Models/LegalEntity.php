@@ -11,8 +11,6 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property string $uuid
- * @property string|null $owner_type
- * @property string|null $owner_id
  * @property string $legal_name
  * @property string|null $trading_name
  * @property string $country_code
@@ -23,6 +21,11 @@ use Illuminate\Support\Carbon;
  * @property string $accounting_basis
  * @property string|null $vat_method
  * @property string $compliance_profile_key
+ * @property string|null $address_line1
+ * @property string|null $address_line2
+ * @property string|null $postal_code
+ * @property string|null $city
+ * @property string|null $region
  * @property LegalEntityState $state
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -38,8 +41,6 @@ class LegalEntity extends AccountingModel
     protected $table = 'accounting_legal_entities';
 
     protected $fillable = [
-        'owner_type',
-        'owner_id',
         'legal_name',
         'trading_name',
         'country_code',

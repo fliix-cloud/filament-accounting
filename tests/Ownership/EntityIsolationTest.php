@@ -3,8 +3,8 @@
 namespace FilamentAccounting\Tests\Ownership;
 
 use FilamentAccounting\Models\Document;
-use FilamentAccounting\Ownership\ConfiguredLegalEntityResolver;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 use FilamentAccounting\Services\IssueSalesInvoice;
 use FilamentAccounting\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
@@ -35,7 +35,7 @@ class EntityIsolationTest extends TestCase
 
         $this->assertSame($invoiceA->number, $invoiceB->number);
 
-        app(ConfiguredLegalEntityResolver::class)->bind($alpha);
+        app(SingleLegalEntityResolver::class)->bind($alpha);
         $scoped = app(LegalEntityScope::class)->constrain(Document::query())->pluck('id')->all();
         $this->assertContains($invoiceA->getKey(), $scoped);
         $this->assertNotContains($invoiceB->getKey(), $scoped);

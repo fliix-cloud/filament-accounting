@@ -5,6 +5,7 @@ namespace FilamentAccounting\Models;
 use FilamentAccounting\Enums\CatalogItemType;
 use FilamentAccounting\Models\Concerns\BelongsToLegalEntity;
 use FilamentAccounting\Support\HasUuid;
+use FilamentAccounting\Support\RichText;
 
 /**
  * @property int $id
@@ -51,5 +52,10 @@ class CatalogItem extends AccountingModel
             'default_unit_price_minor' => 'integer',
             'is_active' => 'boolean',
         ];
+    }
+
+    public function setDescriptionAttribute(mixed $value): void
+    {
+        $this->attributes['description'] = RichText::sanitize(is_string($value) ? $value : null);
     }
 }

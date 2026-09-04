@@ -24,9 +24,9 @@ class AuditEventResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::SETTINGS;
+        return AccountingNavigation::section('reports');
     }
 
     public static function getNavigationLabel(): string

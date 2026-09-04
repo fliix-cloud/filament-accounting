@@ -5,7 +5,7 @@ namespace FilamentAccounting\Ownership;
 use FilamentAccounting\Contracts\AccountingEntityResolver;
 use FilamentAccounting\Models\LegalEntity;
 
-final class ConfiguredLegalEntityResolver implements AccountingEntityResolver
+final class SingleLegalEntityResolver implements AccountingEntityResolver
 {
     private ?LegalEntity $bound = null;
 
@@ -20,16 +20,12 @@ final class ConfiguredLegalEntityResolver implements AccountingEntityResolver
             return $this->bound;
         }
 
-        $id = config('filament-accounting.ownership.legal_entity_id');
-        if (filled($id)) {
-            return LegalEntity::query()->find($id);
+        $entities = LegalEntity::query()->oldest('id')->limit(2)->get();
+
+        if ($entities->count() > 1) {
+            throw new \LogicException(__('filament-accounting::errors.multiple_legal_entities'));
         }
 
-        $uuid = config('filament-accounting.ownership.legal_entity_uuid');
-        if (filled($uuid)) {
-            return LegalEntity::query()->where('uuid', $uuid)->first();
-        }
-
-        return null;
+        return $entities->first();
     }
 }

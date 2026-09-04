@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'legal_entity_already_exists' => 'Für diese Instanz ist bereits ein Unternehmen eingerichtet.',
+    'multiple_legal_entities' => 'Die Instanz enthält mehr als ein Unternehmen. Das Single-Mandanten-Datenmodell ist verletzt.',
     'tax_suggestion_confirmation_required' => 'Der vorgeschlagene Steuerfall ist nicht eindeutig und muss ausdrücklich bestätigt werden.',
     'bank_account_inactive' => 'Dieses Bankkonto ist nicht zur Nutzung aktiviert.',
     'attachment_requires_persisted_model' => 'Anhänge benötigen einen bereits gespeicherten Buchhaltungsdatensatz.',

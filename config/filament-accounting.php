@@ -5,8 +5,8 @@ use FilamentAccounting\Authorization\DefaultAccountingAuthorizer;
 use FilamentAccounting\Compliance\GenericComplianceProfile;
 use FilamentAccounting\Compliance\Germany\GermanComplianceProfile;
 use FilamentAccounting\Ownership\AuthenticatedUserAccountingActorResolver;
-use FilamentAccounting\Ownership\ConfiguredLegalEntityResolver;
 use FilamentAccounting\Ownership\NullAccountingTenancyContextActivator;
+use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 
 return [
     'database' => [
@@ -45,10 +45,8 @@ return [
     ],
 
     'ownership' => [
-        'entity_resolver' => ConfiguredLegalEntityResolver::class,
+        'entity_resolver' => SingleLegalEntityResolver::class,
         'required' => true,
-        'legal_entity_id' => env('ACCOUNTING_LEGAL_ENTITY_ID'),
-        'legal_entity_uuid' => env('ACCOUNTING_LEGAL_ENTITY_UUID'),
     ],
 
     'actor' => [

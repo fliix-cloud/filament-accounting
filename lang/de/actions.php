@@ -33,4 +33,5 @@ return [
     'preview' => 'Vorschau',
     'add_bank_account' => 'Bankkonto hinzufügen',
     'add_tax_rate_period' => 'Künftigen Steuersatz hinzufügen',
+    'create_direct_debit_mandate' => 'SEPA-Mandat anlegen',
 ];

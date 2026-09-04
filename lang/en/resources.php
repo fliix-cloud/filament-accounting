@@ -12,7 +12,7 @@ return [
     'ledger_account' => ['singular' => 'Ledger account', 'plural' => 'Ledger accounts'],
     'posting_rule' => ['singular' => 'Posting rule', 'plural' => 'Posting rules'],
     'tax_code' => ['singular' => 'Tax code', 'plural' => 'Tax codes'],
-    'legal_entity' => ['singular' => 'Legal entity', 'plural' => 'Legal entities'],
+    'legal_entity' => ['singular' => 'Company', 'plural' => 'Company settings'],
     'audit_event' => ['singular' => 'Audit event', 'plural' => 'Audit events'],
     'reconciliation_learning_rule' => ['singular' => 'Learning rule', 'plural' => 'Learning rules'],
 ];

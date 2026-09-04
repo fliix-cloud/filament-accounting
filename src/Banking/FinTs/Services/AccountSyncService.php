@@ -76,7 +76,6 @@ class AccountSyncService
             $isNew = ! $account->exists;
             $account->fill([
                 'legal_entity_id' => $connection->legal_entity_id,
-                'display_name' => $sepa->getIban() ?: $sepa->getAccountNumber() ?: $fingerprint,
                 'source' => 'fints',
                 'external_account_id' => $fingerprint,
                 'iban' => $sepa->getIban(),
@@ -88,6 +87,7 @@ class AccountSyncService
                 'is_available' => true,
             ]);
             if ($isNew) {
+                $account->display_name = $sepa->getIban() ?: $sepa->getAccountNumber() ?: $fingerprint;
                 $account->is_enabled = true;
             }
             $account->save();

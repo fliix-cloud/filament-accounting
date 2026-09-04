@@ -10,6 +10,8 @@ use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\PostingRule;
 use FilamentAccounting\Models\Reconciliation;
+use FilamentAccounting\Models\TaxCode;
+use FilamentAccounting\Reconciliation\ReconciliationAssistantQuery;
 use FilamentAccounting\Services\ImportBankStatementLines;
 use FilamentAccounting\Services\IssueSalesInvoice;
 use FilamentAccounting\Services\RegisterPurchaseInvoice;
@@ -48,7 +50,16 @@ class ReconciliationAssistantTest extends TestCase
             ->assertSee(__('filament-accounting::fields.assignment_types.purchase_invoice'))
             ->assertSee(__('filament-accounting::fields.assignment_types.posting_rule'))
             ->assertSee(__('filament-accounting::fields.assignment_types.split'))
-            ->assertDontSee(__('filament-accounting::fields.invoice_or_bill'));
+            ->assertDontSee(__('filament-accounting::fields.assignment_types.ledger_account'))
+            ->assertDontSee(__('filament-accounting::fields.invoice_or_bill'))
+            ->call('selectAssignmentType', 'posting_rule')
+            ->assertSee('Bankgebühren')
+            ->assertDontSee('bank_fees')
+            ->assertDontSee('DE-0');
+
+        $categories = app(ReconciliationAssistantQuery::class)->categoryCandidates($line);
+        $this->assertFalse(collect($categories)->contains(fn (array $category): bool => ($category['kind'] ?? null) === 'ledger_account' && ($category['id'] ?? null) === $bank->ledger_account_id));
+        $this->assertFalse(collect($categories)->contains(fn (array $category): bool => ($category['kind'] ?? null) === 'ledger_account' && ($category['type'] ?? null) === 'asset'));
     }
 
     #[Test]
@@ -80,7 +91,7 @@ class ReconciliationAssistantTest extends TestCase
     }
 
     #[Test]
-    public function a_booked_transaction_can_be_posted_directly_to_a_ledger_account(): void
+    public function a_ledger_account_is_selected_as_a_tax_category_with_an_overridden_tax_rate(): void
     {
         $entity = $this->makeEntity();
         $this->actingAs($this->makeUser());
@@ -94,9 +105,13 @@ class ReconciliationAssistantTest extends TestCase
         ]);
         $line = BankStatementLine::query()->where('external_id', 'assistant-direct-ledger')->firstOrFail();
 
+        $reducedTax = TaxCode::query()->where('legal_entity_id', $entity->getKey())->where('code', 'DE-7')->firstOrFail()->versionOn('2026-03-10');
+        $this->assertNotNull($reducedTax);
+
         Livewire::test(ReconciliationAssistant::class, ['line' => $line->uuid])
-            ->call('selectAssignmentType', 'ledger_account')
-            ->call('selectLedgerAccount', $expense->getKey())
+            ->call('selectAssignmentType', 'posting_rule')
+            ->call('selectCategory', 'account:'.$expense->getKey())
+            ->set('selectedTaxRuleVersionId', $reducedTax->getKey())
             ->call('finalize')
             ->assertHasNoErrors()
             ->assertDispatched('reconciliation-assistant-finalized');
@@ -106,7 +121,9 @@ class ReconciliationAssistantTest extends TestCase
 
         $this->assertSame(SplitPurpose::LedgerAccount, $split->purpose);
         $this->assertSame($expense->getKey(), $split->ledger_account_id);
+        $this->assertSame($reducedTax->getKey(), $split->tax_rule_version_id);
         $this->assertNotNull($reconciliation->journal_entry_id);
+        $this->assertTrue($reconciliation->journalEntry->lines->contains('tax_code', 'DE-7'));
     }
 
     #[Test]
@@ -193,6 +210,8 @@ class ReconciliationAssistantTest extends TestCase
         $feeRule = PostingRule::query()->where('legal_entity_id', $entity->getKey())->where('code', 'bank_fees')->firstOrFail();
         $feeVersion = $feeRule->versionOn('2026-03-10');
         $this->assertNotNull($feeVersion);
+        $zeroTax = TaxCode::query()->where('legal_entity_id', $entity->getKey())->where('code', 'DE-0')->firstOrFail()->versionOn('2026-03-10');
+        $this->assertNotNull($zeroTax);
         app(ImportBankStatementLines::class)->handle($bank, [
             new BankStatementLineData('assistant-bill-fee', -1290, 'EUR', 'synthetic', 'acc-1', '2026-03-10', null, 'booked'),
         ]);
@@ -202,7 +221,7 @@ class ReconciliationAssistantTest extends TestCase
             ->call('selectAssignmentType', 'split')
             ->set('allocations', [
                 ['type' => 'purchase_invoice', 'target_id' => $bill->openItem->getKey(), 'amount' => '-11.90', 'reason' => null],
-                ['type' => 'posting_rule', 'target_id' => $feeVersion->getKey(), 'amount' => '-1.00', 'reason' => 'Bank fee'],
+                ['type' => 'posting_rule', 'target_id' => 'rule:'.$feeVersion->getKey(), 'tax_rule_version_id' => $zeroTax->getKey(), 'amount' => '-1.00', 'reason' => 'Bank fee'],
             ])
             ->call('finalize')
             ->assertHasNoErrors();
@@ -217,7 +236,7 @@ class ReconciliationAssistantTest extends TestCase
         foreach (['en', 'de'] as $locale) {
             app()->setLocale($locale);
 
-            foreach (['sales_invoice', 'purchase_invoice', 'posting_rule', 'ledger_account', 'split'] as $type) {
+            foreach (['sales_invoice', 'purchase_invoice', 'posting_rule', 'split'] as $type) {
                 $key = 'filament-accounting::fields.assignment_types.'.$type;
                 $this->assertNotSame($key, __($key));
             }

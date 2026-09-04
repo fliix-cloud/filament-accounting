@@ -2,7 +2,6 @@
 
 namespace FilamentAccounting\Banking\FinTs\Filament\Resources\BankTransferResource\Pages;
 
-use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\ViewRecord;
@@ -17,20 +16,6 @@ class ViewBankTransfer extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('resumeSca')
-                ->label(__('filament-accounting::banking/fints/actions.resume_sca'))
-                ->visible(function (): bool {
-                    $record = $this->getRecord();
-
-                    return $record instanceof BankTransfer && $record->status->isInteractive();
-                })
-                ->url(function (): ?string {
-                    $record = $this->getRecord();
-
-                    return $record instanceof BankTransfer
-                        ? BankTransferResource::resumeScaUrl($record)
-                        : null;
-                }),
             DeleteAction::make()
                 ->visible(function (): bool {
                     $record = $this->getRecord();

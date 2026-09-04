@@ -27,13 +27,13 @@ class TaxCodeResource extends Resource
 
     protected static ?string $slug = 'accounting/tax-codes';
 
-    protected static ?int $navigationSort = 50;
+    protected static ?int $navigationSort = 20;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-receipt-percent';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::SETTINGS;
+        return AccountingNavigation::section('settings');
     }
 
     public static function getNavigationLabel(): string
@@ -101,6 +101,17 @@ class TaxCodeResource extends Resource
                         ->label(__('filament-accounting::fields.exemption_reason'))
                         ->required(fn (Get $get): bool => in_array($get('category'), ['exempt', 'non_taxable'], true)),
                 ])
+                ->itemLabel(function (array $state): string {
+                    $from = filled($state['valid_from'] ?? null) ? (string) $state['valid_from'] : '…';
+                    $to = filled($state['valid_to'] ?? null) ? (string) $state['valid_to'] : '∞';
+                    $rate = (float) ($state['rate_bp'] ?? 0);
+                    if ($rate > 100) {
+                        $rate /= 100;
+                    }
+                    $category = (string) ($state['category'] ?? 'standard');
+
+                    return $from.' – '.$to.' · '.number_format($rate, 2, ',', '.').' % · '.__('filament-accounting::fields.tax_treatments.'.$category);
+                })
                 ->addActionLabel(__('filament-accounting::actions.add_tax_rate_period'))
                 ->collapsible()
                 ->reorderable(false)

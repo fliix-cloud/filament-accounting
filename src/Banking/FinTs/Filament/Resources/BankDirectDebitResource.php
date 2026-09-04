@@ -39,12 +39,7 @@ class BankDirectDebitResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('filament-accounting::navigation.group');
-    }
-
-    public static function getNavigationParentItem(): ?string
-    {
-        return AccountingNavigation::BANKING;
+        return AccountingNavigation::section('banking');
     }
 
     public static function getNavigationLabel(): string
@@ -127,6 +122,9 @@ class BankDirectDebitResource extends Resource
             Select::make('sequence_type')
                 ->label(__('filament-accounting::banking/fints/fields.sequence_type'))
                 ->options(fn (Get $get): array => self::sequenceOptions($get('direct_debit_mandate_id')))
+                ->helperText(__('filament-accounting::banking/fints/fields.sequence_type_help'))
+                ->disabled()
+                ->dehydrated()
                 ->required(),
             TextInput::make('amount')
                 ->numeric()
@@ -140,10 +138,6 @@ class BankDirectDebitResource extends Resource
                 ->helperText(__('filament-accounting::banking/fints/fields.collection_date_help'))
                 ->minDate(today())
                 ->required(),
-            TextInput::make('end_to_end_id')
-                ->label(__('filament-accounting::banking/fints/fields.end_to_end_id'))
-                ->helperText(__('filament-accounting::banking/fints/fields.end_to_end_id_help'))
-                ->maxLength(35),
         ]);
     }
 

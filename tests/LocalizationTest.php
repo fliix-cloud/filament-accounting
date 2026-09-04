@@ -11,12 +11,11 @@ class LocalizationTest extends TestCase
     {
         $keys = [
             'filament-accounting::navigation.group',
-            'filament-accounting::navigation.overview',
-            'filament-accounting::navigation.sections.sales',
-            'filament-accounting::navigation.sections.purchases',
             'filament-accounting::navigation.sections.banking',
             'filament-accounting::navigation.sections.reports',
+            'filament-accounting::navigation.sections.master_data',
             'filament-accounting::navigation.sections.settings',
+            'filament-accounting::navigation.bank_settings',
             'filament-accounting::navigation.sales_invoices',
             'filament-accounting::navigation.bank_transactions',
             'filament-accounting::fields.amount',

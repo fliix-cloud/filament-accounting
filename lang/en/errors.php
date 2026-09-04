@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'legal_entity_already_exists' => 'A company has already been configured for this instance.',
+    'multiple_legal_entities' => 'The instance contains more than one company and violates the single-company data model.',
     'tax_suggestion_confirmation_required' => 'The suggested tax treatment is ambiguous and must be confirmed explicitly.',
     'bank_account_inactive' => 'This bank account is not enabled for use.',
     'attachment_requires_persisted_model' => 'Attachments require a persisted accounting record.',

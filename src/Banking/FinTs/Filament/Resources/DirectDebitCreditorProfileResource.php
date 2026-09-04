@@ -4,6 +4,7 @@ namespace FilamentAccounting\Banking\FinTs\Filament\Resources;
 
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
@@ -25,18 +26,18 @@ class DirectDebitCreditorProfileResource extends Resource
 
     protected static ?string $slug = 'bank/direct-debit-creditors';
 
-    protected static ?int $navigationSort = 42;
+    protected static ?int $navigationSort = 30;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-office-2';
 
     public static function getNavigationGroup(): ?string
     {
-        return __('filament-accounting::navigation.group');
+        return AccountingNavigation::section('settings');
     }
 
     public static function getNavigationParentItem(): ?string
     {
-        return AccountingNavigation::BANKING;
+        return AccountingNavigation::BANK_SETTINGS;
     }
 
     public static function getNavigationLabel(): string
@@ -57,16 +58,16 @@ class DirectDebitCreditorProfileResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->where('legal_entity_id', app(OwnerScope::class)->require()->getKey());
+            ->where('legal_entity_id', app(OwnerScope::class)->require()->getKey())
+            ->with('legalEntity');
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')
+            Placeholder::make('legal_entity')
                 ->label(__('filament-accounting::banking/fints/fields.creditor_name'))
-                ->required()
-                ->maxLength(255),
+                ->content(fn (): string => app(OwnerScope::class)->require()->legal_name),
             TextInput::make('creditor_identifier')
                 ->label(__('filament-accounting::banking/fints/fields.creditor_identifier'))
                 ->helperText(__('filament-accounting::banking/fints/fields.creditor_identifier_help'))
@@ -74,22 +75,6 @@ class DirectDebitCreditorProfileResource extends Resource
                 ->maxLength(35),
             Toggle::make('is_default')
                 ->label(__('filament-accounting::banking/fints/fields.default')),
-            TextInput::make('street')
-                ->label(__('filament-accounting::banking/fints/fields.street'))
-                ->maxLength(255),
-            TextInput::make('building_number')
-                ->label(__('filament-accounting::banking/fints/fields.building_number'))
-                ->maxLength(32),
-            TextInput::make('postal_code')
-                ->label(__('filament-accounting::banking/fints/fields.postal_code'))
-                ->maxLength(32),
-            TextInput::make('city')
-                ->label(__('filament-accounting::banking/fints/fields.city'))
-                ->maxLength(255),
-            TextInput::make('country')
-                ->label(__('filament-accounting::banking/fints/fields.country'))
-                ->default('DE')
-                ->length(2),
         ]);
     }
 
@@ -97,7 +82,9 @@ class DirectDebitCreditorProfileResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('name')->searchable(),
+                TextColumn::make('legalEntity.legal_name')
+                    ->label(__('filament-accounting::banking/fints/fields.creditor_name'))
+                    ->searchable(),
                 TextColumn::make('creditor_identifier')
                     ->label(__('filament-accounting::banking/fints/fields.creditor_identifier'))
                     ->searchable(),

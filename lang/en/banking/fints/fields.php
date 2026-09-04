@@ -65,6 +65,7 @@ return [
     'mandate_reference_help' => 'At most 35 characters. Do not start or end with / and do not use //.',
     'mandate_signed_on' => 'Mandate signature date',
     'sequence_type' => 'Sequence type',
+    'sequence_type_help' => 'Determined automatically from the mandate type and its usage history.',
     'scheme' => 'Scheme',
     'collection_date' => 'Collection date',
     'collection_date_help' => 'The bank also enforces its account-specific minimum lead time and cut-off when the order is submitted.',

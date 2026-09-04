@@ -24,13 +24,18 @@ class ReconciliationLearningRuleResource extends Resource
 
     protected static ?string $slug = 'accounting/reconciliation-learning-rules';
 
-    protected static ?int $navigationSort = 39;
+    protected static ?int $navigationSort = 50;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-light-bulb';
 
     public static function getNavigationParentItem(): ?string
     {
-        return AccountingNavigation::BANKING;
+        return AccountingNavigation::BANK_SETTINGS;
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return AccountingNavigation::section('settings');
     }
 
     public static function getNavigationLabel(): string

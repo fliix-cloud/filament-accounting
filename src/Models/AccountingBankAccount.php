@@ -195,8 +195,20 @@ class AccountingBankAccount extends AccountingModel
         $normalizedIban = strtoupper((string) preg_replace('/\s+/', '', (string) $this->iban));
 
         return filled($displayName) && $normalizedDisplayName !== $normalizedIban
-            ? $displayName.' · '.$iban
+            ? $iban.' ('.$displayName.')'
             : $iban;
+    }
+
+    public function hasAutomaticDisplayName(?string $previousProductName = null): bool
+    {
+        $displayName = strtoupper((string) preg_replace('/\s+/', '', trim((string) $this->display_name)));
+        $automaticNames = array_filter([
+            strtoupper((string) preg_replace('/\s+/', '', (string) $this->iban)),
+            strtoupper((string) preg_replace('/\s+/', '', (string) $this->fingerprint)),
+            strtoupper((string) preg_replace('/\s+/', '', (string) $previousProductName)),
+        ]);
+
+        return $displayName === '' || in_array($displayName, $automaticNames, true);
     }
 
     public function formattedIban(): string

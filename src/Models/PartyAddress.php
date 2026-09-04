@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Models;
 
+use FilamentAccounting\Enums\PartyAddressRole;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $city
  * @property string|null $region
  * @property string|null $country_code
+ * @property PartyAddressRole|null $address_role
  * @property bool $is_primary
  */
 class PartyAddress extends AccountingModel
@@ -27,12 +29,14 @@ class PartyAddress extends AccountingModel
         'city',
         'region',
         'country_code',
+        'address_role',
         'is_primary',
     ];
 
     protected function casts(): array
     {
         return [
+            'address_role' => PartyAddressRole::class,
             'is_primary' => 'boolean',
         ];
     }

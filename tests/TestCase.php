@@ -19,7 +19,7 @@ use FilamentAccounting\FilamentAccountingServiceProvider;
 use FilamentAccounting\Models\AccountingBankAccount;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Party;
-use FilamentAccounting\Ownership\ConfiguredLegalEntityResolver;
+use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 use FilamentAccounting\Services\SeedGermanProfile;
 use FilamentAccounting\Tests\Fixtures\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -112,9 +112,8 @@ abstract class TestCase extends Orchestra
             'state' => LegalEntityState::Active,
         ], $overrides));
 
-        $resolver = app(ConfiguredLegalEntityResolver::class);
+        $resolver = app(SingleLegalEntityResolver::class);
         $resolver->bind($entity);
-        config()->set('filament-accounting.ownership.legal_entity_id', $entity->getKey());
 
         app(SeedGermanProfile::class)->handle($entity);
 

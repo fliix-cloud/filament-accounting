@@ -6,11 +6,14 @@ use FilamentAccounting\Documents\Data\EInvoiceParseResult;
 use FilamentAccounting\Documents\Data\PurchaseInvoiceUploadResult;
 use FilamentAccounting\Documents\UblEInvoiceParser;
 use FilamentAccounting\Documents\ZugferdEInvoiceAdapter;
+use FilamentAccounting\Enums\PartyAddressRole;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Models\Attachment;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Party;
+use FilamentAccounting\Models\PartyAddress;
+use FilamentAccounting\Models\PartyTaxId;
 use horstoeko\zugferd\ZugferdDocumentPdfReaderExt;
 use Illuminate\Support\Facades\Storage;
 
@@ -44,7 +47,7 @@ final class ImportPurchaseInvoice
         }
 
         [$parsed, $embeddedXml, $format] = $this->inspect($filename, $contents);
-        [$party, $match] = $parsed ? $this->matchSupplier($entity, $parsed) : [null, 'unmatched'];
+        [$party, $match, $supplierCreated] = $parsed ? $this->matchSupplier($entity, $parsed) : [null, 'unmatched', false];
         $lines = $parsed ? array_map(fn (array $line): array => $this->importedLine($line), $parsed->lines) : [];
         $meta = [
             'structured' => $parsed instanceof EInvoiceParseResult,
@@ -62,17 +65,17 @@ final class ImportPurchaseInvoice
             ->where('legal_entity_id', $entity->getKey())
             ->where('idempotency_key', $hash)
             ->first();
-        $document = $this->invoices->createDraft($entity, [
-            'party_id' => $party?->getKey(),
-            'supplier_invoice_number' => $parsed?->documentNumber ?: null,
-            'issue_date' => $parsed?->issueDate,
-            'currency' => $parsed instanceof EInvoiceParseResult ? $parsed->currency : $entity->base_currency,
-            'lines' => $lines,
-            'e_invoice_meta' => $meta,
-            'idempotency_key' => $hash,
-        ]);
-
+        $document = null;
         try {
+            $document = $this->invoices->createDraft($entity, [
+                'party_id' => $party?->getKey(),
+                'supplier_invoice_number' => $parsed?->documentNumber ?: null,
+                'issue_date' => $parsed?->issueDate,
+                'currency' => $parsed instanceof EInvoiceParseResult ? $parsed->currency : $entity->base_currency,
+                'lines' => $lines,
+                'e_invoice_meta' => $meta,
+                'idempotency_key' => $hash,
+            ]);
             $this->attachments->handle($entity, $document, $filename, $contents, 'original_invoice', [
                 'format' => $format,
                 'structured' => $parsed instanceof EInvoiceParseResult,
@@ -88,8 +91,11 @@ final class ImportPurchaseInvoice
                 );
             }
         } catch (\Throwable $exception) {
-            if (! $existingDraft instanceof Document) {
+            if ($document instanceof Document && ! $existingDraft instanceof Document) {
                 $this->cleanup($document);
+            }
+            if ($supplierCreated && $party instanceof Party && ! $party->documents()->exists()) {
+                $party->delete();
             }
             throw $exception;
         }
@@ -140,34 +146,84 @@ final class ImportPurchaseInvoice
         return $parsed;
     }
 
-    /** @return array{0: Party|null, 1: string} */
+    /** @return array{0: Party|null, 1: string, 2: bool} */
     private function matchSupplier(LegalEntity $entity, EInvoiceParseResult $parsed): array
     {
         $suppliers = Party::query()
             ->where('legal_entity_id', $entity->getKey())
             ->where('is_supplier', true)
-            ->where('is_active', true);
+            ->with('taxIds');
         if (filled($parsed->sellerVatId)) {
-            $matches = (clone $suppliers)->whereHas('taxIds', fn ($query) => $query->where('number', $parsed->sellerVatId))->get();
+            $vatId = $this->normalizeIdentifier($parsed->sellerVatId);
+            $matches = (clone $suppliers)->whereHas('taxIds')->get()
+                ->filter(fn (Party $party): bool => $party->taxIds->contains(
+                    fn (PartyTaxId $taxId): bool => $this->normalizeIdentifier($taxId->number) === $vatId
+                ));
             if ($matches->count() === 1) {
-                return [$matches->first(), 'matched'];
+                return [$matches->first(), 'matched', false];
             }
             if ($matches->count() > 1) {
-                return [null, 'ambiguous'];
+                return [null, 'ambiguous', false];
             }
         }
         if (filled($parsed->sellerName)) {
-            $needle = mb_strtolower(trim((string) $parsed->sellerName));
-            $matches = $suppliers->get()->filter(fn (Party $party): bool => mb_strtolower(trim($party->legal_name)) === $needle);
+            $needle = $this->normalizeName($parsed->sellerName);
+            $matches = $suppliers->get()->filter(fn (Party $party): bool => $this->normalizeName($party->legal_name) === $needle);
             if ($matches->count() === 1) {
-                return [$matches->first(), 'matched'];
+                return [$matches->first(), 'matched', false];
             }
             if ($matches->count() > 1) {
-                return [null, 'ambiguous'];
+                return [null, 'ambiguous', false];
             }
+
+            $party = Party::query()->create([
+                'legal_entity_id' => $entity->getKey(),
+                'kind' => 'organization',
+                'is_customer' => false,
+                'is_supplier' => true,
+                'legal_name' => trim((string) $parsed->sellerName),
+                'country_code' => filled($parsed->sellerCountryCode) ? strtoupper((string) $parsed->sellerCountryCode) : null,
+                'email' => $parsed->sellerEmail,
+                'default_currency' => $parsed->currency,
+                'is_active' => true,
+            ]);
+
+            if (collect([$parsed->sellerAddressLine1, $parsed->sellerAddressLine2, $parsed->sellerPostalCode, $parsed->sellerCity])->filter()->isNotEmpty()) {
+                PartyAddress::query()->create([
+                    'party_id' => $party->getKey(),
+                    'line1' => $parsed->sellerAddressLine1,
+                    'line2' => $parsed->sellerAddressLine2,
+                    'postal_code' => $parsed->sellerPostalCode,
+                    'city' => $parsed->sellerCity,
+                    'country_code' => filled($parsed->sellerCountryCode) ? strtoupper((string) $parsed->sellerCountryCode) : null,
+                    'address_role' => PartyAddressRole::Both,
+                    'is_primary' => true,
+                ]);
+            }
+
+            if (filled($parsed->sellerVatId)) {
+                PartyTaxId::query()->create([
+                    'party_id' => $party->getKey(),
+                    'type' => 'vat',
+                    'number' => trim((string) $parsed->sellerVatId),
+                    'country_code' => filled($parsed->sellerCountryCode) ? strtoupper((string) $parsed->sellerCountryCode) : null,
+                ]);
+            }
+
+            return [$party, 'created', true];
         }
 
-        return [null, 'unmatched'];
+        return [null, 'unmatched', false];
+    }
+
+    private function normalizeIdentifier(?string $value): string
+    {
+        return strtoupper((string) preg_replace('/[^A-Z0-9]/i', '', (string) $value));
+    }
+
+    private function normalizeName(?string $value): string
+    {
+        return mb_strtolower((string) preg_replace('/\s+/', ' ', trim((string) $value)));
     }
 
     /** @param array<string, mixed> $line */

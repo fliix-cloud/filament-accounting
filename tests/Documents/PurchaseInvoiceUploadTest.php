@@ -4,6 +4,7 @@ namespace FilamentAccounting\Tests\Documents;
 
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Exceptions\DocumentException;
+use FilamentAccounting\Models\Party;
 use FilamentAccounting\Models\PartyTaxId;
 use FilamentAccounting\Services\ImportPurchaseInvoice;
 use FilamentAccounting\Services\IssueSalesInvoice;
@@ -46,6 +47,41 @@ class PurchaseInvoiceUploadTest extends TestCase
 
         $this->expectException(DocumentException::class);
         app(RegisterPurchaseInvoice::class)->receive($result->document);
+    }
+
+    #[Test]
+    public function standalone_ubl_creates_an_unambiguous_missing_supplier(): void
+    {
+        Storage::fake('purchase-imports');
+        config()->set('filament-accounting.storage.disk', 'purchase-imports');
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+
+        $result = app(ImportPurchaseInvoice::class)->handle($entity, 'vendor-42.xml', $this->ublInvoice());
+        $supplier = Party::query()->where('legal_entity_id', $entity->getKey())->where('is_supplier', true)->sole();
+
+        $this->assertSame('created', $result->supplierMatch);
+        $this->assertSame($supplier->getKey(), $result->document->party_id);
+        $this->assertSame('Vendor GmbH', $supplier->legal_name);
+        $this->assertSame('EUR', $supplier->default_currency);
+        $this->assertSame('DE999999999', $supplier->taxIds()->sole()->number);
+    }
+
+    #[Test]
+    public function standalone_ubl_keeps_an_ambiguous_supplier_unassigned(): void
+    {
+        Storage::fake('purchase-imports');
+        config()->set('filament-accounting.storage.disk', 'purchase-imports');
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $this->makeParty($entity, ['is_customer' => false, 'is_supplier' => true, 'legal_name' => 'Vendor GmbH']);
+        $this->makeParty($entity, ['is_customer' => false, 'is_supplier' => true, 'legal_name' => 'Vendor GmbH']);
+
+        $result = app(ImportPurchaseInvoice::class)->handle($entity, 'vendor-42.xml', $this->ublInvoice());
+
+        $this->assertSame('ambiguous', $result->supplierMatch);
+        $this->assertNull($result->document->party_id);
+        $this->assertSame(2, Party::query()->where('legal_entity_id', $entity->getKey())->where('is_supplier', true)->count());
     }
 
     #[Test]

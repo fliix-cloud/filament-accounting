@@ -2,7 +2,6 @@
 
 namespace FilamentAccounting\Banking\FinTs\Filament\Resources;
 
-use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
@@ -15,17 +14,16 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use FilamentAccounting\Banking\FinTs\Enums\TransferType;
-use FilamentAccounting\Banking\FinTs\Filament\Pages\StrongAuthentication;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\BankTransferResource\Pages\CreateBankTransfer;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\BankTransferResource\Pages\ListBankTransfers;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\BankTransferResource\Pages\ViewBankTransfer;
 use FilamentAccounting\Banking\FinTs\Models\BankConnection;
 use FilamentAccounting\Banking\FinTs\Models\BankTransfer;
-use FilamentAccounting\Banking\FinTs\Models\StrongAuthenticationSession;
 use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope as OwnerScope;
 use FilamentAccounting\Banking\FinTs\Services\CapabilityService;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
+use FilamentAccounting\Support\ReferenceData;
 use Illuminate\Database\Eloquent\Builder;
 
 class BankTransferResource extends Resource
@@ -40,12 +38,7 @@ class BankTransferResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('filament-accounting::navigation.group');
-    }
-
-    public static function getNavigationParentItem(): ?string
-    {
-        return AccountingNavigation::BANKING;
+        return AccountingNavigation::section('banking');
     }
 
     public static function getNavigationLabel(): string
@@ -87,7 +80,7 @@ class BankTransferResource extends Resource
             TextInput::make('recipient_iban')->label(__('filament-accounting::banking/fints/fields.recipient_iban'))->required(),
             TextInput::make('recipient_bic')->label(__('filament-accounting::banking/fints/fields.bic')),
             TextInput::make('amount')->numeric()->label(__('filament-accounting::banking/fints/fields.amount'))->required(),
-            TextInput::make('currency')->default('EUR')->maxLength(3)->label(__('filament-accounting::banking/fints/fields.currency')),
+            Select::make('currency')->default('EUR')->options(ReferenceData::currencies())->searchable()->label(__('filament-accounting::banking/fints/fields.currency')),
             TextInput::make('purpose')->label(__('filament-accounting::banking/fints/fields.purpose')),
             DatePicker::make('requested_execution_date')->label(__('filament-accounting::banking/fints/fields.execution_date')),
             TextInput::make('end_to_end_id')->label(__('filament-accounting::banking/fints/fields.end_to_end_id')),
@@ -113,10 +106,6 @@ class BankTransferResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
-                Action::make('resumeSca')
-                    ->label(__('filament-accounting::banking/fints/actions.resume_sca'))
-                    ->visible(fn (BankTransfer $record): bool => $record->status->isInteractive())
-                    ->url(fn (BankTransfer $record): ?string => self::resumeScaUrl($record)),
                 DeleteAction::make()
                     ->visible(fn (BankTransfer $record): bool => $record->status->isDeletable()),
             ])
@@ -130,15 +119,6 @@ class BankTransferResource extends Resource
             'create' => CreateBankTransfer::route('/create'),
             'view' => ViewBankTransfer::route('/{record}'),
         ];
-    }
-
-    public static function resumeScaUrl(BankTransfer $record): ?string
-    {
-        $session = StrongAuthenticationSession::openFor($record);
-
-        return $session instanceof StrongAuthenticationSession
-            ? StrongAuthentication::getUrl(['record' => $session])
-            : null;
     }
 
     /** @return array<string, string> */

@@ -11,8 +11,6 @@ return new class extends Migration
         Schema::create('accounting_legal_entities', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
-            $table->string('owner_type', 191)->nullable();
-            $table->string('owner_id', 64)->nullable();
             $table->string('legal_name');
             $table->string('trading_name')->nullable();
             $table->string('address_line1')->nullable();
@@ -42,7 +40,6 @@ return new class extends Migration
             $table->string('invoice_template_version', 32)->default('1');
             $table->string('state', 16)->default('active');
             $table->timestamps();
-            $table->index(['owner_type', 'owner_id']);
             $table->index('state');
         });
 
@@ -57,6 +54,7 @@ return new class extends Migration
             $table->string('display_name')->nullable();
             $table->char('country_code', 2)->nullable();
             $table->string('email')->nullable();
+            $table->string('invoice_email')->nullable();
             $table->string('phone')->nullable();
             $table->unsignedSmallInteger('payment_terms_days')->default(14);
             $table->char('default_currency', 3)->nullable();
@@ -76,6 +74,7 @@ return new class extends Migration
             $table->string('city')->nullable();
             $table->string('region')->nullable();
             $table->char('country_code', 2)->nullable();
+            $table->string('address_role', 16)->default('both');
             $table->boolean('is_primary')->default(true);
             $table->timestamps();
         });

@@ -14,10 +14,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $open_item_id
  * @property int|null $posting_rule_version_id
  * @property int|null $ledger_account_id
+ * @property int|null $tax_rule_version_id
  * @property string|null $reason
  * @property-read OpenItem|null $openItem
  * @property-read PostingRuleVersion|null $postingRuleVersion
  * @property-read LedgerAccount|null $ledgerAccount
+ * @property-read TaxRuleVersion|null $taxRuleVersion
  */
 class ReconciliationSplit extends AccountingModel
 {
@@ -31,6 +33,7 @@ class ReconciliationSplit extends AccountingModel
         'open_item_id',
         'posting_rule_version_id',
         'ledger_account_id',
+        'tax_rule_version_id',
         'reason',
     ];
 
@@ -64,5 +67,11 @@ class ReconciliationSplit extends AccountingModel
     public function ledgerAccount(): BelongsTo
     {
         return $this->belongsTo(LedgerAccount::class);
+    }
+
+    /** @return BelongsTo<TaxRuleVersion, $this> */
+    public function taxRuleVersion(): BelongsTo
+    {
+        return $this->belongsTo(TaxRuleVersion::class);
     }
 }

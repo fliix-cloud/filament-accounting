@@ -7,15 +7,13 @@ use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Table;
 use FilamentAccounting\Enums\LegalEntityState;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\LegalEntityResource\Pages\CreateLegalEntity;
-use FilamentAccounting\Filament\Resources\LegalEntityResource\Pages\EditLegalEntity;
-use FilamentAccounting\Filament\Resources\LegalEntityResource\Pages\ListLegalEntities;
+use FilamentAccounting\Filament\Resources\LegalEntityResource\Pages\ManageLegalEntity;
 use FilamentAccounting\Models\LegalEntity;
+use FilamentAccounting\Support\ReferenceData;
 use FilamentAccounting\Support\Sepa;
 
 class LegalEntityResource extends Resource
@@ -24,15 +22,15 @@ class LegalEntityResource extends Resource
 
     protected static ?string $model = LegalEntity::class;
 
-    protected static ?string $slug = 'accounting/legal-entities';
+    protected static ?string $slug = 'accounting/company-settings';
 
-    protected static ?int $navigationSort = 90;
+    protected static ?int $navigationSort = 30;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-office-2';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::SETTINGS;
+        return AccountingNavigation::section('settings');
     }
 
     public static function getNavigationLabel(): string
@@ -60,6 +58,11 @@ class LegalEntityResource extends Resource
         return false;
     }
 
+    public static function canCreate(): bool
+    {
+        return ! LegalEntity::query()->exists() && parent::canCreate();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -71,7 +74,7 @@ class LegalEntityResource extends Resource
                 TextInput::make('postal_code')->label(__('filament-accounting::fields.postal_code'))->required(),
                 TextInput::make('city')->label(__('filament-accounting::fields.city'))->required(),
                 TextInput::make('region')->label(__('filament-accounting::fields.region')),
-                TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->maxLength(2)->required(),
+                Select::make('country_code')->label(__('filament-accounting::fields.country'))->options(ReferenceData::countries())->searchable()->required(),
                 TextInput::make('tax_number')->label(__('filament-accounting::fields.tax_number')),
                 TextInput::make('vat_id')->label(__('filament-accounting::fields.vat_id')),
                 TextInput::make('email')->label(__('filament-accounting::fields.email'))->email(),
@@ -104,11 +107,11 @@ class LegalEntityResource extends Resource
                 TextInput::make('invoice_template_version')->label(__('filament-accounting::fields.template_version'))->required(),
             ])->columns(3),
             Section::make(__('filament-accounting::fields.accounting_settings'))->schema([
-                TextInput::make('base_currency')->label(__('filament-accounting::fields.base_currency'))->maxLength(3)->required(),
-                TextInput::make('locale')->label(__('filament-accounting::fields.locale')),
-                TextInput::make('timezone')->label(__('filament-accounting::fields.timezone')),
+                Select::make('base_currency')->label(__('filament-accounting::fields.base_currency'))->options(ReferenceData::currencies())->searchable()->required(),
+                Select::make('locale')->label(__('filament-accounting::fields.locale'))->options(ReferenceData::locales())->searchable()->required(),
+                Select::make('timezone')->label(__('filament-accounting::fields.timezone'))->options(ReferenceData::timezones())->searchable()->required(),
                 TextInput::make('fiscal_year_start_month')->numeric()->label(__('filament-accounting::fields.fiscal_year_start')),
-                TextInput::make('compliance_profile_key')->label(__('filament-accounting::fields.compliance_profile')),
+                Select::make('compliance_profile_key')->label(__('filament-accounting::fields.compliance_profile'))->options(ReferenceData::complianceProfiles())->required(),
                 Select::make('state')->label(__('filament-accounting::fields.state'))->options([
                     LegalEntityState::Active->value => __('filament-accounting::statuses.entity.active'),
                     LegalEntityState::Inactive->value => __('filament-accounting::statuses.entity.inactive'),
@@ -117,22 +120,11 @@ class LegalEntityResource extends Resource
         ]);
     }
 
-    public static function table(Table $table): Table
-    {
-        return $table->columns([
-            TextColumn::make('legal_name')->label(__('filament-accounting::fields.legal_name'))->searchable(),
-            TextColumn::make('country_code')->label(__('filament-accounting::fields.country')),
-            TextColumn::make('base_currency')->label(__('filament-accounting::fields.currency')),
-            TextColumn::make('state')->badge()->label(__('filament-accounting::fields.state')),
-        ]);
-    }
-
     public static function getPages(): array
     {
         return [
-            'index' => ListLegalEntities::route('/'),
-            'create' => CreateLegalEntity::route('/create'),
-            'edit' => EditLegalEntity::route('/{record}/edit'),
+            'index' => ManageLegalEntity::route('/'),
+            'create' => CreateLegalEntity::route('/setup'),
         ];
     }
 }

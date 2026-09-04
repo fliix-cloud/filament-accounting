@@ -7,7 +7,7 @@ use FilamentAccounting\Filament\Resources\LedgerAccountResource;
 use FilamentAccounting\Filament\Resources\PostingRuleResource;
 use FilamentAccounting\Filament\Resources\TaxCodeResource;
 use FilamentAccounting\Models\CatalogItem;
-use FilamentAccounting\Ownership\ConfiguredLegalEntityResolver;
+use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 use FilamentAccounting\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -33,8 +33,7 @@ class ConfigurationResourceScopeTest extends TestCase
             ]);
         }
 
-        app(ConfiguredLegalEntityResolver::class)->bind($current);
-        config()->set('filament-accounting.ownership.legal_entity_id', $current->getKey());
+        app(SingleLegalEntityResolver::class)->bind($current);
 
         foreach ([
             CatalogItemResource::class,

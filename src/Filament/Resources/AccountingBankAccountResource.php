@@ -3,11 +3,11 @@
 namespace FilamentAccounting\Filament\Resources;
 
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use FilamentAccounting\Banking\FinTs\Support\ProductRegistration;
@@ -17,6 +17,7 @@ use FilamentAccounting\Filament\Resources\AccountingBankAccountResource\Pages\Ed
 use FilamentAccounting\Filament\Resources\AccountingBankAccountResource\Pages\ListAccountingBankAccounts;
 use FilamentAccounting\Models\AccountingBankAccount;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Support\ReferenceData;
 use Illuminate\Database\Eloquent\Builder;
 
 class AccountingBankAccountResource extends Resource
@@ -27,13 +28,18 @@ class AccountingBankAccountResource extends Resource
 
     protected static ?string $slug = 'accounting/bank-accounts';
 
-    protected static ?int $navigationSort = 30;
+    protected static ?int $navigationSort = 20;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-library';
 
     public static function getNavigationParentItem(): ?string
     {
-        return AccountingNavigation::BANKING;
+        return AccountingNavigation::BANK_SETTINGS;
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return AccountingNavigation::section('settings');
     }
 
     public static function getNavigationLabel(): string
@@ -60,7 +66,14 @@ class AccountingBankAccountResource extends Resource
     {
         return app(LegalEntityScope::class)
             ->constrain(parent::getEloquentQuery())
-            ->orderByDesc('is_available')
+            ->where('is_active', true)
+            ->where('is_enabled', true)
+            ->withCount([
+                'statementLines as pending_statement_line_count' => fn (Builder $query): Builder => $query->where('source_status', 'pending'),
+            ])
+            ->withSum([
+                'statementLines as pending_statement_line_sum_minor' => fn (Builder $query): Builder => $query->where('source_status', 'pending'),
+            ], 'amount_minor')
             ->orderBy('display_name');
     }
 
@@ -69,7 +82,7 @@ class AccountingBankAccountResource extends Resource
         return $schema->components([
             TextInput::make('display_name')->label(__('filament-accounting::fields.display_name'))->required(),
             TextInput::make('iban')->label(__('filament-accounting::fields.iban'))->disabled(),
-            TextInput::make('currency')->label(__('filament-accounting::fields.currency'))->disabled(),
+            Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->disabled(),
             Toggle::make('is_enabled')
                 ->label(__('filament-accounting::fields.bank_account_enabled'))
                 ->helperText(__('filament-accounting::fields.bank_account_enabled_help')),
@@ -85,8 +98,16 @@ class AccountingBankAccountResource extends Resource
                 TextColumn::make('booked_balance_minor')
                     ->label(__('filament-accounting::fields.booked_balance'))
                     ->formatStateUsing(fn (?int $state, AccountingBankAccount $record): ?string => $record->formattedBalance($state)),
-                IconColumn::make('is_available')->boolean()->label(__('filament-accounting::fields.bank_account_available')),
-                IconColumn::make('is_enabled')->boolean()->label(__('filament-accounting::fields.bank_account_enabled')),
+                TextColumn::make('pending_statement_line_sum_minor')
+                    ->label(__('filament-accounting::fields.pending_balance'))
+                    ->placeholder('—')
+                    ->formatStateUsing(fn (mixed $state, AccountingBankAccount $record): ?string => (int) $record->pendingStatementLinesSummary()['count'] > 0
+                        ? $record->formattedBalance((int) $state)
+                        : null),
+                TextColumn::make('available_amount_minor')
+                    ->label(__('filament-accounting::fields.available_amount'))
+                    ->placeholder('—')
+                    ->formatStateUsing(fn (?int $state, AccountingBankAccount $record): ?string => $record->formattedBalance($state)),
             ])
             ->recordActions([
                 Action::make('syncTransactions')

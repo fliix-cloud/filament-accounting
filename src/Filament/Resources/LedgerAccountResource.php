@@ -18,6 +18,7 @@ use FilamentAccounting\Filament\Resources\LedgerAccountResource\Pages\EditLedger
 use FilamentAccounting\Filament\Resources\LedgerAccountResource\Pages\ListLedgerAccounts;
 use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Support\ReferenceData;
 use Illuminate\Database\Eloquent\Builder;
 
 class LedgerAccountResource extends Resource
@@ -32,9 +33,9 @@ class LedgerAccountResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::REPORTS;
+        return AccountingNavigation::section('reports');
     }
 
     public static function getNavigationLabel(): string
@@ -69,7 +70,7 @@ class LedgerAccountResource extends Resource
             TextInput::make('name')->label(__('filament-accounting::fields.name'))->required(),
             Select::make('type')->label(__('filament-accounting::fields.type'))->options(collect(AccountType::cases())->mapWithKeys(fn ($c) => [$c->value => $c->value]))->required(),
             Select::make('normal_balance')->label(__('filament-accounting::fields.normal_balance'))->options(collect(NormalBalance::cases())->mapWithKeys(fn ($c) => [$c->value => $c->value]))->required(),
-            TextInput::make('currency')->label(__('filament-accounting::fields.currency'))->maxLength(3),
+            Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable(),
             Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),
         ]);
     }

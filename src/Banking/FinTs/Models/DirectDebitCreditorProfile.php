@@ -50,6 +50,15 @@ class DirectDebitCreditorProfile extends Model
         });
 
         static::saving(function (self $model): void {
+            $entity = LegalEntity::query()->find($model->legal_entity_id);
+            if ($entity instanceof LegalEntity) {
+                $model->name = $entity->legal_name;
+                $model->street = $entity->address_line1;
+                $model->building_number = null;
+                $model->postal_code = $entity->postal_code;
+                $model->city = $entity->city;
+                $model->country = $entity->country_code;
+            }
             $model->creditor_identifier = SepaIdentifier::normalize((string) $model->creditor_identifier);
             $model->creditor_identifier_normalized = $model->creditor_identifier;
             $model->country = filled($model->country) ? strtoupper((string) $model->country) : null;

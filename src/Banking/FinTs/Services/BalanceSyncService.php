@@ -88,7 +88,12 @@ class BalanceSyncService
         $account->available_amount_minor = $available
             ? ExactMoney::ofString((string) $available->wert, $available->waehrung ?: $account->currency)->minorAmount
             : null;
-        $account->product_name = $hisal->getKontoproduktbezeichnung() ?: $account->product_name;
+        $previousProductName = $account->product_name;
+        $productName = $hisal->getKontoproduktbezeichnung() ?: $previousProductName;
+        if (filled($productName) && $account->hasAutomaticDisplayName($previousProductName)) {
+            $account->display_name = $productName;
+        }
+        $account->product_name = $productName;
         $account->balance_at = now();
         $account->last_balance_sync_at = now();
         $account->save();

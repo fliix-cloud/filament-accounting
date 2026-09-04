@@ -6,6 +6,8 @@ use Filament\Actions\Action;
 use Filament\Tables\Table;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\BankDirectDebitResource;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\BankDirectDebitResource\Pages\ListBankDirectDebits;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\BankTransferResource;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\BankTransferResource\Pages\ListBankTransfers;
 use FilamentAccounting\Filament\Resources\AccountingBankAccountResource;
 use FilamentAccounting\Filament\Resources\AccountingBankAccountResource\Pages\ListAccountingBankAccounts;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
@@ -69,7 +71,7 @@ class BankingResourceUiTest extends TestCase
         $this->assertSame('DE89 3704 0044 0532 0130 00', $account->pickerLabel());
 
         $account->display_name = 'Geschäftskonto';
-        $this->assertSame('Geschäftskonto · DE89 3704 0044 0532 0130 00', $account->pickerLabel());
+        $this->assertSame('DE89 3704 0044 0532 0130 00 (Geschäftskonto)', $account->pickerLabel());
     }
 
     #[Test]
@@ -80,5 +82,16 @@ class BankingResourceUiTest extends TestCase
         $table = BankDirectDebitResource::table(Table::make(new ListBankDirectDebits));
 
         $this->assertSame('Erstellt am', $table->getColumn('created_at')?->getLabel());
+    }
+
+    #[Test]
+    public function transfers_cannot_resume_an_abandoned_authentication_from_the_list(): void
+    {
+        $table = BankTransferResource::table(Table::make(new ListBankTransfers));
+
+        $this->assertSame(
+            ['view', 'delete'],
+            collect($table->getRecordActions())->map(fn (Action $action): string => $action->getName())->values()->all(),
+        );
     }
 }

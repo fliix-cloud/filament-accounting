@@ -3,7 +3,7 @@
 namespace FilamentAccounting\Tests\Attachments;
 
 use FilamentAccounting\Exceptions\AccountingException;
-use FilamentAccounting\Ownership\ConfiguredLegalEntityResolver;
+use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 use FilamentAccounting\Services\ReadAttachment;
 use FilamentAccounting\Services\StoreAttachment;
 use FilamentAccounting\Tests\TestCase;
@@ -75,7 +75,7 @@ class AttachmentStorageTest extends TestCase
         );
 
         $secondEntity = $this->makeEntity(['legal_name' => 'Second GmbH']);
-        app(ConfiguredLegalEntityResolver::class)->bind($secondEntity);
+        app(SingleLegalEntityResolver::class)->bind($secondEntity);
 
         $this->expectException(AccountingException::class);
         app(ReadAttachment::class)->handle($attachment);

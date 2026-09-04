@@ -4,6 +4,7 @@ namespace FilamentAccounting\Models;
 
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Exceptions\PostedRecordImmutableException;
+use FilamentAccounting\Support\RichText;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -86,6 +87,11 @@ class DocumentLine extends AccountingModel
             'service_from' => 'date',
             'service_to' => 'date',
         ];
+    }
+
+    public function setDescriptionAttribute(mixed $value): void
+    {
+        $this->attributes['description'] = RichText::sanitize(is_string($value) ? $value : null) ?? '';
     }
 
     protected static function booted(): void

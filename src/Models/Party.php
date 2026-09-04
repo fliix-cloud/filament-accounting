@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Models;
 
+use FilamentAccounting\Enums\PartyAddressRole;
 use FilamentAccounting\Enums\PartyKind;
 use FilamentAccounting\Models\Concerns\BelongsToLegalEntity;
 use FilamentAccounting\Support\HasUuid;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $display_name
  * @property string|null $country_code
  * @property string|null $email
+ * @property string|null $invoice_email
  * @property string|null $phone
  * @property int $payment_terms_days
  * @property string|null $default_currency
@@ -45,6 +47,7 @@ class Party extends AccountingModel
         'display_name',
         'country_code',
         'email',
+        'invoice_email',
         'phone',
         'payment_terms_days',
         'default_currency',
@@ -103,18 +106,30 @@ class Party extends AccountingModel
             'display_name' => $this->display_name,
             'country_code' => $this->country_code,
             'email' => $this->email,
+            'invoice_email' => $this->invoice_email,
             'phone' => $this->phone,
             'payment_terms_days' => $this->payment_terms_days,
             'default_currency' => $this->default_currency,
-            'addresses' => $this->addresses->map(fn (PartyAddress $address): array => [
-                'line1' => $address->line1,
-                'line2' => $address->line2,
-                'postal_code' => $address->postal_code,
-                'city' => $address->city,
-                'region' => $address->region,
-                'country_code' => $address->country_code,
-                'is_primary' => $address->is_primary,
-            ])->all(),
+            'addresses' => $this->addresses
+                ->sortBy(fn (PartyAddress $address): array => [
+                    match ($address->address_role) {
+                        PartyAddressRole::Billing, PartyAddressRole::Both => 0,
+                        PartyAddressRole::Shipping => 1,
+                        default => 0,
+                    },
+                    $address->is_primary ? 0 : 1,
+                    $address->getKey(),
+                ])
+                ->map(fn (PartyAddress $address): array => [
+                    'line1' => $address->line1,
+                    'line2' => $address->line2,
+                    'postal_code' => $address->postal_code,
+                    'city' => $address->city,
+                    'region' => $address->region,
+                    'country_code' => $address->country_code,
+                    'address_role' => $address->address_role->value,
+                    'is_primary' => $address->is_primary,
+                ])->all(),
             'vat_ids' => $this->taxIds->map(fn (PartyTaxId $id): array => [
                 'type' => $id->type,
                 'number' => $id->number,

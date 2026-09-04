@@ -12,7 +12,7 @@ return [
     'ledger_account' => ['singular' => 'Konto', 'plural' => 'Konten'],
     'posting_rule' => ['singular' => 'Steuerfall', 'plural' => 'Steuerfälle'],
     'tax_code' => ['singular' => 'Steuerschlüssel', 'plural' => 'Steuerschlüssel'],
-    'legal_entity' => ['singular' => 'Mandant', 'plural' => 'Mandanten'],
+    'legal_entity' => ['singular' => 'Unternehmen', 'plural' => 'Unternehmensdaten'],
     'audit_event' => ['singular' => 'Prüfereignis', 'plural' => 'Prüfereignisse'],
     'reconciliation_learning_rule' => ['singular' => 'Lernregel', 'plural' => 'Lernregeln'],
 ];

@@ -32,18 +32,18 @@ class DirectDebitMandateResource extends Resource
 
     protected static ?string $slug = 'bank/direct-debit-mandates';
 
-    protected static ?int $navigationSort = 43;
+    protected static ?int $navigationSort = 40;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
     public static function getNavigationGroup(): ?string
     {
-        return __('filament-accounting::navigation.group');
+        return AccountingNavigation::section('settings');
     }
 
     public static function getNavigationParentItem(): ?string
     {
-        return AccountingNavigation::BANKING;
+        return AccountingNavigation::BANK_SETTINGS;
     }
 
     public static function getNavigationLabel(): string

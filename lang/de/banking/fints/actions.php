@@ -19,6 +19,5 @@ return [
     'create' => 'Anlegen',
     'save' => 'Speichern',
     'open_transactions' => 'Umsätze öffnen',
-    'resume_sca' => 'Authentifizierung fortsetzen',
     'close' => 'Schließen',
 ];

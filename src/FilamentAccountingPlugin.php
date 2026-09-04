@@ -12,9 +12,7 @@ use FilamentAccounting\Banking\FinTs\Filament\Resources\BankTransferResource;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitCreditorProfileResource;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitMandateResource;
 use FilamentAccounting\Banking\FinTs\Filament\Widgets\BankBalancesWidget;
-use FilamentAccounting\Banking\FinTs\Filament\Widgets\PendingScaWidget;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
-use FilamentAccounting\Filament\Pages\AccountingOverview;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
 use FilamentAccounting\Filament\Resources\AccountingBankAccountResource;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
@@ -27,6 +25,7 @@ use FilamentAccounting\Filament\Resources\ReconciliationLearningRuleResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
 use FilamentAccounting\Filament\Resources\SupplierResource;
 use FilamentAccounting\Filament\Resources\TaxCodeResource;
+use FilamentAccounting\Filament\Widgets\AccountingOverviewStats;
 
 class FilamentAccountingPlugin implements Plugin
 {
@@ -151,9 +150,12 @@ class FilamentAccountingPlugin implements Plugin
     {
         $pages = [];
         $resources = [];
+        $widgets = [
+            BankBalancesWidget::class,
+        ];
 
         if ($this->enabled('dashboard') && $this->hasDashboard) {
-            $pages[] = AccountingOverview::class;
+            array_unshift($widgets, AccountingOverviewStats::class);
         }
 
         if ($this->enabled('customers') && $this->hasCustomers) {
@@ -203,13 +205,11 @@ class FilamentAccountingPlugin implements Plugin
                 'accounting-negative' => Color::hex('#0072B2'),
                 'accounting-positive' => Color::hex('#009E73'),
             ])
+            ->navigationGroups(AccountingNavigation::groups())
             ->navigationItems(AccountingNavigation::items())
             ->pages($pages)
             ->resources($resources)
-            ->widgets([
-                BankBalancesWidget::class,
-                PendingScaWidget::class,
-            ]);
+            ->widgets($widgets);
     }
 
     public function boot(Panel $panel): void {}

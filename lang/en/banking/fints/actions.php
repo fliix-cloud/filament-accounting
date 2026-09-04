@@ -19,6 +19,5 @@ return [
     'create' => 'Create',
     'save' => 'Save',
     'open_transactions' => 'Open transactions',
-    'resume_sca' => 'Resume authentication',
     'close' => 'Close',
 ];

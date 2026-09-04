@@ -65,6 +65,7 @@ return [
     'mandate_reference_help' => 'Maximal 35 Zeichen. Nicht mit / beginnen oder enden und kein // verwenden.',
     'mandate_signed_on' => 'Mandatsunterschrift',
     'sequence_type' => 'Sequenztyp',
+    'sequence_type_help' => 'Wird automatisch aus Mandatsart und bisheriger Nutzung bestimmt.',
     'scheme' => 'Verfahren',
     'collection_date' => 'Einzugsdatum',
     'collection_date_help' => 'Die Bank prüft beim Absenden zusätzlich ihre kontospezifische Mindestvorlaufzeit und Cut-off-Zeit.',

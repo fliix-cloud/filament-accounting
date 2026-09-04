@@ -25,7 +25,6 @@ class ReconciliationAssistant extends Component
         'sales_invoice',
         'purchase_invoice',
         'posting_rule',
-        'ledger_account',
         'split',
     ];
 
@@ -34,7 +33,6 @@ class ReconciliationAssistant extends Component
         'sales_invoice',
         'purchase_invoice',
         'posting_rule',
-        'ledger_account',
     ];
 
     public string $line;
@@ -53,13 +51,11 @@ class ReconciliationAssistant extends Component
 
     public ?int $selectedOpenItemId = null;
 
-    public ?int $selectedPostingRuleVersionId = null;
+    public ?string $selectedCategoryKey = null;
 
-    public ?int $selectedLedgerAccountId = null;
+    public ?int $selectedTaxRuleVersionId = null;
 
     public ?string $allocationReason = null;
-
-    public ?string $exceptionReason = null;
 
     /** @var list<array<string, mixed>> */
     public array $allocations = [];
@@ -89,8 +85,8 @@ class ReconciliationAssistant extends Component
         $this->resetErrorBag();
         $this->assignmentType = $type;
         $this->selectedOpenItemId = null;
-        $this->selectedPostingRuleVersionId = null;
-        $this->selectedLedgerAccountId = null;
+        $this->selectedCategoryKey = null;
+        $this->selectedTaxRuleVersionId = null;
 
         if ($type === 'split' && $this->allocations === []) {
             $line = $this->statementLine();
@@ -108,15 +104,16 @@ class ReconciliationAssistant extends Component
         $this->resetErrorBag();
     }
 
-    public function selectPostingRule(int $id): void
+    public function selectCategory(string $key): void
     {
-        $this->selectedPostingRuleVersionId = $id;
-        $this->resetErrorBag();
-    }
+        $line = $this->statementLine();
+        $candidate = $line ? collect($this->query()->categoryCandidates($line))->firstWhere('key', $key) : null;
+        if (! is_array($candidate)) {
+            return;
+        }
 
-    public function selectLedgerAccount(int $id): void
-    {
-        $this->selectedLedgerAccountId = $id;
+        $this->selectedCategoryKey = $key;
+        $this->selectedTaxRuleVersionId = $candidate['default_tax_rule_version_id'];
         $this->resetErrorBag();
     }
 
@@ -145,6 +142,19 @@ class ReconciliationAssistant extends Component
 
         $this->allocations[$index]['type'] = $type;
         $this->allocations[$index]['target_id'] = null;
+        $this->allocations[$index]['tax_rule_version_id'] = null;
+    }
+
+    public function changeAllocationTarget(int $index, string $key): void
+    {
+        if (! array_key_exists($index, $this->allocations)) {
+            return;
+        }
+
+        $this->allocations[$index]['target_id'] = $key !== '' ? $key : null;
+        $line = $this->statementLine();
+        $category = $line ? $this->categoryCandidate($line, $key) : null;
+        $this->allocations[$index]['tax_rule_version_id'] = $category['default_tax_rule_version_id'] ?? null;
     }
 
     public function useRemaining(int $index): void
@@ -205,13 +215,11 @@ class ReconciliationAssistant extends Component
                 $splitter->handle(
                     $line,
                     $this->splitAllocations($line),
-                    $this->exceptionReason ?: null,
                 );
             } else {
                 $assigner->handle(
                     $line,
                     $this->directAssignment($line),
-                    $this->exceptionReason ?: null,
                 );
             }
         } catch (\Throwable $exception) {
@@ -248,8 +256,9 @@ class ReconciliationAssistant extends Component
         $posted = $line?->activePostedReconciliation();
         $salesInvoices = [];
         $purchaseInvoices = [];
-        $postingRules = [];
-        $ledgerAccounts = [];
+        $categories = [];
+        $taxRates = [];
+        $selectedCategory = null;
         $selectedOpenItem = null;
         $validationErrors = [];
 
@@ -268,8 +277,9 @@ class ReconciliationAssistant extends Component
                 $this->onlyOpen,
                 $this->amountNear,
             );
-            $postingRules = $this->query()->postingRuleCandidates($line, $this->postingRuleSearch);
-            $ledgerAccounts = $this->query()->ledgerAccountCandidates($line);
+            $categories = $this->query()->categoryCandidates($line, $this->postingRuleSearch);
+            $taxRates = $this->query()->taxRateCandidates($line);
+            $selectedCategory = collect($categories)->firstWhere('key', $this->selectedCategoryKey);
             $selectedOpenItem = $this->query()->openItemCandidate($line, $this->selectedOpenItemId);
             $validationErrors = $this->validationErrors($line);
         }
@@ -280,8 +290,9 @@ class ReconciliationAssistant extends Component
             'postedAllocations' => $posted instanceof Reconciliation ? $this->query()->postedAllocations($posted) : [],
             'salesInvoices' => $salesInvoices,
             'purchaseInvoices' => $purchaseInvoices,
-            'postingRules' => $postingRules,
-            'ledgerAccounts' => $ledgerAccounts,
+            'categories' => $categories,
+            'taxRates' => $taxRates,
+            'selectedCategory' => $selectedCategory,
             'selectedOpenItem' => $selectedOpenItem,
             'validationErrors' => $validationErrors,
             'canFinalize' => $validationErrors === [],
@@ -313,6 +324,7 @@ class ReconciliationAssistant extends Component
         return [
             'type' => $type,
             'target_id' => null,
+            'tax_rule_version_id' => null,
             'amount' => '',
             'reason' => null,
         ];
@@ -323,8 +335,10 @@ class ReconciliationAssistant extends Component
     {
         $errors = [];
 
-        if ($line->source_status !== StatementLineStatus::Booked && ! filled($this->exceptionReason)) {
-            $errors['exceptionReason'] = __('filament-accounting::errors.pending_cannot_finalize');
+        if ($line->source_status !== StatementLineStatus::Booked) {
+            $errors['assistant'] = __('filament-accounting::errors.pending_cannot_finalize');
+
+            return $errors;
         }
 
         if ($this->assignmentType === 'split') {
@@ -351,20 +365,11 @@ class ReconciliationAssistant extends Component
         }
 
         if ($this->assignmentType === 'posting_rule') {
-            $valid = collect($this->query()->postingRuleCandidates($line))
-                ->contains(fn (array $candidate): bool => $candidate['id'] === $this->selectedPostingRuleVersionId);
-            if (! $valid) {
-                $errors['selectedPostingRuleVersionId'] = __('filament-accounting::errors.assignment_target_required');
-            }
-
-            return $errors;
-        }
-
-        if ($this->assignmentType === 'ledger_account') {
-            $valid = collect($this->query()->ledgerAccountCandidates($line))
-                ->contains(fn (array $candidate): bool => $candidate['id'] === $this->selectedLedgerAccountId);
-            if (! $valid) {
-                $errors['selectedLedgerAccountId'] = __('filament-accounting::errors.assignment_target_required');
+            $category = $this->categoryCandidate($line, $this->selectedCategoryKey);
+            if (! is_array($category)) {
+                $errors['selectedCategoryKey'] = __('filament-accounting::errors.assignment_target_required');
+            } elseif (! $this->validTaxSelection($line, $category, $this->selectedTaxRuleVersionId)) {
+                $errors['selectedTaxRuleVersionId'] = __('filament-accounting::errors.invalid_tax_rule');
             }
 
             return $errors;
@@ -418,16 +423,15 @@ class ReconciliationAssistant extends Component
                     $openItemTargets[] = $targetId;
                 }
             } elseif ($type === 'posting_rule') {
-                $valid = collect($this->query()->postingRuleCandidates($line))
-                    ->contains(fn (array $candidate): bool => $candidate['id'] === $targetId);
-                if (! $valid) {
+                $targetKey = is_string($allocation['target_id'] ?? null) ? $allocation['target_id'] : null;
+                $category = $this->categoryCandidate($line, $targetKey);
+                $taxRuleVersionId = is_numeric($allocation['tax_rule_version_id'] ?? null)
+                    ? (int) $allocation['tax_rule_version_id']
+                    : null;
+                if (! is_array($category)) {
                     $errors["allocations.{$index}.target_id"] = __('filament-accounting::errors.assignment_target_required');
-                }
-            } elseif ($type === 'ledger_account') {
-                $valid = collect($this->query()->ledgerAccountCandidates($line))
-                    ->contains(fn (array $candidate): bool => $candidate['id'] === $targetId);
-                if (! $valid) {
-                    $errors["allocations.{$index}.target_id"] = __('filament-accounting::errors.assignment_target_required');
+                } elseif (! $this->validTaxSelection($line, $category, $taxRuleVersionId)) {
+                    $errors["allocations.{$index}.tax_rule_version_id"] = __('filament-accounting::errors.invalid_tax_rule');
                 }
             } else {
                 $errors["allocations.{$index}.type"] = __('filament-accounting::errors.invalid_allocation_purpose');
@@ -445,18 +449,15 @@ class ReconciliationAssistant extends Component
     private function directAssignment(BankStatementLine $line): array
     {
         if ($this->assignmentType === 'posting_rule') {
-            return [
-                'purpose' => SplitPurpose::PostingRule->value,
-                'posting_rule_version_id' => $this->selectedPostingRuleVersionId,
-                'reason' => $this->allocationReason,
-                'selection_source' => 'manual',
-            ];
-        }
+            $category = $this->categoryCandidate($line, $this->selectedCategoryKey);
 
-        if ($this->assignmentType === 'ledger_account') {
             return [
-                'purpose' => SplitPurpose::LedgerAccount->value,
-                'ledger_account_id' => $this->selectedLedgerAccountId,
+                'purpose' => ($category['kind'] ?? null) === 'ledger_account'
+                    ? SplitPurpose::LedgerAccount->value
+                    : SplitPurpose::PostingRule->value,
+                'posting_rule_version_id' => ($category['kind'] ?? null) === 'posting_rule' ? $category['id'] : null,
+                'ledger_account_id' => ($category['kind'] ?? null) === 'ledger_account' ? $category['id'] : null,
+                'tax_rule_version_id' => $this->selectedTaxRuleVersionId,
                 'reason' => $this->allocationReason,
                 'selection_source' => 'manual',
             ];
@@ -479,7 +480,10 @@ class ReconciliationAssistant extends Component
         return array_map(function (array $allocation) use ($line): array {
             $type = (string) ($allocation['type'] ?? '');
             $isInvoice = in_array($type, ['sales_invoice', 'purchase_invoice'], true);
-            $isLedgerAccount = $type === 'ledger_account';
+            $category = $type === 'posting_rule'
+                ? $this->categoryCandidate($line, is_string($allocation['target_id'] ?? null) ? $allocation['target_id'] : null)
+                : null;
+            $isLedgerAccount = ($category['kind'] ?? null) === 'ledger_account';
 
             return [
                 'purpose' => $isInvoice
@@ -487,8 +491,9 @@ class ReconciliationAssistant extends Component
                     : ($isLedgerAccount ? SplitPurpose::LedgerAccount->value : SplitPurpose::PostingRule->value),
                 'amount_minor' => $this->minorFromInput($allocation['amount'] ?? null, $line->currency),
                 'open_item_id' => $isInvoice ? ($allocation['target_id'] ?? null) : null,
-                'posting_rule_version_id' => $type === 'posting_rule' ? ($allocation['target_id'] ?? null) : null,
-                'ledger_account_id' => $isLedgerAccount ? ($allocation['target_id'] ?? null) : null,
+                'posting_rule_version_id' => $type === 'posting_rule' && ! $isLedgerAccount ? ($category['id'] ?? null) : null,
+                'ledger_account_id' => $isLedgerAccount ? ($category['id'] ?? null) : null,
+                'tax_rule_version_id' => $type === 'posting_rule' ? ($allocation['tax_rule_version_id'] ?? null) : null,
                 'reason' => $allocation['reason'] ?? null,
                 'selection_source' => 'manual',
             ];
@@ -544,5 +549,28 @@ class ReconciliationAssistant extends Component
         }
 
         return null;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function categoryCandidate(BankStatementLine $line, ?string $key): ?array
+    {
+        if (! filled($key)) {
+            return null;
+        }
+
+        $candidate = collect($this->query()->categoryCandidates($line))->firstWhere('key', $key);
+
+        return is_array($candidate) ? $candidate : null;
+    }
+
+    /** @param array<string, mixed> $category */
+    private function validTaxSelection(BankStatementLine $line, array $category, ?int $taxRuleVersionId): bool
+    {
+        if (! ($category['allows_tax'] ?? false)) {
+            return $taxRuleVersionId === null;
+        }
+
+        return collect($this->query()->taxRateCandidates($line))
+            ->contains(fn (array $taxRate): bool => $taxRate['id'] === $taxRuleVersionId);
     }
 }

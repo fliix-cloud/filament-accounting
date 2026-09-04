@@ -41,9 +41,9 @@ class BankStatementLineResource extends Resource
     /** @var class-string<ListBankStatementLines> */
     protected static string $listPage = ListBankStatementLines::class;
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::BANKING;
+        return AccountingNavigation::section('banking');
     }
 
     public static function getNavigationLabel(): string
@@ -164,14 +164,12 @@ class BankStatementLineResource extends Resource
                         default => 'gray',
                     })
                     ->sortable(),
-                TextColumn::make('source_status')
-                    ->badge()
-                    ->label(__('filament-accounting::fields.source_status'))
-                    ->formatStateUsing(fn (StatementLineStatus $state): string => __('filament-accounting::statuses.statement.'.$state->value)),
                 TextColumn::make('reconciliation_badge')
                     ->label(__('filament-accounting::fields.reconciliation'))
-                    ->badge()
-                    ->state(fn (BankStatementLine $record): string => __('filament-accounting::statuses.reconciliation.'.$record->derivedBadge()->value)),
+                    ->badge(fn (BankStatementLine $record): bool => $record->source_status === StatementLineStatus::Booked)
+                    ->state(fn (BankStatementLine $record): string => $record->source_status === StatementLineStatus::Booked
+                        ? __('filament-accounting::statuses.reconciliation.'.$record->derivedBadge()->value)
+                        : '—'),
                 TextColumn::make('amount_match')
                     ->label(__('filament-accounting::fields.amount_match'))
                     ->badge()
@@ -246,6 +244,10 @@ class BankStatementLineResource extends Resource
                     ->label(__('filament-accounting::actions.reconcile'))
                     ->icon('heroicon-o-link')
                     ->visible(fn (BankStatementLine $record): bool => ! ($record->activePostedReconciliation() instanceof Reconciliation))
+                    ->disabled(fn (BankStatementLine $record): bool => $record->source_status !== StatementLineStatus::Booked)
+                    ->tooltip(fn (BankStatementLine $record): ?string => $record->source_status === StatementLineStatus::Booked
+                        ? null
+                        : __('filament-accounting::fields.assignment_unavailable_pending'))
                     ->modalHeading(__('filament-accounting::fields.reconciliation_assistant'))
                     ->modalDescription(__('filament-accounting::fields.reconciliation_assistant_help'))
                     ->modalWidth(Width::ScreenTwoExtraLarge)

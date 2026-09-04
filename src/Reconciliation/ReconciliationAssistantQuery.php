@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Reconciliation;
 
+use FilamentAccounting\Enums\AccountType;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Enums\OpenItemKind;
 use FilamentAccounting\Enums\PaymentStatus;
@@ -177,21 +178,28 @@ final class ReconciliationAssistantQuery
                 }
 
                 $taxCode = filled($version->tax_code) ? (string) $version->tax_code : null;
+                $taxRuleVersion = null;
                 if ($taxCode !== null && ! array_key_exists($taxCode, $taxRates)) {
-                    $taxRates[$taxCode] = TaxCode::query()
+                    $taxRuleVersion = TaxCode::query()
                         ->where('legal_entity_id', $line->legal_entity_id)
                         ->where('code', $taxCode)
-                        ->first()?->versionOn($date)?->rate_bp;
+                        ->first()?->versionOn($date);
+                    $taxRates[$taxCode] = $taxRuleVersion;
+                } elseif ($taxCode !== null) {
+                    $taxRuleVersion = $taxRates[$taxCode] ?? null;
                 }
 
                 return [
                     'id' => (int) $version->getKey(),
                     'code' => (string) $rule->code,
                     'label' => (string) $rule->label,
-                    'explanation' => (string) ($rule->explanation ?: $rule->label),
+                    'explanation' => filled($rule->explanation) && trim((string) $rule->explanation) !== trim((string) $rule->label)
+                        ? (string) $rule->explanation
+                        : null,
                     'profile' => (string) ($rule->compliance_profile_key ?: ''),
                     'tax_code' => $taxCode,
-                    'tax_rate_bp' => $taxCode !== null ? ($taxRates[$taxCode] ?? null) : null,
+                    'tax_rule_version_id' => $taxRuleVersion?->getKey(),
+                    'tax_rate_bp' => $taxRuleVersion?->rate_bp,
                     'direction' => $version->direction,
                     'score' => in_array((int) $rule->getKey(), $learnedRuleIds, true) ? 35 : 0,
                     'reasons' => in_array((int) $rule->getKey(), $learnedRuleIds, true) ? ['learned_rule'] : [],
@@ -222,6 +230,7 @@ final class ReconciliationAssistantQuery
         return LedgerAccount::query()
             ->where('legal_entity_id', $line->legal_entity_id)
             ->where('is_active', true)
+            ->where('type', '!=', AccountType::Asset->value)
             ->whereKeyNot($line->bankAccount->ledger_account_id)
             ->orderBy('code')
             ->get()
@@ -231,6 +240,87 @@ final class ReconciliationAssistantQuery
                 'name' => (string) $account->name,
                 'type' => $account->type->value,
             ])
+            ->all();
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function categoryCandidates(BankStatementLine $line, string $search = ''): array
+    {
+        $taxRates = $this->taxRateCandidates($line);
+        $standardTax = collect($taxRates)->firstWhere('code', 'DE-19');
+        $needle = Str::lower(trim($search));
+
+        $rules = collect($this->postingRuleCandidates($line, $search))->map(fn (array $rule): array => [
+            ...$rule,
+            'key' => 'rule:'.$rule['id'],
+            'kind' => 'posting_rule',
+            'account_code' => null,
+            'type' => null,
+            'name' => $rule['label'],
+            'allows_tax' => $rule['tax_rule_version_id'] !== null,
+            'default_tax_rule_version_id' => $rule['tax_rule_version_id'],
+        ]);
+
+        $accounts = collect($this->ledgerAccountCandidates($line))
+            ->map(function (array $account) use ($standardTax): array {
+                $allowsTax = in_array($account['type'], [AccountType::Expense->value, AccountType::Revenue->value], true);
+
+                return [
+                    'key' => 'account:'.$account['id'],
+                    'kind' => 'ledger_account',
+                    'id' => $account['id'],
+                    'code' => null,
+                    'account_code' => $account['code'],
+                    'type' => $account['type'],
+                    'name' => $account['name'],
+                    'label' => $account['name'],
+                    'explanation' => null,
+                    'score' => 0,
+                    'reasons' => [],
+                    'allows_tax' => $allowsTax,
+                    'default_tax_rule_version_id' => $allowsTax ? ($standardTax['id'] ?? null) : null,
+                    'tax_rule_version_id' => $allowsTax ? ($standardTax['id'] ?? null) : null,
+                    'tax_rate_bp' => $allowsTax ? ($standardTax['rate_bp'] ?? null) : null,
+                ];
+            })
+            ->filter(function (array $candidate) use ($needle): bool {
+                return $needle === '' || str_contains(Str::lower($candidate['account_code'].' '.$candidate['name']), $needle);
+            });
+
+        return $rules
+            ->concat($accounts)
+            ->sortByDesc(fn (array $candidate): int => (int) $candidate['score'])
+            ->values()
+            ->all();
+    }
+
+    /** @return list<array{id: int, code: string, name: string, rate_bp: int}> */
+    public function taxRateCandidates(BankStatementLine $line): array
+    {
+        $date = ($line->booking_date ?? now())->toDateString();
+        $direction = $line->isIncoming() ? 'incoming' : 'outgoing';
+
+        return TaxCode::query()
+            ->where('legal_entity_id', $line->legal_entity_id)
+            ->where('is_active', true)
+            ->where(function ($query) use ($direction): void {
+                $query->whereNull('direction')->orWhere('direction', 'both')->orWhere('direction', $direction);
+            })
+            ->orderBy('name')
+            ->get()
+            ->map(function (TaxCode $taxCode) use ($date): ?array {
+                $version = $taxCode->versionOn($date);
+
+                return $version ? [
+                    'id' => (int) $version->getKey(),
+                    'code' => (string) $taxCode->code,
+                    'name' => (string) $taxCode->name,
+                    'rate_bp' => (int) $version->rate_bp,
+                ] : null;
+            })
+            ->filter()
+            ->sortByDesc('rate_bp')
+            ->values()
             ->all();
     }
 
@@ -280,7 +370,7 @@ final class ReconciliationAssistantQuery
             return 'purchase_invoice';
         }
 
-        return $split->ledger_account_id ? 'ledger_account' : 'posting_rule';
+        return 'posting_rule';
     }
 
     private function allocationTargetLabel(ReconciliationSplit $split): string

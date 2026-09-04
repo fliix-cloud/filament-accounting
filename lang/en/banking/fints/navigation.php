@@ -9,5 +9,5 @@ return [
     'direct_debit_creditors' => 'Creditors',
     'direct_debit_mandates' => 'Mandates',
     'direct_debits' => 'Direct debits',
-    'settings' => 'Settings',
+    'settings' => 'Bank connections',
 ];

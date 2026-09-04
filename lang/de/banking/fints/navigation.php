@@ -9,5 +9,5 @@ return [
     'direct_debit_creditors' => 'Gläubiger',
     'direct_debit_mandates' => 'Mandate',
     'direct_debits' => 'Lastschriften',
-    'settings' => 'Einstellungen',
+    'settings' => 'Bankverbindungen',
 ];

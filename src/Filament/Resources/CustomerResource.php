@@ -2,18 +2,22 @@
 
 namespace FilamentAccounting\Filament\Resources;
 
+use Filament\Actions\Action;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitMandateResource;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
+use FilamentAccounting\Enums\PartyAddressRole;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\CustomerResource\Pages\CreateCustomer;
@@ -21,6 +25,7 @@ use FilamentAccounting\Filament\Resources\CustomerResource\Pages\EditCustomer;
 use FilamentAccounting\Filament\Resources\CustomerResource\Pages\ListCustomers;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Support\ReferenceData;
 use FilamentAccounting\Support\Sepa;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -32,13 +37,13 @@ class CustomerResource extends Resource
 
     protected static ?string $slug = 'accounting/customers';
 
-    protected static ?int $navigationSort = 20;
+    protected static ?int $navigationSort = 10;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::SALES;
+        return AccountingNavigation::section('master_data');
     }
 
     public static function getNavigationLabel(): string
@@ -74,10 +79,11 @@ class CustomerResource extends Resource
             TextInput::make('legal_name')->label(__('filament-accounting::fields.legal_name'))->required(),
             TextInput::make('display_name')->label(__('filament-accounting::fields.display_name')),
             TextInput::make('email')->label(__('filament-accounting::fields.email'))->email(),
+            TextInput::make('invoice_email')->label(__('filament-accounting::fields.invoice_email'))->email(),
             TextInput::make('phone')->label(__('filament-accounting::fields.phone')),
-            TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->maxLength(2),
+            Select::make('country_code')->label(__('filament-accounting::fields.country'))->options(ReferenceData::countries())->searchable(),
             TextInput::make('payment_terms_days')->label(__('filament-accounting::fields.payment_terms_days'))->numeric()->minValue(0)->default(14),
-            TextInput::make('default_currency')->label(__('filament-accounting::fields.default_currency'))->maxLength(3)->default('EUR'),
+            Select::make('default_currency')->label(__('filament-accounting::fields.default_currency'))->options(ReferenceData::currencies())->searchable()->default('EUR'),
             Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),
             Section::make(__('filament-accounting::fields.addresses'))
                 ->schema([
@@ -110,6 +116,21 @@ class CustomerResource extends Resource
                         ->collapsible()
                         ->defaultItems(0)
                         ->addActionLabel(__('filament-accounting::actions.add_bank_account')),
+                    Actions::make([
+                        Action::make('createDirectDebitMandate')
+                            ->label(__('filament-accounting::actions.create_direct_debit_mandate'))
+                            ->icon('heroicon-o-document-plus')
+                            ->url(fn (?Party $record): ?string => $record?->bankAccounts()->orderByDesc('is_primary')->value('id')
+                                ? DirectDebitMandateResource::getUrl('create', [
+                                    'party' => $record->getKey(),
+                                    'party_bank_account_id' => $record->bankAccounts()->orderByDesc('is_primary')->value('id'),
+                                ])
+                                : null)
+                            ->disabled(fn (?Party $record): bool => ! $record?->bankAccounts()->exists())
+                            ->tooltip(fn (?Party $record): ?string => $record?->bankAccounts()->exists()
+                                ? null
+                                : __('filament-accounting::fields.mandate_requires_bank_account')),
+                    ]),
                 ])
                 ->columnSpanFull(),
         ]);
@@ -189,7 +210,12 @@ class CustomerResource extends Resource
             TextInput::make('postal_code')->label(__('filament-accounting::fields.postal_code'))->required()->maxLength(20),
             TextInput::make('city')->label(__('filament-accounting::fields.city'))->required()->maxLength(255),
             TextInput::make('region')->label(__('filament-accounting::fields.region'))->maxLength(255),
-            TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->required()->maxLength(2)->default('DE'),
+            Select::make('country_code')->label(__('filament-accounting::fields.country'))->options(ReferenceData::countries())->searchable()->required()->default('DE'),
+            Select::make('address_role')
+                ->label(__('filament-accounting::fields.address_role'))
+                ->options(collect(PartyAddressRole::cases())->mapWithKeys(fn (PartyAddressRole $role): array => [$role->value => $role->getLabel()]))
+                ->default(PartyAddressRole::Both->value)
+                ->required(),
             Toggle::make('is_primary')->label(__('filament-accounting::fields.primary_address'))->default(false),
         ];
     }
@@ -206,7 +232,7 @@ class CustomerResource extends Resource
                 ])
                 ->required(),
             TextInput::make('number')->label(__('filament-accounting::fields.tax_id_number'))->required()->maxLength(64),
-            TextInput::make('country_code')->label(__('filament-accounting::fields.country'))->maxLength(2)->default('DE'),
+            Select::make('country_code')->label(__('filament-accounting::fields.country'))->options(ReferenceData::countries())->searchable()->default('DE'),
         ];
     }
 }

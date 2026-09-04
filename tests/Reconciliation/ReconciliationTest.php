@@ -426,7 +426,7 @@ class ReconciliationTest extends TestCase
     }
 
     #[Test]
-    public function pending_lines_cannot_be_finalized_without_reason(): void
+    public function pending_lines_cannot_be_finalized_even_with_a_reason(): void
     {
         $entity = $this->makeEntity();
         $this->actingAs($this->makeUser());

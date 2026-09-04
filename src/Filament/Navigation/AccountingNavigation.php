@@ -2,19 +2,23 @@
 
 namespace FilamentAccounting\Filament\Navigation;
 
+use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
 
 final class AccountingNavigation
 {
-    public const SALES = 'filament-accounting.sales';
+    public const BANK_SETTINGS = 'filament-accounting.bank-settings';
 
-    public const PURCHASES = 'filament-accounting.purchases';
-
-    public const BANKING = 'filament-accounting.banking';
-
-    public const REPORTS = 'filament-accounting.reports';
-
-    public const SETTINGS = 'filament-accounting.settings';
+    /** @return list<NavigationGroup> */
+    public static function groups(): array
+    {
+        return [
+            NavigationGroup::make(fn (): string => self::section('banking')),
+            NavigationGroup::make(fn (): string => self::section('reports')),
+            NavigationGroup::make(fn (): string => self::section('master_data')),
+            NavigationGroup::make(fn (): string => self::section('settings')),
+        ];
+    }
 
     /**
      * @return list<NavigationItem>
@@ -22,22 +26,16 @@ final class AccountingNavigation
     public static function items(): array
     {
         return [
-            self::item(self::SALES, 'sales', 'heroicon-o-arrow-trending-up', 10),
-            self::item(self::PURCHASES, 'purchases', 'heroicon-o-arrow-trending-down', 20),
-            self::item(self::BANKING, 'banking', 'heroicon-o-banknotes', 30),
-            self::item(self::REPORTS, 'reports', 'heroicon-o-chart-bar', 40),
-            self::item(self::SETTINGS, 'settings', 'heroicon-o-cog-6-tooth', 90),
+            NavigationItem::make(fn (): string => __('filament-accounting::navigation.bank_settings'))
+                ->key(self::BANK_SETTINGS)
+                ->group(fn (): string => self::section('settings'))
+                ->icon('heroicon-o-building-library')
+                ->sort(10),
         ];
     }
 
-    private static function item(string $key, string $translationKey, string $icon, int $sort): NavigationItem
+    public static function section(string $key): string
     {
-        return NavigationItem::make(
-            fn (): string => __("filament-accounting::navigation.sections.{$translationKey}"),
-        )
-            ->key($key)
-            ->group(fn (): string => __('filament-accounting::navigation.group'))
-            ->icon($icon)
-            ->sort($sort);
+        return __("filament-accounting::navigation.sections.{$key}");
     }
 }

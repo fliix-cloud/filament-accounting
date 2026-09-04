@@ -21,6 +21,7 @@ use FilamentAccounting\Banking\FinTs\Support\Money;
 use FilamentAccounting\Contracts\AccountingActorResolver as BankActorResolver;
 use FilamentAccounting\Contracts\AccountingAuthorizer as BankAuthorizer;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
+use FilamentAccounting\Models\LegalEntity;
 use Illuminate\Validation\ValidationException;
 
 class CreateBankDirectDebit extends CreateRecord
@@ -50,6 +51,7 @@ class CreateBankDirectDebit extends CreateRecord
         if (! $profile instanceof DirectDebitCreditorProfile) {
             throw ValidationException::withMessages(['creditor_profile_id' => __('filament-accounting::banking/fints/validation.creditor_profile')]);
         }
+        $creditor = LegalEntity::query()->findOrFail($profile->legal_entity_id);
         if (! $mandate instanceof DirectDebitMandate || ! $mandate->canCollect()) {
             throw ValidationException::withMessages(['direct_debit_mandate_id' => __('filament-accounting::banking/fints/validation.mandate_active')]);
         }
@@ -75,13 +77,13 @@ class CreateBankDirectDebit extends CreateRecord
             'bank_connection_id' => $account->bank_connection_id,
             'creditor_profile_id' => $profile->id,
             'direct_debit_mandate_id' => $mandate->id,
-            'creditor_name' => $profile->name,
+            'creditor_name' => $creditor->legal_name,
             'creditor_identifier' => $profile->creditor_identifier,
-            'creditor_street' => $profile->street,
-            'creditor_building_number' => $profile->building_number,
-            'creditor_postal_code' => $profile->postal_code,
-            'creditor_city' => $profile->city,
-            'creditor_country' => $profile->country,
+            'creditor_street' => $creditor->address_line1,
+            'creditor_building_number' => null,
+            'creditor_postal_code' => $creditor->postal_code,
+            'creditor_city' => $creditor->city,
+            'creditor_country' => $creditor->country_code,
             'debtor_name' => $mandate->debtor_name,
             'debtor_iban' => $mandate->debtor_iban,
             'debtor_bic' => $mandate->debtor_bic,

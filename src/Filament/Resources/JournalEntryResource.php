@@ -25,13 +25,13 @@ class JournalEntryResource extends Resource
 
     protected static ?string $slug = 'accounting/journal';
 
-    protected static ?int $navigationSort = 40;
+    protected static ?int $navigationSort = 10;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-book-open';
 
-    public static function getNavigationParentItem(): ?string
+    public static function getNavigationGroup(): ?string
     {
-        return AccountingNavigation::REPORTS;
+        return AccountingNavigation::section('reports');
     }
 
     public static function getNavigationLabel(): string

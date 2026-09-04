@@ -15,6 +15,24 @@ class CreateDirectDebitMandate extends CreateRecord
 {
     protected static string $resource = DirectDebitMandateResource::class;
 
+    public function mount(): void
+    {
+        parent::mount();
+
+        $account = PartyBankAccount::query()
+            ->where('legal_entity_id', app(OwnerScope::class)->require()->getKey())
+            ->whereKey(request()->integer('party_bank_account_id'))
+            ->when(request()->integer('party') > 0, fn ($query) => $query->where('party_id', request()->integer('party')))
+            ->first();
+
+        if ($account instanceof PartyBankAccount) {
+            $this->form->fill([
+                ...$this->form->getRawState(),
+                'party_bank_account_id' => $account->getKey(),
+            ]);
+        }
+    }
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $owner = app(OwnerScope::class)->require();
