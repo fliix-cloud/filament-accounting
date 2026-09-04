@@ -5,6 +5,7 @@ namespace FilamentAccounting;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\Width;
 use FilamentAccounting\Banking\FinTs\Filament\Pages\StrongAuthentication;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\BankConnectionResource;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\BankDirectDebitResource;
@@ -201,6 +202,7 @@ class FilamentAccountingPlugin implements Plugin
         }
 
         $panel
+            ->maxContentWidth(Width::Full)
             ->colors([
                 'accounting-negative' => Color::hex('#0072B2'),
                 'accounting-positive' => Color::hex('#009E73'),

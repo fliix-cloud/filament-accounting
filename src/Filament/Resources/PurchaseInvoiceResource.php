@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Filament\Resources;
 
+use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -23,11 +24,13 @@ use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\CreatePu
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\EditPurchaseInvoice;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ListPurchaseInvoices;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ViewPurchaseInvoice;
+use FilamentAccounting\Filament\Support\DocumentAttachmentActions;
 use FilamentAccounting\Filament\Support\InvoiceInfolist;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Models\TaxCode;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Services\DeletePurchaseInvoiceDraft;
 use FilamentAccounting\Support\MoneyFormatter;
 use FilamentAccounting\Support\ReferenceData;
 use Illuminate\Database\Eloquent\Builder;
@@ -67,6 +70,13 @@ class PurchaseInvoiceResource extends Resource
     protected static function ability(): string
     {
         return 'register_purchase_invoices';
+    }
+
+    public static function canDelete($record): bool
+    {
+        return $record instanceof Document
+            && $record->document_status === DocumentStatus::Draft
+            && static::canViewAny();
     }
 
     public static function getEloquentQuery(): Builder
@@ -216,6 +226,11 @@ class PurchaseInvoiceResource extends Resource
                 ->color(fn (PaymentStatus $state): string => $state->getColor()),
             TextColumn::make('settlements_count')
                 ->label(__('filament-accounting::fields.assigned_transactions')),
+        ])->recordActions([
+            ...DocumentAttachmentActions::table(),
+            DeleteAction::make()
+                ->visible(fn (Document $record): bool => $record->document_status === DocumentStatus::Draft)
+                ->using(fn (Document $record): bool => app(DeletePurchaseInvoiceDraft::class)->handle($record)),
         ]);
     }
 

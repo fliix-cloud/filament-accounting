@@ -9,6 +9,7 @@ return [
     'invalid_attachment' => 'The attachment is empty, too large, or has an invalid filename.',
     'unsupported_attachment_type' => 'Only PDF, XML, PNG, and JPEG attachments are supported.',
     'invalid_pdf' => 'The uploaded PDF is invalid or has no PDF signature.',
+    'purchase_invoice_pdf_required' => 'Every purchase invoice requires a PDF upload.',
     'unsafe_xml' => 'XML document type declarations and external entities are not allowed.',
     'invalid_xml' => 'The uploaded XML is not well formed.',
     'attachment_write_failed' => 'The private attachment could not be stored.',
@@ -66,4 +67,5 @@ return [
     'ledger_account_invalid' => 'Every journal account must be active and belong to the posting legal entity.',
     'only_draft_invoice_editable' => 'Only draft invoices can be edited.',
     'only_draft_invoice_issuable' => 'Only a sales invoice draft can be issued.',
+    'only_purchase_invoice_draft_deletable' => 'Only a purchase invoice draft can be deleted.',
 ];

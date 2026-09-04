@@ -17,7 +17,7 @@ use PHPUnit\Framework\Attributes\Test;
 class PurchaseInvoiceUploadTest extends TestCase
 {
     #[Test]
-    public function standalone_ubl_creates_one_unconfirmed_prefilled_draft_and_retries_idempotently(): void
+    public function pdf_with_separate_ubl_creates_one_unconfirmed_prefilled_draft_and_retries_idempotently(): void
     {
         Storage::fake('purchase-imports');
         config()->set('filament-accounting.storage.disk', 'purchase-imports');
@@ -26,12 +26,13 @@ class PurchaseInvoiceUploadTest extends TestCase
         $supplier = $this->makeParty($entity, ['is_customer' => false, 'is_supplier' => true, 'legal_name' => 'Vendor GmbH']);
         PartyTaxId::query()->create(['party_id' => $supplier->getKey(), 'type' => 'vat', 'number' => 'DE999999999', 'country_code' => 'DE']);
         $xml = $this->ublInvoice();
+        $pdf = $this->plainPdf();
 
-        $result = app(ImportPurchaseInvoice::class)->handle($entity, 'vendor-42.xml', $xml);
-        $retry = app(ImportPurchaseInvoice::class)->handle($entity, 'vendor-42.xml', $xml);
+        $result = app(ImportPurchaseInvoice::class)->handle($entity, 'vendor-42.pdf', $pdf, 'vendor-42.xml', $xml);
+        $retry = app(ImportPurchaseInvoice::class)->handle($entity, 'vendor-42.pdf', $pdf, 'vendor-42.xml', $xml);
 
         $this->assertTrue($result->structured);
-        $this->assertSame('ubl', $result->format);
+        $this->assertSame('pdf+ubl', $result->format);
         $this->assertSame('matched', $result->supplierMatch);
         $this->assertTrue($retry->idempotentRetry);
         $this->assertSame($result->document->getKey(), $retry->document->getKey());
@@ -42,22 +43,30 @@ class PurchaseInvoiceUploadTest extends TestCase
         $this->assertSame('DE-19', $result->document->lines->firstOrFail()->tax_code);
         $this->assertFalse($result->document->lines->firstOrFail()->classification_confirmed);
         $this->assertFalse($result->document->lines->firstOrFail()->tax_confirmed);
-        $this->assertCount(1, $result->document->attachments);
-        $this->assertSame($xml, app(ReadAttachment::class)->handle($result->document->attachments->firstOrFail()));
+        $this->assertCount(2, $result->document->attachments);
+        $xmlAttachment = $result->document->attachments->firstWhere('source_type', 'supplied_e_invoice');
+        $this->assertNotNull($xmlAttachment);
+        $this->assertSame($xml, app(ReadAttachment::class)->handle($xmlAttachment));
 
         $this->expectException(DocumentException::class);
         app(RegisterPurchaseInvoice::class)->receive($result->document);
     }
 
     #[Test]
-    public function standalone_ubl_creates_an_unambiguous_missing_supplier(): void
+    public function pdf_with_separate_ubl_creates_an_unambiguous_missing_supplier(): void
     {
         Storage::fake('purchase-imports');
         config()->set('filament-accounting.storage.disk', 'purchase-imports');
         $entity = $this->makeEntity();
         $this->actingAs($this->makeUser());
 
-        $result = app(ImportPurchaseInvoice::class)->handle($entity, 'vendor-42.xml', $this->ublInvoice());
+        $result = app(ImportPurchaseInvoice::class)->handle(
+            $entity,
+            'vendor-42.pdf',
+            $this->plainPdf(),
+            'vendor-42.xml',
+            $this->ublInvoice(),
+        );
         $supplier = Party::query()->where('legal_entity_id', $entity->getKey())->where('is_supplier', true)->sole();
 
         $this->assertSame('created', $result->supplierMatch);
@@ -68,7 +77,7 @@ class PurchaseInvoiceUploadTest extends TestCase
     }
 
     #[Test]
-    public function standalone_ubl_keeps_an_ambiguous_supplier_unassigned(): void
+    public function pdf_with_separate_ubl_keeps_an_ambiguous_supplier_unassigned(): void
     {
         Storage::fake('purchase-imports');
         config()->set('filament-accounting.storage.disk', 'purchase-imports');
@@ -77,7 +86,13 @@ class PurchaseInvoiceUploadTest extends TestCase
         $this->makeParty($entity, ['is_customer' => false, 'is_supplier' => true, 'legal_name' => 'Vendor GmbH']);
         $this->makeParty($entity, ['is_customer' => false, 'is_supplier' => true, 'legal_name' => 'Vendor GmbH']);
 
-        $result = app(ImportPurchaseInvoice::class)->handle($entity, 'vendor-42.xml', $this->ublInvoice());
+        $result = app(ImportPurchaseInvoice::class)->handle(
+            $entity,
+            'vendor-42.pdf',
+            $this->plainPdf(),
+            'vendor-42.xml',
+            $this->ublInvoice(),
+        );
 
         $this->assertSame('ambiguous', $result->supplierMatch);
         $this->assertNull($result->document->party_id);
@@ -107,7 +122,7 @@ class PurchaseInvoiceUploadTest extends TestCase
         $hybridPdf = app(ReadAttachment::class)->handle($salesInvoice->attachments()->where('source_type', 'generated_pdf')->firstOrFail());
 
         $hybrid = app(ImportPurchaseInvoice::class)->handle($entity, 'hybrid.pdf', $hybridPdf);
-        $plain = app(ImportPurchaseInvoice::class)->handle($entity, 'plain.pdf', "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF");
+        $plain = app(ImportPurchaseInvoice::class)->handle($entity, 'plain.pdf', $this->plainPdf());
 
         $this->assertTrue($hybrid->structured);
         $this->assertStringStartsWith('hybrid-', $hybrid->format);
@@ -127,13 +142,35 @@ class PurchaseInvoiceUploadTest extends TestCase
         $this->actingAs($this->makeUser());
 
         try {
-            app(ImportPurchaseInvoice::class)->handle($entity, 'unsafe.xml', '<!DOCTYPE Invoice [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><Invoice>&xxe;</Invoice>');
+            app(ImportPurchaseInvoice::class)->handle(
+                $entity,
+                'unsafe.pdf',
+                $this->plainPdf(),
+                'unsafe.xml',
+                '<!DOCTYPE Invoice [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><Invoice>&xxe;</Invoice>',
+            );
             $this->fail('XXE input must be rejected.');
         } catch (DocumentException) {
             $this->assertDatabaseCount('accounting_documents', 0);
             $this->assertDatabaseCount('accounting_attachments', 0);
             $this->assertSame([], Storage::disk('purchase-imports')->allFiles());
         }
+    }
+
+    #[Test]
+    public function standalone_xml_is_rejected_because_a_purchase_invoice_requires_pdf(): void
+    {
+        $entity = $this->makeEntity();
+
+        $this->expectException(DocumentException::class);
+        $this->expectExceptionMessage(__('filament-accounting::errors.purchase_invoice_pdf_required'));
+
+        app(ImportPurchaseInvoice::class)->handle($entity, 'vendor-42.xml', $this->ublInvoice());
+    }
+
+    private function plainPdf(): string
+    {
+        return "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF";
     }
 
     private function ublInvoice(): string

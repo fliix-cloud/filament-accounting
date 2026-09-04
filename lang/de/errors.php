@@ -9,6 +9,7 @@ return [
     'invalid_attachment' => 'Der Anhang ist leer, zu groß oder hat einen ungültigen Dateinamen.',
     'unsupported_attachment_type' => 'Es werden nur PDF-, XML-, PNG- und JPEG-Anhänge unterstützt.',
     'invalid_pdf' => 'Die hochgeladene PDF-Datei ist ungültig oder besitzt keine PDF-Signatur.',
+    'purchase_invoice_pdf_required' => 'Für jede Eingangsrechnung muss eine PDF-Datei hochgeladen werden.',
     'unsafe_xml' => 'XML-Dokumenttypdeklarationen und externe Entitäten sind nicht zulässig.',
     'invalid_xml' => 'Die hochgeladene XML-Datei ist nicht wohlgeformt.',
     'attachment_write_failed' => 'Der private Anhang konnte nicht gespeichert werden.',
@@ -66,4 +67,5 @@ return [
     'ledger_account_invalid' => 'Jedes Journal-Konto muss aktiv sein und zum buchenden Mandanten gehören.',
     'only_draft_invoice_editable' => 'Nur Rechnungsentwürfe können bearbeitet werden.',
     'only_draft_invoice_issuable' => 'Nur ein Ausgangsrechnungsentwurf kann freigegeben werden.',
+    'only_purchase_invoice_draft_deletable' => 'Nur ein Eingangsrechnungsentwurf kann gelöscht werden.',
 ];

@@ -51,6 +51,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $issued_at
  * @property Carbon|null $posted_at
  * @property-read Collection<int, DocumentLine> $lines
+ * @property-read Collection<int, Attachment> $attachments
  * @property-read OpenItem|null $openItem
  * @property-read Party|null $party
  * @property-read Collection<int, Settlement> $settlements

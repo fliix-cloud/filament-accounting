@@ -26,8 +26,17 @@ final class ImportPurchaseInvoice
         private readonly StoreAttachment $attachments,
     ) {}
 
-    public function handle(LegalEntity $entity, string $filename, string $contents): PurchaseInvoiceUploadResult
-    {
+    public function handle(
+        LegalEntity $entity,
+        string $filename,
+        string $contents,
+        ?string $xmlFilename = null,
+        ?string $xmlContents = null,
+    ): PurchaseInvoiceUploadResult {
+        if (strtolower((string) pathinfo($filename, PATHINFO_EXTENSION)) !== 'pdf') {
+            throw new DocumentException(__('filament-accounting::errors.purchase_invoice_pdf_required'));
+        }
+
         $hash = hash('sha256', $contents);
         $retry = Attachment::query()
             ->where('legal_entity_id', $entity->getKey())
@@ -47,6 +56,27 @@ final class ImportPurchaseInvoice
         }
 
         [$parsed, $embeddedXml, $format] = $this->inspect($filename, $contents);
+        $eInvoiceXml = $embeddedXml;
+        $eInvoiceFilename = $embeddedXml !== null
+            ? pathinfo($filename, PATHINFO_FILENAME).'-embedded.xml'
+            : null;
+        $eInvoiceSourceType = 'embedded_e_invoice';
+        if ($xmlContents !== null) {
+            if (! is_string($xmlFilename) || strtolower((string) pathinfo($xmlFilename, PATHINFO_EXTENSION)) !== 'xml') {
+                throw new DocumentException(__('filament-accounting::errors.invalid_e_invoice'));
+            }
+
+            $supplied = $this->parseXml($xmlContents, $xmlFilename);
+            if ($embeddedXml !== null && ! hash_equals(hash('sha256', $embeddedXml), hash('sha256', $xmlContents))) {
+                throw new DocumentException(__('filament-accounting::errors.embedded_xml_mismatch'));
+            }
+
+            $parsed = $supplied;
+            $eInvoiceXml = $xmlContents;
+            $eInvoiceFilename = $xmlFilename;
+            $eInvoiceSourceType = $embeddedXml !== null ? 'embedded_e_invoice' : 'supplied_e_invoice';
+            $format = ($embeddedXml !== null ? 'hybrid-' : 'pdf+').$supplied->formatKey;
+        }
         [$party, $match, $supplierCreated] = $parsed ? $this->matchSupplier($entity, $parsed) : [null, 'unmatched', false];
         $lines = $parsed ? array_map(fn (array $line): array => $this->importedLine($line), $parsed->lines) : [];
         $meta = [
@@ -80,13 +110,13 @@ final class ImportPurchaseInvoice
                 'format' => $format,
                 'structured' => $parsed instanceof EInvoiceParseResult,
             ]);
-            if ($embeddedXml !== null) {
+            if ($eInvoiceXml !== null && $eInvoiceFilename !== null) {
                 $this->attachments->handle(
                     $entity,
                     $document,
-                    pathinfo($filename, PATHINFO_FILENAME).'-embedded.xml',
-                    $embeddedXml,
-                    'embedded_e_invoice',
+                    $eInvoiceFilename,
+                    $eInvoiceXml,
+                    $eInvoiceSourceType,
                     ['format' => $parsed?->formatKey, 'extracted_from_sha256' => $hash],
                 );
             }
@@ -120,13 +150,7 @@ final class ImportPurchaseInvoice
 
             return [$parsed, $embedded, 'hybrid-'.$parsed->formatKey];
         }
-        if ($extension === 'xml') {
-            $parsed = $this->parseXml($contents, $filename);
-
-            return [$parsed, null, $parsed->formatKey];
-        }
-
-        throw new DocumentException(__('filament-accounting::errors.unsupported_attachment_type'));
+        throw new DocumentException(__('filament-accounting::errors.purchase_invoice_pdf_required'));
     }
 
     private function parseXml(string $contents, string $filename): EInvoiceParseResult
