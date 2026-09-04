@@ -19,7 +19,8 @@ final class DocumentAttachmentActions
             ->orderBy('created_at')
             ->get()
             ->map(fn (Attachment $attachment): Action => Action::make('attachment'.$attachment->getKey())
-                ->label(__('filament-accounting::actions.download_attachment', ['name' => $attachment->original_filename]))
+                ->label(self::label($attachment))
+                ->tooltip($attachment->original_filename)
                 ->icon(str_contains($attachment->mime_type, 'pdf') ? 'heroicon-o-document' : 'heroicon-o-code-bracket')
                 ->action(function () use ($attachment) {
                     $contents = app(ReadAttachment::class)->handle($attachment);
@@ -33,5 +34,16 @@ final class DocumentAttachmentActions
                     );
                 }))
             ->all();
+    }
+
+    private static function label(Attachment $attachment): string
+    {
+        $extension = strtolower(pathinfo($attachment->original_filename, PATHINFO_EXTENSION));
+
+        return match (true) {
+            $extension === 'pdf' || str_contains($attachment->mime_type, 'pdf') => 'PDF',
+            $extension === 'xml' || str_contains($attachment->mime_type, 'xml') => 'XML',
+            default => __('filament-accounting::actions.download_attachment', ['name' => $attachment->original_filename]),
+        };
     }
 }

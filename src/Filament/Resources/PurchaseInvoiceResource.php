@@ -3,10 +3,14 @@
 namespace FilamentAccounting\Filament\Resources;
 
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -19,6 +23,7 @@ use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\CreatePu
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\EditPurchaseInvoice;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ListPurchaseInvoices;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ViewPurchaseInvoice;
+use FilamentAccounting\Filament\Support\InvoiceInfolist;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Models\TaxCode;
@@ -68,7 +73,7 @@ class PurchaseInvoiceResource extends Resource
     {
         return app(LegalEntityScope::class)->constrain(parent::getEloquentQuery())
             ->where('type', DocumentType::PurchaseInvoice)
-            ->with(['party', 'openItem.settlements', 'settlements.reconciliation.statementLine'])
+            ->with(['party', 'lines.document', 'attachments', 'openItem.settlements', 'settlements.reconciliation.statementLine'])
             ->withCount('settlements');
     }
 
@@ -89,12 +94,27 @@ class PurchaseInvoiceResource extends Resource
             DatePicker::make('receipt_date')->label(__('filament-accounting::fields.receipt_date')),
             DatePicker::make('supply_date')->label(__('filament-accounting::fields.supply_date')),
             Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable()->required(),
+            self::totalsSection(),
             Repeater::make('lines')
                 ->label(__('filament-accounting::fields.lines'))
                 ->schema([
-                    TextInput::make('description')->label(__('filament-accounting::fields.description'))->required(),
-                    TextInput::make('quantity')->label(__('filament-accounting::fields.quantity'))->required(),
-                    TextInput::make('unit_price')->label(__('filament-accounting::fields.unit_price'))->required(),
+                    TextInput::make('description')
+                        ->label(__('filament-accounting::fields.description'))
+                        ->required()
+                        ->columnSpanFull(),
+                    TextInput::make('quantity')
+                        ->label(__('filament-accounting::fields.quantity'))
+                        ->required()
+                        ->columnSpan(2),
+                    Select::make('unit')
+                        ->label(__('filament-accounting::fields.unit'))
+                        ->options(fn (Get $get): array => ReferenceData::catalogUnits($get('unit')))
+                        ->searchable()
+                        ->columnSpan(2),
+                    TextInput::make('unit_price')
+                        ->label(__('filament-accounting::fields.unit_price'))
+                        ->required()
+                        ->columnSpan(2),
                     Select::make('classification_code')
                         ->label(__('filament-accounting::fields.expense_category'))
                         ->options([
@@ -111,7 +131,8 @@ class PurchaseInvoiceResource extends Resource
                             'personnel' => __('filament-accounting::fields.expense_categories.personnel'),
                             'suspense' => __('filament-accounting::fields.expense_categories.suspense'),
                         ])
-                        ->required(),
+                        ->required()
+                        ->columnSpan(3),
                     Select::make('tax_code')
                         ->label(__('filament-accounting::fields.tax_treatment'))
                         ->options(function (): array {
@@ -119,11 +140,57 @@ class PurchaseInvoiceResource extends Resource
 
                             return TaxCode::query()->where('legal_entity_id', $entity->getKey())->where('is_active', true)->orderBy('code')->pluck('name', 'code')->all();
                         })
-                        ->required(),
+                        ->required()
+                        ->columnSpan(3),
                     TextInput::make('imported_tax_code')->hidden(),
                 ])
-                ->defaultItems(1),
+                ->columns(12)
+                ->defaultItems(1)
+                ->columnSpanFull(),
         ]);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make(__('filament-accounting::fields.invoice_details'))
+                ->schema([
+                    TextEntry::make('party.legal_name')->label(__('filament-accounting::fields.supplier')),
+                    TextEntry::make('supplier_invoice_number')->label(__('filament-accounting::fields.supplier_invoice_number')),
+                    TextEntry::make('issue_date')->date()->label(__('filament-accounting::fields.issue_date')),
+                    TextEntry::make('receipt_date')->date()->label(__('filament-accounting::fields.receipt_date')),
+                    TextEntry::make('supply_date')->date()->label(__('filament-accounting::fields.supply_date')),
+                    TextEntry::make('currency')->label(__('filament-accounting::fields.currency')),
+                    InvoiceInfolist::originalFiles(),
+                ])
+                ->columns(3)
+                ->columnSpanFull(),
+            InvoiceInfolist::totals(),
+            InvoiceInfolist::lines(),
+        ]);
+    }
+
+    private static function totalsSection(): Section
+    {
+        return Section::make(__('filament-accounting::fields.totals'))
+            ->schema([
+                Placeholder::make('net_total')
+                    ->label(__('filament-accounting::fields.net'))
+                    ->content(fn (?Document $record): string => self::formatTotal($record, 'net_minor')),
+                Placeholder::make('gross_total')
+                    ->label(__('filament-accounting::fields.gross'))
+                    ->content(fn (?Document $record): string => self::formatTotal($record, 'gross_minor')),
+            ])
+            ->columns(2)
+            ->visible(fn (?Document $record): bool => $record instanceof Document)
+            ->columnSpanFull();
+    }
+
+    private static function formatTotal(?Document $record, string $attribute): string
+    {
+        return $record instanceof Document
+            ? MoneyFormatter::format((int) $record->getAttribute($attribute), $record->currency)
+            : '—';
     }
 
     public static function table(Table $table): Table

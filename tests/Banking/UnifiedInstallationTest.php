@@ -42,7 +42,7 @@ class UnifiedInstallationTest extends TestCase
     }
 
     #[Test]
-    public function package_migrations_describe_only_the_fresh_target_schema(): void
+    public function package_migrations_include_the_forward_schema_updates(): void
     {
         $migrationDirectory = __DIR__.'/../../database/migrations';
         $paths = glob($migrationDirectory.'/*.php') ?: [];
@@ -52,11 +52,12 @@ class UnifiedInstallationTest extends TestCase
             '2026_08_30_000001_create_filament_accounting_tables.php',
             '2026_08_31_000002_create_accounting_party_bank_accounts.php',
             '2026_09_01_000003_create_filament_accounting_banking_tables.php',
+            '2026_09_04_000004_add_tax_rule_to_reconciliation_splits.php',
+            '2026_09_04_000005_add_party_contact_columns.php',
         ], array_map('basename', $paths));
 
         foreach ($paths as $path) {
             $contents = (string) file_get_contents($path);
-            $this->assertStringNotContainsString('Schema::table(', $contents);
             $this->assertStringNotContainsString('Schema::hasTable(', $contents);
             $this->assertStringNotContainsString('Schema::hasColumn(', $contents);
             $this->assertStringNotContainsString('->change()', $contents);

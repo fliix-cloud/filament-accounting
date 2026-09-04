@@ -11,8 +11,11 @@ use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -27,6 +30,7 @@ use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\CreateSales
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\EditSalesInvoice;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\ListSalesInvoices;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\ViewSalesInvoice;
+use FilamentAccounting\Filament\Support\InvoiceInfolist;
 use FilamentAccounting\Models\CatalogItem;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\Party;
@@ -81,7 +85,7 @@ class SalesInvoiceResource extends Resource
     {
         return app(LegalEntityScope::class)->constrain(parent::getEloquentQuery())
             ->where('type', DocumentType::SalesInvoice)
-            ->with(['party', 'openItem.settlements', 'settlements.reconciliation.statementLine'])
+            ->with(['party', 'lines.document', 'attachments', 'openItem.settlements', 'settlements.reconciliation.statementLine'])
             ->withCount('settlements');
     }
 
@@ -107,6 +111,7 @@ class SalesInvoiceResource extends Resource
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
             Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable()->required()
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
+            self::totalsSection(),
             Repeater::make('lines')
                 ->label(__('filament-accounting::fields.lines'))
                 ->schema([
@@ -156,18 +161,20 @@ class SalesInvoiceResource extends Resource
                             $set('tax_suggestion_explanation', $suggestion->explanation);
                             $set('tax_requires_confirmation', $suggestion->requiresConfirmation);
                             $set('tax_confirmed', ! $suggestion->requiresConfirmation);
-                        }),
+                        })
+                        ->columnSpan(3),
                     RichEditor::make('description')
                         ->label(__('filament-accounting::fields.description'))
                         ->toolbarButtons([['bold', 'italic'], ['bulletList', 'orderedList']])
                         ->required()
-                        ->columnSpanFull(),
-                    TextInput::make('quantity')->label(__('filament-accounting::fields.quantity'))->required(),
+                        ->columnSpan(9),
+                    TextInput::make('quantity')->label(__('filament-accounting::fields.quantity'))->required()->columnSpan(2),
                     Select::make('unit')
                         ->label(__('filament-accounting::fields.unit'))
                         ->options(fn (Get $get): array => ReferenceData::catalogUnits($get('unit')))
-                        ->searchable(),
-                    TextInput::make('unit_price')->label(__('filament-accounting::fields.unit_price'))->numeric()->required(),
+                        ->searchable()
+                        ->columnSpan(2),
+                    TextInput::make('unit_price')->label(__('filament-accounting::fields.unit_price'))->numeric()->required()->columnSpan(2),
                     Select::make('tax_code')
                         ->label(__('filament-accounting::fields.tax_treatment'))
                         ->options(fn (): array => TaxCode::query()
@@ -176,20 +183,68 @@ class SalesInvoiceResource extends Resource
                             ->orderBy('code')
                             ->pluck('name', 'code')
                             ->all())
-                        ->required(),
+                        ->required()
+                        ->columnSpan(3),
                     Hidden::make('tax_suggestion_explanation'),
                     Hidden::make('tax_requires_confirmation'),
-                    Placeholder::make('tax_suggestion')
-                        ->label(__('filament-accounting::fields.tax_suggestion'))
-                        ->content(fn (Get $get): string => (string) ($get('tax_suggestion_explanation') ?: __('filament-accounting::fields.tax_suggestion_help'))),
-                    Toggle::make('tax_confirmed')
-                        ->label(__('filament-accounting::fields.confirm_tax_suggestion'))
-                        ->visible(fn (Get $get): bool => (bool) $get('tax_requires_confirmation'))
-                        ->accepted(fn (Get $get): bool => (bool) $get('tax_requires_confirmation')),
+                    Group::make([
+                        Placeholder::make('tax_suggestion')
+                            ->label(__('filament-accounting::fields.tax_suggestion'))
+                            ->content(fn (Get $get): string => (string) ($get('tax_suggestion_explanation') ?: __('filament-accounting::fields.tax_suggestion_help'))),
+                        Toggle::make('tax_confirmed')
+                            ->label(__('filament-accounting::fields.confirm_tax_suggestion'))
+                            ->visible(fn (Get $get): bool => (bool) $get('tax_requires_confirmation'))
+                            ->accepted(fn (Get $get): bool => (bool) $get('tax_requires_confirmation')),
+                    ])->columnSpan(3),
                 ])
+                ->columns(12)
                 ->defaultItems(1)
-                ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
+                ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false)
+                ->columnSpanFull(),
         ]);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make(__('filament-accounting::fields.invoice_details'))
+                ->schema([
+                    TextEntry::make('number')->label(__('filament-accounting::fields.number')),
+                    TextEntry::make('party.legal_name')->label(__('filament-accounting::fields.customer')),
+                    TextEntry::make('issue_date')->date()->label(__('filament-accounting::fields.issue_date')),
+                    TextEntry::make('supply_date')->date()->label(__('filament-accounting::fields.supply_date')),
+                    TextEntry::make('due_date')->date()->label(__('filament-accounting::fields.due_date')),
+                    TextEntry::make('currency')->label(__('filament-accounting::fields.currency')),
+                    InvoiceInfolist::originalFiles(),
+                ])
+                ->columns(3)
+                ->columnSpanFull(),
+            InvoiceInfolist::totals(),
+            InvoiceInfolist::lines(),
+        ]);
+    }
+
+    private static function totalsSection(): Section
+    {
+        return Section::make(__('filament-accounting::fields.totals'))
+            ->schema([
+                Placeholder::make('net_total')
+                    ->label(__('filament-accounting::fields.net'))
+                    ->content(fn (?Document $record): string => self::formatTotal($record, 'net_minor')),
+                Placeholder::make('gross_total')
+                    ->label(__('filament-accounting::fields.gross'))
+                    ->content(fn (?Document $record): string => self::formatTotal($record, 'gross_minor')),
+            ])
+            ->columns(2)
+            ->visible(fn (?Document $record): bool => $record instanceof Document)
+            ->columnSpanFull();
+    }
+
+    private static function formatTotal(?Document $record, string $attribute): string
+    {
+        return $record instanceof Document
+            ? MoneyFormatter::format((int) $record->getAttribute($attribute), $record->currency)
+            : '—';
     }
 
     public static function table(Table $table): Table
