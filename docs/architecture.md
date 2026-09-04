@@ -1,100 +1,91 @@
 # Architecture
 
-`fliix-cloud/filament-accounting` is the single Laravel/Filament product package.
-A host installs it through Composer and registers only
-`FilamentAccountingPlugin`. The framework-free `nemiah/php-fints` library
-is transitive and exposes only the `Fhp\` protocol namespace.
+`filament-accounting` is one Laravel package with one service provider, one
+Filament plugin, and one accounting boundary. `nemiah/php-fints` remains a
+framework-independent protocol dependency; all application behavior lives in
+this repository.
 
-## Runtime boundary
+## Scope
 
-```text
-Host application
-└── fliix-cloud/filament-accounting
-    ├── FilamentAccountingServiceProvider
-    ├── FilamentAccountingPlugin
-    ├── one filament-accounting configuration
-    ├── Accounting, documents, tax, audit and reconciliation modules
-    └── Banking/FinTs product integration
-        └── nemiah/php-fints (Fhp\ protocol core, no framework integration)
-```
+The package currently provides:
 
-The runtime has one provider, one Filament plugin, one trusted Legal Entity
-boundary, and one canonical set of accounting and banking models.
+- customers, suppliers, catalog items, and sales and purchase invoices;
+- a first-party double-entry ledger, open items, periods, and reversals;
+- versioned tax and posting rules with a Germany-first profile;
+- FinTS account, balance, and transaction synchronization;
+- SEPA transfers, direct debits, mandates, and SCA workflows;
+- bank reconciliation with direct assignments, partial payments, and splits;
+- invoice attachments, structured e-invoices, and audit evidence.
 
-## Internal modules
+Fixed assets, payroll, cash-register/TSE workflows, consolidation, and complete
+foreign tax advice are outside the current scope.
 
-```text
-src/
-├── Audit/           hash-chain, anchors, evidence export and verification
-├── Authorization/   host abilities and trusted authorization boundary
-├── Banking/
-│   ├── FinTs/       connections, SCA, sync, payments, mandates and I/O adapters
-│   └── Services/    canonical bank import and ledger provisioning
-├── Compliance/      product profiles; version 0.1 is Germany-first
-├── Documents/       invoice intake, storage, categories and document services
-├── EInvoicing/      structured invoice adapters
-├── Export/          controlled accounting exports
-├── Filament/        thin localized UI orchestration
-├── Ledger/          balanced journal engine and period controls
-├── Models/          canonical persisted product models
-├── Ownership/       Legal Entity, actor and tenant-context boundaries
-├── Reconciliation/  deterministic matching, learning and split validation
-├── Tax/             explainable sales-tax suggestions
-└── Services/        application workflows
-```
+## Boundaries
 
-## Domain flow
+`LegalEntity` is the reporting and integrity boundary. The default resolver
+expects exactly one company per application instance. The host resolves the
+current actor and authorization separately; request data never selects the
+company. Queue jobs carry scalar identifiers and activate the trusted context
+before loading records.
 
-```text
-FinTS client
-  → account/balance/transaction sync services
-  → UnifiedBankTransactionImporter
-  → canonical BankStatementLine
-  → append-only BankTransactionSourceVersion
-  → deterministic suggestions / user-confirmed reconciliation
-  → immutable balanced journal and settlements
-```
+`AccountingBankAccount` and `BankStatementLine` are the canonical bank models.
+FinTS imports directly into them. Material source changes create append-only
+`BankTransactionSourceVersion` records instead of silently changing posted
+accounting data.
 
-`AccountingBankAccount` is the canonical account and receives its internal asset
-account idempotently from `BankLedgerAccountProvisioner`. Bank connection,
-availability, user activation, balances, and sync timestamps remain on the same
-product record. Users do not choose ledger mappings.
+Core business rules live in services and contracts. Filament resources provide
+the UI but are not the security or accounting boundary.
 
-`BankStatementLine` is the canonical bank transaction. Source identity is stable per Legal
-Entity/account/source ID. A retry with identical evidence is a no-op. A material
-bank change creates a source version; posted values are preserved and flagged
-for review rather than overwritten.
+## Accounting rules
 
-## Ownership and security
+- Money uses integer minor units and exact decimal conversion, never floats.
+- A posted journal has at least two non-zero lines and balanced debits/credits.
+- Posting is idempotent per Legal Entity and idempotency key.
+- Hard-closed periods reject new postings.
+- Posted journals and issued documents are immutable.
+- Corrections create linked reversals; they do not edit accounting history.
+- Document payment state is derived from open items and active settlements.
+- Tax and posting rules are versioned by effective date.
 
-`LegalEntity` is the only company/tenant boundary. Trusted resolvers determine
-the current entity and actor. Request parameters never select tenancy. Queue jobs
-carry scalar durable identities and activate tenancy before querying models.
+Purchase invoices start with a PDF upload. A separate XML e-invoice may be
+attached for structured import. The user confirms the business category before
+registration; the package resolves the internal ledger account.
 
-PIN, user ID, dialog state, SCA payload, and payment state remain encrypted or
-redacted. Endpoints are HTTPS-only by default and validated against private-host
-and allow-list policy. Ambiguous payment submissions are not automatically
-retried. SCA challenges are tenant/ability scoped, non-cacheable, `nosniff`, and
-sandboxed for SVG content.
+## Reconciliation
 
-## Business boundaries
+A direct assignment consumes one complete bank transaction, even when it only
+partially settles an invoice. A split is required when one transaction targets
+two or more invoices, categories, or ledger purposes. Allocation amounts are
+signed, currency-matched, and must equal the transaction exactly.
 
-- `LedgerEngine` owns double-entry posting; posted entries are immutable and
-  corrections use reversals.
-- Documents store exact minor-unit amounts, commercial snapshots, attachments,
-  and selected tax/accounting decisions.
-- Tax rates are time-versioned. Germany-first recommendations consider seller
-  country, customer country, business/private status, VAT ID, item type, date,
-  and item tax class. Ambiguity requires confirmation.
-- Purchase invoices start with upload/manual intake and require a user-confirmed
-  business category. The category resolves the internal account.
-- Reconciliation distinguishes a single direct/partial assignment from a split
-  of at least two positions. Local learning is explainable and never auto-posts.
+`FinalizeReconciliation` locks the relevant records, validates ownership and
+amounts, posts one balanced journal, creates settlements, and marks the result
+as posted in one database transaction. Reversals restore the accounting state
+without deleting history.
 
-All money is persisted as integer minor units and processed via
-`FilamentAccounting\Support\ExactMoney` / `brick/money`; floats are not business
-amounts. E-invoice generation and validation remain PHP-only per
-[ADR 0002](adr/0002-php-only-e-invoice-validation.md).
+Suggestions are deterministic and explainable. Confirmed local learning rules
+can improve later rankings, but suggestions never post automatically and never
+cross Legal Entities.
 
-The product and protocol boundaries are documented in
-[ADR 0003](adr/0003-unified-accounting-package.md).
+## E-invoices and security
+
+Structured invoices use `horstoeko/zugferd`. Generation is based on the issued
+document snapshot. XML and PDF checks run in PHP without Java or remote
+validation services. These checks support validation but do not constitute an
+independent conformity certification.
+
+Attachments use a private Laravel disk and content-based MIME detection.
+Credentials, dialog state, SCA data, and resumable payment state are encrypted
+or redacted. FinTS endpoints require HTTPS by default, and ambiguous payment
+submissions are not retried automatically.
+
+The package records critical actions in a per-company SHA-256 audit chain.
+External anchors make later manipulation detectable when stored outside the
+application's normal database and permission boundary.
+
+## Extension points
+
+Host applications may replace the documented contracts for ownership, actor
+resolution, tenancy activation, authorization, compliance profiles, audit
+anchor storage, accounting export, and e-invoice handling. The first-party
+ledger remains behind `LedgerEngine`.

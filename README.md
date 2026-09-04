@@ -48,7 +48,8 @@ php artisan filament-accounting:audit-export ENTITY_UUID exports/audit-evidence.
 php artisan filament-accounting:audit-verify-file exports/audit-evidence.json --json
 ```
 
-See [Audit-chain integrity and external anchors](docs/audit-integrity.md) for the required trust boundary, configuration, scheduling, and residual risks.
+See [Operations](docs/operations.md) for the required trust boundary,
+configuration, scheduling, and residual risks.
 
 Register the plugin on a Filament panel:
 
@@ -72,19 +73,21 @@ There is no data-upgrade or consolidation workflow.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
-- [ADR: unified accounting package](docs/adr/0003-unified-accounting-package.md)
-- [Upstream php-fints policy](docs/upstream/php-fints-upstream-policy.md)
-- [Domain model](docs/domain-model.md)
-- [Ledger invariants](docs/ledger-invariants.md)
-- [Bank reconciliation](docs/bank-reconciliation.md)
-- [Ownership and tenancy](docs/ownership-tenancy.md)
-- [Germany compliance](docs/germany-compliance.md)
-- [E-invoicing](docs/e-invoicing.md)
-- [Security](docs/security.md)
-- [Local development](docs/LOCAL_DEVELOPMENT.md)
-- [Operations and retention](docs/operations-and-retention.md)
-- [ADR: ledger engine](docs/adr/0001-ledger-engine.md)
+- [Architecture](docs/architecture.md) — scope, boundaries, accounting rules,
+  reconciliation, e-invoices, and extension points
+- [Operations](docs/operations.md) — production responsibilities, audit anchors,
+  retention, recovery, and release checks
+
+## Development
+
+```bash
+composer install
+composer check
+vendor/bin/testbench serve
+```
+
+The workbench panel is available at `/admin`. On Windows, run
+`scripts/setup-herd-demo.ps1` to link the package into the optional Herd demo.
 
 ## License
 
