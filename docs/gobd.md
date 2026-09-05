@@ -54,7 +54,8 @@ baseline; the detailed findings retain that baseline as their reference.
 | Findings | Implemented in this change | Still required |
 | --- | --- | --- |
 | F1 / F3 | Purchase draft disposal now retains the document, lines, PDF/XML, and an actor/reason audit event. It requires a dedicated permission, current company scope, and a locked persisted draft. UI offers “Discard draft”; physical deletion is disabled. | Preserve failed/rejected imports before parsing; complete intake history and recovery workflows. |
-| F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. | Bulk/SQL protection, concurrent mutation evidence, business snapshots bound to audit hashes, and controlled correction workflows. |
+| F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. | Bulk/SQL write prevention, concurrent mutation evidence, and controlled correction workflows. |
+| F2 / F8 / F10 | Each ledger posting includes a versioned full journal snapshot and SHA-256 digest in its audit event. Verification compares both directions and detects changed/missing journal data. Account/period values are frozen at posting. CSV exports use checked historical records and refuse integrity failures. | Bind document, attachment, settlement, and other business contents to evidence; protect storage and database privileges; complete the machine-readable audit export. This is journal tamper detection, not prevention of privileged SQL writes. |
 | F3 | Undefined Gates now deny access; the provider no longer creates permissive fallback Gates. Tests explicitly configure fixture permissions; hosts must configure their own Gates. | Complete the authorization audit of all public mutation paths and integrations. |
 | F5 | Closing cannot weaken a hard lock. Reopening requires a separate permission and non-blank reason. Both record before/after state, use the accounting connection, and lock entity before period. Repeated close is idempotent. | Production database concurrency tests and protection against direct period-model/SQL changes. |
 | F6 / F9 | Posting reloads persisted state and accepts only issued sales invoices or received purchase invoices. Ledger posting/reversal and changed document/period services use the accounting connection. | Currency/discount/tax correctness; connection consistency in the remaining services and cross-connection rollback tests. |
@@ -66,8 +67,15 @@ the [Filament discard workflow](../tests/Filament/InvoiceLayoutTest.php).
 [CI for implementation commit 8560ff7](https://github.com/fliix-cloud/filament-accounting/actions/runs/33946659939)
 passed all 162 tests on PHP 8.3/8.4/8.5, PHPStan, Pint, and Composer validation
 (1,735 assertions on PHP 8.3). Local PHP/Composer execution remains unavailable.
-This proves the covered regressions, not production concurrency or storage
-immutability. F7–F8 and F10–F12 remain open; see the [upgrade notes](operations.md).
+This proves the first implementation slice, not production concurrency or storage
+immutability. The subsequent [journal evidence tests](../tests/Audit/JournalIntegrityTest.php)
+are awaiting CI verification. F7–F12 are not fully resolved; see [operations](operations.md).
+
+**Development schema:** there are no installed/production databases to migrate.
+The base migration now includes journal `period_snapshot` and line
+`account_snapshot` JSON columns. Drafts may omit them; posted entries without
+complete snapshots and exactly one posting event fail verification. Rebuild
+disposable DEV databases; no backfill or legacy-evidence acceptance is supplied.
 
 ## Existing foundation
 

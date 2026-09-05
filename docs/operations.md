@@ -28,7 +28,7 @@ Gate. Define the mapped Gates in `authorization.abilities`, including the new
 `AccountingAuthorizer` implementation. Each Gate must check the actual actor,
 role, and company. Authentication alone grants no accounting permission.
 This also applies to workbench installations; the test suite's permissive Gates
-are test fixtures only. Existing hosts must configure access before upgrading.
+are test fixtures only. Configure access explicitly in every development host.
 
 ## Audit anchors
 
@@ -67,6 +67,19 @@ The export is tamper-evident, not digitally signed. An auditor still needs an
 independently obtained anchor or hash to rule out replacement of both database
 history and exported evidence.
 
+Every ledger posting stores a versioned journal snapshot and digest inside its
+audit event. `filament-accounting:verify` compares the stored journal against
+that evidence, including missing records and altered historical account/period
+values. The generic CSV exporter checks the entity's ledger, chain, and configured
+anchors before exporting the verified historical values; corruption outside the
+requested date range also blocks the export. Documents and settlements do not
+yet have equivalent content verification.
+
+These checks detect journal changes; they do not prevent privileged SQL writes.
+Independent anchors remain necessary to detect a coordinated rewrite of the
+journal, snapshot, and local audit hashes. Run them frequently enough for the
+operator's required detection window.
+
 ## Retention and recovery
 
 Do not cascade-delete issued documents, original attachments, posted journals,
@@ -96,8 +109,10 @@ Run the repository quality gate before release:
 composer check
 ```
 
-For pre-release schema changes, rebuild development databases and verify the
-fresh installation:
+There are no production installations yet. Schema changes are made directly in
+the base migrations: rebuild **disposable DEV databases only** and verify the
+fresh installation. No legacy backfill fabricates evidence for old postings.
+Journal snapshots are mandatory for verification of posted entries.
 
 ```bash
 php artisan migrate:fresh --seed

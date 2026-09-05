@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'journal_integrity_failed' => 'Die Prüfung der Buchungs- oder Audit-Daten ist fehlgeschlagen. Export abgebrochen; bitte mit filament-accounting:verify untersuchen.',
     'legal_entity_already_exists' => 'Für diese Instanz ist bereits ein Unternehmen eingerichtet.',
     'multiple_legal_entities' => 'Die Instanz enthält mehr als ein Unternehmen. Das Single-Mandanten-Datenmodell ist verletzt.',
     'tax_suggestion_confirmation_required' => 'Der vorgeschlagene Steuerfall ist nicht eindeutig und muss ausdrücklich bestätigt werden.',

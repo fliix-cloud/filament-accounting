@@ -80,6 +80,10 @@ or redacted. FinTS endpoints require HTTPS by default, and ambiguous payment
 submissions are not retried automatically.
 
 The package records critical actions in a per-company SHA-256 audit chain.
+Journal posting captures the complete persisted journal and its lines in a
+versioned, hashed audit payload. Account and period snapshots preserve historical
+export values. Verification detects changed, missing, and unsealed postings;
+CSV export refuses failed ledger, audit-chain, or configured-anchor checks.
 External anchors make later manipulation detectable when stored outside the
 application's normal database and permission boundary.
 

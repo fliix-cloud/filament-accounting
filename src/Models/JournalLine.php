@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property int $journal_entry_id
  * @property int $ledger_account_id
+ * @property array<string, mixed>|null $account_snapshot
  * @property int $position
  * @property int $debit_minor
  * @property int $credit_minor
@@ -29,6 +30,7 @@ class JournalLine extends AccountingModel
     protected $fillable = [
         'journal_entry_id',
         'ledger_account_id',
+        'account_snapshot',
         'position',
         'debit_minor',
         'credit_minor',
@@ -43,6 +45,7 @@ class JournalLine extends AccountingModel
     protected function casts(): array
     {
         return [
+            'account_snapshot' => 'array',
             'position' => 'integer',
             'debit_minor' => 'integer',
             'credit_minor' => 'integer',

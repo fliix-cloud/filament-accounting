@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property int $legal_entity_id
  * @property string|null $sequence
  * @property int $period_id
+ * @property array<string, mixed>|null $period_snapshot
  * @property Carbon $posted_on
  * @property JournalStatus $status
  * @property string $source_type
@@ -45,6 +46,7 @@ class JournalEntry extends AccountingModel
         'legal_entity_id',
         'sequence',
         'period_id',
+        'period_snapshot',
         'posted_on',
         'status',
         'source_type',
@@ -64,6 +66,7 @@ class JournalEntry extends AccountingModel
     protected function casts(): array
     {
         return [
+            'period_snapshot' => 'array',
             'posted_on' => 'date',
             'status' => JournalStatus::class,
             'posted_at' => 'datetime',

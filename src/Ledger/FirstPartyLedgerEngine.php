@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Ledger;
 
+use FilamentAccounting\Audit\JournalSnapshot;
 use FilamentAccounting\Contracts\LedgerEngine;
 use FilamentAccounting\Enums\JournalStatus;
 use FilamentAccounting\Enums\PeriodState;
@@ -14,12 +15,14 @@ use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Services\AuditLogger;
 use FilamentAccounting\Services\ResolveAccountingPeriod;
+use Illuminate\Database\Eloquent\Collection;
 
 final class FirstPartyLedgerEngine implements LedgerEngine
 {
     public function __construct(
         private readonly ResolveAccountingPeriod $periods,
         private readonly AuditLogger $audit,
+        private readonly JournalSnapshot $snapshots,
     ) {}
 
     public function post(PostJournalCommand $command): JournalEntry
@@ -38,7 +41,7 @@ final class FirstPartyLedgerEngine implements LedgerEngine
                 }
             }
 
-            $this->assertLines($entity, $command->lines);
+            $accounts = $this->assertLines($entity, $command->lines);
 
             $period = $this->periods->covering($entity, $command->postedOn, lock: true);
 
@@ -62,6 +65,14 @@ final class FirstPartyLedgerEngine implements LedgerEngine
                 'legal_entity_id' => $entity->getKey(),
                 'sequence' => $this->nextSequence($entity),
                 'period_id' => $period->getKey(),
+                'period_snapshot' => [
+                    'id' => (int) $period->getKey(),
+                    'uuid' => (string) $period->uuid,
+                    'fiscal_year' => (int) $period->fiscal_year,
+                    'period_number' => (int) $period->period_number,
+                    'starts_on' => $period->starts_on->toDateString(),
+                    'ends_on' => $period->ends_on->toDateString(),
+                ],
                 'posted_on' => $command->postedOn,
                 'status' => JournalStatus::Draft,
                 'source_type' => $command->sourceType,
@@ -80,10 +91,21 @@ final class FirstPartyLedgerEngine implements LedgerEngine
             $entry->save();
 
             foreach ($command->lines as $index => $draft) {
+                $account = $accounts->find($draft->ledgerAccountId)
+                    ?? throw new UnbalancedJournalException(__('filament-accounting::errors.ledger_account_invalid'));
                 $line = new JournalLine;
                 $line->fill([
                     'journal_entry_id' => $entry->getKey(),
                     'ledger_account_id' => $draft->ledgerAccountId,
+                    'account_snapshot' => [
+                        'id' => (int) $account->getKey(),
+                        'uuid' => (string) $account->uuid,
+                        'code' => (string) $account->code,
+                        'name' => (string) $account->name,
+                        'type' => $account->type->value,
+                        'normal_balance' => $account->normal_balance->value,
+                        'currency' => $account->currency,
+                    ],
                     'position' => $index + 1,
                     'debit_minor' => $draft->debitMinor,
                     'credit_minor' => $draft->creditMinor,
@@ -100,9 +122,14 @@ final class FirstPartyLedgerEngine implements LedgerEngine
             $entry->status = JournalStatus::Posted;
             $entry->save();
 
+            // Capture database-normalized values after the final state transition.
+            $entry->refresh()->load('lines');
+            $snapshot = $this->snapshots->capture($entry);
             $this->audit->log($entity, 'journal.posted', $entry, [
                 'sequence' => $entry->sequence,
                 'source_type' => $entry->source_type,
+                'journal_snapshot' => $snapshot,
+                'snapshot_sha256' => $this->snapshots->hash($snapshot),
             ]);
 
             $entity->getConnection()->afterCommit(fn () => JournalPosted::dispatch($entry->fresh(['lines'])));
@@ -177,8 +204,9 @@ final class FirstPartyLedgerEngine implements LedgerEngine
 
     /**
      * @param  list<JournalLineDraft>  $lines
+     * @return Collection<int, LedgerAccount>
      */
-    private function assertLines(LegalEntity $entity, array $lines): void
+    private function assertLines(LegalEntity $entity, array $lines): Collection
     {
         if (count($lines) < 2) {
             throw new UnbalancedJournalException(__('filament-accounting::errors.journal_min_lines'));
@@ -203,15 +231,19 @@ final class FirstPartyLedgerEngine implements LedgerEngine
             ->unique()
             ->values();
 
-        $validAccountCount = LedgerAccount::query()
+        $accounts = LedgerAccount::query()
             ->where('legal_entity_id', $entity->getKey())
             ->where('is_active', true)
             ->whereIn('id', $accountIds)
-            ->count();
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
 
-        if ($validAccountCount !== $accountIds->count()) {
+        if ($accounts->count() !== $accountIds->count()) {
             throw new UnbalancedJournalException(__('filament-accounting::errors.ledger_account_invalid'));
         }
+
+        return $accounts;
     }
 
     private function nextSequence(LegalEntity $entity): string
