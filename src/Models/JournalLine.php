@@ -54,7 +54,7 @@ class JournalLine extends AccountingModel
     protected static function booted(): void
     {
         static::saving(function (self $line): void {
-            if (($line->exists && $line->isDirty('journal_entry_id')) || self::parentIsPosted($line)) {
+            if (($line->exists && $line->isDirty([$line->getKeyName(), 'journal_entry_id'])) || self::parentIsPosted($line)) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.journal_line_immutable')
                 );

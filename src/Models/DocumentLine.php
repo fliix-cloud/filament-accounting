@@ -98,7 +98,7 @@ class DocumentLine extends AccountingModel
     protected static function booted(): void
     {
         static::saving(function (self $line): void {
-            if (($line->exists && $line->isDirty('document_id')) || self::parentIsProtected($line)) {
+            if (($line->exists && $line->isDirty([$line->getKeyName(), 'document_id'])) || self::parentIsProtected($line)) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.document_line_immutable')
                 );

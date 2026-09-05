@@ -146,8 +146,8 @@ class Document extends AccountingModel
     protected static function booted(): void
     {
         static::updating(function (self $document): void {
-            $stored = self::query()->findOrFail($document->getKey());
-            $protected = ['legal_entity_id', 'uuid', 'type', 'direction', 'created_by_type', 'created_by_id'];
+            $stored = self::query()->findOrFail($document->getRawOriginal($document->getKeyName()));
+            $protected = [$document->getKeyName(), 'legal_entity_id', 'uuid', 'type', 'direction', 'created_by_type', 'created_by_id'];
 
             if ($stored->document_status !== DocumentStatus::Draft || $stored->isPosted()) {
                 $protected = array_merge($protected, self::COMMERCIAL_FIELDS, [
@@ -178,7 +178,7 @@ class Document extends AccountingModel
         });
 
         static::deleting(function (self $document): void {
-            $stored = self::query()->findOrFail($document->getKey());
+            $stored = self::query()->findOrFail($document->getRawOriginal($document->getKeyName()));
             if ($stored->type === DocumentType::PurchaseInvoice || $stored->isIssuedOrReceived() || $stored->isPosted()) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.document_immutable')

@@ -112,12 +112,14 @@ class RecordProtectionTest extends TestCase
         $draft = $this->draft($entity);
         $stale = $draft->fresh();
         $draft->update(['document_status' => DocumentStatus::Received]);
+        $other = $this->draft($entity);
 
         foreach ([
             fn () => $draft->fresh()->update(['document_status' => DocumentStatus::Draft]),
             fn () => $draft->fresh()->update(['legal_entity_id' => 999]),
             fn () => $draft->fresh()->update(['type' => DocumentType::SalesInvoice]),
             fn () => $stale->update(['gross_minor' => 1]),
+            fn () => $draft->fresh()->update(['id' => $other->getKey(), 'gross_minor' => 1]),
             fn () => $stale->delete(),
         ] as $operation) {
             $this->assertImmutable($operation);

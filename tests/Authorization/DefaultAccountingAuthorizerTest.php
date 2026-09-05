@@ -21,6 +21,7 @@ class DefaultAccountingAuthorizerTest extends TestCase
     #[Test]
     public function undefined_abilities_deny_authenticated_and_anonymous_actors(): void
     {
+        $this->assertFalse(Gate::has('accounting.documents.post'));
         $authorizer = app(AccountingAuthorizer::class);
         $this->assertFalse($authorizer->can('post_documents'));
         $this->actingAs($this->makeUser());

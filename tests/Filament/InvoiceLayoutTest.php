@@ -146,6 +146,11 @@ class InvoiceLayoutTest extends TestCase
         $document->e_invoice_meta = ['structured' => true];
 
         Livewire::test(ListPurchaseInvoices::class)
+            ->callTableAction('discard', $document, ['reason' => ''])
+            ->assertHasTableActionErrors(['reason' => 'required']);
+        $this->assertSame(DocumentStatus::Draft, $document->fresh()->document_status);
+
+        Livewire::test(ListPurchaseInvoices::class)
             ->callTableAction('discard', $document, ['reason' => 'Duplicate intake'])
             ->assertHasNoTableActionErrors();
 

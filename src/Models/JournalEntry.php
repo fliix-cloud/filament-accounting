@@ -73,7 +73,8 @@ class JournalEntry extends AccountingModel
     protected static function booted(): void
     {
         static::updating(function (self $entry): void {
-            if (self::originalIsPosted($entry) || self::query()->whereKey($entry->getKey())->where('status', JournalStatus::Posted)->exists()) {
+            if ($entry->isDirty($entry->getKeyName()) || self::originalIsPosted($entry)
+                || self::query()->whereKey($entry->getRawOriginal($entry->getKeyName()))->where('status', JournalStatus::Posted)->exists()) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.journal_immutable')
                 );
@@ -82,7 +83,7 @@ class JournalEntry extends AccountingModel
 
         static::deleting(function (self $entry): void {
             if ($entry->status === JournalStatus::Posted || self::originalIsPosted($entry)
-                || self::query()->whereKey($entry->getKey())->where('status', JournalStatus::Posted)->exists()) {
+                || self::query()->whereKey($entry->getRawOriginal($entry->getKeyName()))->where('status', JournalStatus::Posted)->exists()) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.journal_immutable')
                 );
