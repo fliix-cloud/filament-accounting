@@ -77,6 +77,8 @@ There is no data-upgrade or consolidation workflow.
   reconciliation, e-invoices, and extension points
 - [Operations](docs/operations.md) — production responsibilities, audit anchors,
   retention, recovery, and release checks
+- [GoBD readiness](docs/gobd.md) — code assessment, release blockers, and the
+  conditions for a defensible compliance claim
 
 ## Development
 

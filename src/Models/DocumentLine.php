@@ -3,6 +3,7 @@
 namespace FilamentAccounting\Models;
 
 use FilamentAccounting\Enums\DocumentStatus;
+use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Exceptions\PostedRecordImmutableException;
 use FilamentAccounting\Support\RichText;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -97,18 +98,7 @@ class DocumentLine extends AccountingModel
     protected static function booted(): void
     {
         static::saving(function (self $line): void {
-            $document = $line->document;
-
-            if (! $document instanceof Document) {
-                return;
-            }
-
-            if (in_array($document->document_status, [
-                DocumentStatus::Issued,
-                DocumentStatus::Received,
-                DocumentStatus::Corrected,
-                DocumentStatus::Cancelled,
-            ], true)) {
+            if (($line->exists && $line->isDirty([$line->getKeyName(), 'document_id'])) || self::parentIsProtected($line)) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.document_line_immutable')
                 );
@@ -116,19 +106,22 @@ class DocumentLine extends AccountingModel
         });
 
         static::deleting(function (self $line): void {
-            $document = $line->document;
-
-            if ($document instanceof Document && in_array($document->document_status, [
-                DocumentStatus::Issued,
-                DocumentStatus::Received,
-                DocumentStatus::Corrected,
-                DocumentStatus::Cancelled,
-            ], true)) {
+            if (self::parentIsProtected($line)) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.document_line_immutable')
                 );
             }
         });
+    }
+
+    private static function parentIsProtected(self $line): bool
+    {
+        return Document::query()
+            ->whereIn('id', array_filter([$line->document_id, $line->getRawOriginal('document_id')]))
+            ->where(fn ($query) => $query
+                ->where('document_status', '!=', DocumentStatus::Draft)
+                ->orWhere('posting_status', '!=', PostingStatus::Unposted))
+            ->exists();
     }
 
     public function document(): BelongsTo

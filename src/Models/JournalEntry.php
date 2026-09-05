@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property int $legal_entity_id
  * @property string|null $sequence
  * @property int $period_id
+ * @property array<string, mixed>|null $period_snapshot
  * @property Carbon $posted_on
  * @property JournalStatus $status
  * @property string $source_type
@@ -45,6 +46,7 @@ class JournalEntry extends AccountingModel
         'legal_entity_id',
         'sequence',
         'period_id',
+        'period_snapshot',
         'posted_on',
         'status',
         'source_type',
@@ -64,6 +66,7 @@ class JournalEntry extends AccountingModel
     protected function casts(): array
     {
         return [
+            'period_snapshot' => 'array',
             'posted_on' => 'date',
             'status' => JournalStatus::class,
             'posted_at' => 'datetime',
@@ -73,7 +76,8 @@ class JournalEntry extends AccountingModel
     protected static function booted(): void
     {
         static::updating(function (self $entry): void {
-            if (self::originalIsPosted($entry)) {
+            if ($entry->isDirty($entry->getKeyName()) || self::originalIsPosted($entry)
+                || self::query()->whereKey($entry->getRawOriginal($entry->getKeyName()))->where('status', JournalStatus::Posted)->exists()) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.journal_immutable')
                 );
@@ -81,7 +85,8 @@ class JournalEntry extends AccountingModel
         });
 
         static::deleting(function (self $entry): void {
-            if ($entry->status === JournalStatus::Posted || self::originalIsPosted($entry)) {
+            if ($entry->status === JournalStatus::Posted || self::originalIsPosted($entry)
+                || self::query()->whereKey($entry->getRawOriginal($entry->getKeyName()))->where('status', JournalStatus::Posted)->exists()) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.journal_immutable')
                 );

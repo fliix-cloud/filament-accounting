@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property int $journal_entry_id
  * @property int $ledger_account_id
+ * @property array<string, mixed>|null $account_snapshot
  * @property int $position
  * @property int $debit_minor
  * @property int $credit_minor
@@ -29,6 +30,7 @@ class JournalLine extends AccountingModel
     protected $fillable = [
         'journal_entry_id',
         'ledger_account_id',
+        'account_snapshot',
         'position',
         'debit_minor',
         'credit_minor',
@@ -43,6 +45,7 @@ class JournalLine extends AccountingModel
     protected function casts(): array
     {
         return [
+            'account_snapshot' => 'array',
             'position' => 'integer',
             'debit_minor' => 'integer',
             'credit_minor' => 'integer',
@@ -54,7 +57,7 @@ class JournalLine extends AccountingModel
     protected static function booted(): void
     {
         static::saving(function (self $line): void {
-            if (self::parentIsPosted($line)) {
+            if (($line->exists && $line->isDirty([$line->getKeyName(), 'journal_entry_id'])) || self::parentIsPosted($line)) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.journal_line_immutable')
                 );
@@ -86,10 +89,9 @@ class JournalLine extends AccountingModel
             return false;
         }
 
-        $entry = $line->relationLoaded('journalEntry')
-            ? $line->journalEntry
-            : JournalEntry::query()->find($line->journal_entry_id);
-
-        return $entry instanceof JournalEntry && $entry->status === JournalStatus::Posted;
+        return JournalEntry::query()
+            ->whereIn('id', array_filter([$line->journal_entry_id, $line->getRawOriginal('journal_entry_id')]))
+            ->where('status', JournalStatus::Posted)
+            ->exists();
     }
 }

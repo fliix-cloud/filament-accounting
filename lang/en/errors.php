@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'journal_integrity_failed' => 'Journal or audit evidence failed verification. Export refused; investigate with filament-accounting:verify.',
     'legal_entity_already_exists' => 'A company has already been configured for this instance.',
     'multiple_legal_entities' => 'The instance contains more than one company and violates the single-company data model.',
     'tax_suggestion_confirmation_required' => 'The suggested tax treatment is ambiguous and must be confirmed explicitly.',
@@ -67,5 +68,8 @@ return [
     'ledger_account_invalid' => 'Every journal account must be active and belong to the posting legal entity.',
     'only_draft_invoice_editable' => 'Only draft invoices can be edited.',
     'only_draft_invoice_issuable' => 'Only a sales invoice draft can be issued.',
-    'only_purchase_invoice_draft_deletable' => 'Only a purchase invoice draft can be deleted.',
+    'only_purchase_invoice_draft_deletable' => 'Only an unposted purchase invoice draft can be discarded.',
+    'reason_required' => 'A non-empty reason is required.',
+    'attachment_immutable' => 'Retained attachment evidence cannot be changed or deleted.',
+    'document_not_ready_to_post' => 'Only an issued sales invoice or received purchase invoice can be posted.',
 ];

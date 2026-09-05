@@ -66,6 +66,7 @@ return [
             'create_draft_invoices' => 'accounting.invoices.draft',
             'issue_invoices' => 'accounting.invoices.issue',
             'register_purchase_invoices' => 'accounting.invoices.register-purchase',
+            'discard_purchase_invoices' => 'accounting.invoices.discard-purchase',
             'post_documents' => 'accounting.documents.post',
             'view_bank' => 'accounting.bank.view',
             'manage_bank_connections' => 'accounting.bank.manage-connections',

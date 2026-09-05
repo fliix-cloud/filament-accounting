@@ -299,6 +299,7 @@ return new class extends Migration
             $table->foreignId('legal_entity_id')->constrained('accounting_legal_entities')->restrictOnDelete();
             $table->string('sequence')->nullable();
             $table->foreignId('period_id')->constrained('accounting_periods')->restrictOnDelete();
+            $table->json('period_snapshot')->nullable();
             $table->date('posted_on');
             $table->string('status', 16)->default('draft');
             $table->string('source_type', 64);
@@ -324,6 +325,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('journal_entry_id')->constrained('accounting_journal_entries')->restrictOnDelete();
             $table->foreignId('ledger_account_id')->constrained('accounting_ledger_accounts')->restrictOnDelete();
+            $table->json('account_snapshot')->nullable();
             $table->unsignedInteger('position')->default(1);
             $table->bigInteger('debit_minor')->default(0);
             $table->bigInteger('credit_minor')->default(0);

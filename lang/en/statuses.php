@@ -7,6 +7,7 @@ return [
         'received' => 'Received',
         'corrected' => 'Corrected',
         'cancelled' => 'Cancelled',
+        'discarded' => 'Discarded draft',
     ],
     'posting' => [
         'unposted' => 'Unposted',

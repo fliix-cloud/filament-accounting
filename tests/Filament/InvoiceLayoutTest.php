@@ -18,7 +18,6 @@ use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\EditSalesIn
 use FilamentAccounting\Filament\Support\DocumentAttachmentActions;
 use FilamentAccounting\Models\Attachment;
 use FilamentAccounting\Models\Document;
-use FilamentAccounting\Services\DeletePurchaseInvoiceDraft;
 use FilamentAccounting\Tests\TestCase;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -98,7 +97,7 @@ class InvoiceLayoutTest extends TestCase
     }
 
     #[Test]
-    public function purchase_invoice_list_exposes_downloads_and_deletes_only_drafts_with_all_dependents(): void
+    public function purchase_invoice_list_exposes_downloads_and_discards_drafts_without_deleting_evidence(): void
     {
         Storage::fake('local');
         filament()->setCurrentPanel(filament()->getPanel('admin'));
@@ -127,30 +126,41 @@ class InvoiceLayoutTest extends TestCase
         $xml = $this->attach($document, 'vendor-document.xml', 'application/xml');
         Storage::disk('local')->put($pdf->path, 'pdf');
         Storage::disk('local')->put($xml->path, 'xml');
+        $document->refresh();
 
         $table = PurchaseInvoiceResource::table(Table::make(new ListPurchaseInvoices));
         $actions = collect($table->getRecordActions())->keyBy(fn ($action): string => $action->getName());
         $this->assertSame(
-            ['downloadPdf', 'downloadXml', 'delete'],
+            ['downloadPdf', 'downloadXml', 'discard'],
             $actions->keys()->all(),
         );
         $this->assertTrue($actions->get('downloadPdf')?->record($document)->isVisible());
         $this->assertTrue($actions->get('downloadXml')?->record($document)->isVisible());
         $this->assertSame('ER2026-000003.pdf', DocumentAttachmentActions::downloadFilename($document, $pdf));
         $this->assertSame('ER2026-000003.xml', DocumentAttachmentActions::downloadFilename($document, $xml));
-        $this->assertTrue(PurchaseInvoiceResource::canDelete($document));
+        $this->assertFalse(PurchaseInvoiceResource::canDelete($document));
+        $this->assertTrue(PurchaseInvoiceResource::canDiscard($document));
 
         $document->e_invoice_meta = ['structured' => false];
         $this->assertFalse($actions->get('downloadXml')?->record($document)->isVisible());
         $document->e_invoice_meta = ['structured' => true];
 
-        app(DeletePurchaseInvoiceDraft::class)->handle($document);
+        Livewire::test(ListPurchaseInvoices::class)
+            ->callTableAction('discard', $document, ['reason' => ''])
+            ->assertHasTableActionErrors(['reason' => 'required']);
+        $this->assertSame(DocumentStatus::Draft, $document->fresh()->document_status);
 
-        $this->assertDatabaseMissing('accounting_documents', ['id' => $document->getKey()]);
-        $this->assertDatabaseMissing('accounting_document_lines', ['document_id' => $document->getKey()]);
-        $this->assertDatabaseMissing('accounting_attachments', ['attachable_id' => $document->getKey()]);
-        Storage::disk('local')->assertMissing($pdf->path);
-        Storage::disk('local')->assertMissing($xml->path);
+        Livewire::test(ListPurchaseInvoices::class)
+            ->callTableAction('discard', $document, ['reason' => 'Duplicate intake'])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('accounting_documents', ['id' => $document->getKey(), 'document_status' => 'discarded']);
+        $this->assertDatabaseHas('accounting_document_lines', ['document_id' => $document->getKey()]);
+        $this->assertDatabaseHas('accounting_attachments', ['id' => $pdf->getKey()]);
+        $this->assertDatabaseHas('accounting_attachments', ['id' => $xml->getKey()]);
+        Storage::disk('local')->assertExists($pdf->path);
+        Storage::disk('local')->assertExists($xml->path);
+        $this->assertFalse(PurchaseInvoiceResource::canDiscard($document->fresh()));
 
         $document->document_status = DocumentStatus::Received;
         $this->assertFalse(PurchaseInvoiceResource::canDelete($document));
