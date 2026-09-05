@@ -63,8 +63,11 @@ Regression coverage: [document protection](../tests/Documents/RecordProtectionTe
 [ledger/period protection](../tests/Ledger/RecordProtectionTest.php),
 [authorization](../tests/Authorization/DefaultAccountingAuthorizerTest.php), and
 the [Filament discard workflow](../tests/Filament/InvoiceLayoutTest.php).
-CI validation of these changes is pending. Local PHP/Composer execution remains
-unavailable. F7–F8 and F10–F12 remain open; see the [upgrade notes](operations.md).
+[CI for implementation commit 8560ff7](https://github.com/fliix-cloud/filament-accounting/actions/runs/33946659939)
+passed all 162 tests on PHP 8.3/8.4/8.5, PHPStan, Pint, and Composer validation
+(1,735 assertions on PHP 8.3). Local PHP/Composer execution remains unavailable.
+This proves the covered regressions, not production concurrency or storage
+immutability. F7–F8 and F10–F12 remain open; see the [upgrade notes](operations.md).
 
 ## Existing foundation
 
@@ -76,13 +79,16 @@ unavailable. F7–F8 and F10–F12 remain open; see the [upgrade notes](operatio
 | Audit and files | Canonical event chain, external anchors, offline evidence verification, SHA-256 checks on attachment reads; [audit tests](../tests/Audit/AuditAnchorTest.php), [attachment tests](../tests/Attachments/AttachmentStorageTest.php) | Detects specific failures, not all business-data changes |
 | Quality checks | [Baseline CI](https://github.com/fliix-cloud/filament-accounting/actions/runs/33943471032): PHPUnit on PHP 8.3/8.4/8.5, PHPStan, Pint, Composer validation passed | Existing suite is green; compliance gaps remain |
 
-## Release-blocking findings
+## Baseline findings and acceptance criteria
+
+The findings describe commit 99b2218. Code links locate the affected files;
+the progress table above records subsequent corrections and remaining work.
 
 P0 means a direct integrity/access risk. P1 means another mandatory item before
 the scoped readiness claim. These priorities are engineering judgments, not
 official GoBD classifications.
 
-| ID | Finding and code evidence | Required outcome / regression evidence |
+| ID | Baseline finding and code location | Required outcome / regression evidence |
 | --- | --- | --- |
 | F1 · P0 | [DeletePurchaseInvoiceDraft](../src/Services/DeletePurchaseInvoiceDraft.php) deletes the received PDF/XML and metadata without a retained deletion event. [InvoiceLayoutTest](../tests/Filament/InvoiceLayoutTest.php) explicitly expects this deletion. A draft booking does not make a received original disposable. | Preserve tax-relevant originals from intake, including rejected/invalid imports. Discard the booking draft separately, with actor/reason and a retained intake record. Never remove the only retained copy of a received invoice. |
 | F2 · P0 | `journal.posted` logs sequence/source type, not journal amounts/accounts. [VerifyCommand](../src/Commands/VerifyCommand.php) checks balance and line count, but does not bind journal/document/settlement contents to audit hashes. A balanced SQL change or account substitution can leave these checks green. [Attachment](../src/Models/Attachment.php) has no update/delete guard. | Protect finalized records and references against application and bulk-write paths; verify canonical business snapshots against independently anchored evidence. Test balanced tampering, missing records, changed attachments, and privileged mutation. ORM events and self-contained hashes alone are insufficient. |
