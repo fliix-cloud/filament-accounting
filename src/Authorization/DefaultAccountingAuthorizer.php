@@ -22,7 +22,7 @@ final class DefaultAccountingAuthorizer implements AccountingAuthorizer
             return Gate::forUser($actor)->allows($gate, $subject);
         }
 
-        return $actor !== null;
+        return false;
     }
 
     public function authorize(string $ability, mixed $subject = null): void

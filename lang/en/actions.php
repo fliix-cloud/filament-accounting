@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'discard_draft' => 'Discard draft',
+    'discard_draft_description' => 'The draft and original files remain available for inspection. This does not cancel the supplier invoice.',
     'download_attachment' => 'Download :name',
     'receive_and_post' => 'Validate, receive and post',
     'create' => 'Create',

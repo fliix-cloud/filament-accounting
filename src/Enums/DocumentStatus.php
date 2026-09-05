@@ -12,6 +12,7 @@ enum DocumentStatus: string implements HasColor, HasLabel
     case Received = 'received';
     case Corrected = 'corrected';
     case Cancelled = 'cancelled';
+    case Discarded = 'discarded';
 
     public function getLabel(): string
     {
@@ -24,7 +25,7 @@ enum DocumentStatus: string implements HasColor, HasLabel
             self::Draft => 'gray',
             self::Issued, self::Received => 'success',
             self::Corrected => 'warning',
-            self::Cancelled => 'danger',
+            self::Cancelled, self::Discarded => 'danger',
         };
     }
 }

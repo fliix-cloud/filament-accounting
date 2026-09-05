@@ -146,21 +146,29 @@ class Document extends AccountingModel
     protected static function booted(): void
     {
         static::updating(function (self $document): void {
-            $original = $document->getOriginal('document_status');
-            $status = $original instanceof DocumentStatus
-                ? $original
-                : DocumentStatus::tryFrom((string) ($original ?? ''));
+            $stored = self::query()->findOrFail($document->getKey());
+            $protected = ['legal_entity_id', 'uuid', 'type', 'direction', 'created_by_type', 'created_by_id'];
 
-            if (! in_array($status, [
-                DocumentStatus::Issued,
-                DocumentStatus::Received,
-                DocumentStatus::Corrected,
-                DocumentStatus::Cancelled,
-            ], true)) {
-                return;
+            if ($stored->document_status !== DocumentStatus::Draft || $stored->isPosted()) {
+                $protected = array_merge($protected, self::COMMERCIAL_FIELDS, [
+                    'document_status', 'issued_at', 'issued_by_type', 'issued_by_id',
+                ]);
+            } elseif ($document->isDirty('document_status')) {
+                $allowed = match ($stored->type) {
+                    DocumentType::SalesInvoice => [DocumentStatus::Issued],
+                    DocumentType::PurchaseInvoice => [DocumentStatus::Received, DocumentStatus::Discarded],
+                    default => [],
+                };
+                if (! in_array($document->document_status, $allowed, true)) {
+                    throw new PostedRecordImmutableException(__('filament-accounting::errors.document_immutable'));
+                }
             }
 
-            foreach (self::COMMERCIAL_FIELDS as $field) {
+            if ($stored->posting_status !== PostingStatus::Unposted) {
+                $protected = array_merge($protected, ['posting_status', 'posted_at']);
+            }
+
+            foreach ($protected as $field) {
                 if ($document->isDirty($field)) {
                     throw new PostedRecordImmutableException(
                         __('filament-accounting::errors.document_immutable')
@@ -170,7 +178,8 @@ class Document extends AccountingModel
         });
 
         static::deleting(function (self $document): void {
-            if ($document->isIssuedOrReceived() || $document->isPosted()) {
+            $stored = self::query()->findOrFail($document->getKey());
+            if ($stored->type === DocumentType::PurchaseInvoice || $stored->isIssuedOrReceived() || $stored->isPosted()) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.document_immutable')
                 );
@@ -218,8 +227,8 @@ class Document extends AccountingModel
         $original = $this->getOriginal('document_status');
         $status = $original instanceof DocumentStatus ? $original : DocumentStatus::tryFrom((string) $original);
 
-        return in_array($status, [DocumentStatus::Issued, DocumentStatus::Received, DocumentStatus::Corrected, DocumentStatus::Cancelled], true)
-            || in_array($this->document_status, [DocumentStatus::Issued, DocumentStatus::Received, DocumentStatus::Corrected, DocumentStatus::Cancelled], true);
+        return in_array($status, [DocumentStatus::Issued, DocumentStatus::Received, DocumentStatus::Corrected, DocumentStatus::Cancelled, DocumentStatus::Discarded], true)
+            || in_array($this->document_status, [DocumentStatus::Issued, DocumentStatus::Received, DocumentStatus::Corrected, DocumentStatus::Cancelled, DocumentStatus::Discarded], true);
     }
 
     public function isPosted(): bool

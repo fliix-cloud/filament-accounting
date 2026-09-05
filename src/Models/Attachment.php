@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Models;
 
+use FilamentAccounting\Exceptions\PostedRecordImmutableException;
 use FilamentAccounting\Models\Concerns\BelongsToLegalEntity;
 use FilamentAccounting\Support\HasUuid;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -52,6 +53,20 @@ class Attachment extends AccountingModel
             'size' => 'integer',
             'meta' => 'array',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(function (self $attachment): void {
+            throw new PostedRecordImmutableException(__('filament-accounting::errors.attachment_immutable'));
+        });
+
+        static::deleting(function (self $attachment): void {
+            $stored = self::query()->findOrFail($attachment->getKey());
+            if (in_array($stored->source_type, ['original_invoice', 'embedded_e_invoice', 'supplied_e_invoice'], true)) {
+                throw new PostedRecordImmutableException(__('filament-accounting::errors.attachment_immutable'));
+            }
+        });
     }
 
     public function attachable(): MorphTo

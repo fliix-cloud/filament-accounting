@@ -45,6 +45,27 @@ obtain accounting and legal review of any stronger German marketing wording.
 Do not equate GoBD readiness with complete VAT correctness, XRechnung
 conformance, DATEV compatibility, or statutory financial statements.
 
+## Implementation progress
+
+Updated: 5 September 2026. The table below tracks changes after the reviewed
+baseline; the detailed findings retain that baseline as their reference.
+**No finding is fully closed and the compliance verdict is unchanged.**
+
+| Findings | Implemented in this change | Still required |
+| --- | --- | --- |
+| F1 / F3 | Purchase draft disposal now retains the document, lines, PDF/XML, and an actor/reason audit event. It requires a dedicated permission, current company scope, and a locked persisted draft. UI offers “Discard draft”; physical deletion is disabled. | Preserve failed/rejected imports before parsing; complete intake history and recovery workflows. |
+| F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. | Bulk/SQL protection, concurrent mutation evidence, business snapshots bound to audit hashes, and controlled correction workflows. |
+| F3 | Undefined Gates now deny access. Tests explicitly configure fixture permissions; hosts must configure their own Gates. | Complete the authorization audit of all public mutation paths and integrations. |
+| F5 | Closing cannot weaken a hard lock. Reopening requires a separate permission and non-blank reason. Both record before/after state, use the accounting connection, and lock entity before period. Repeated close is idempotent. | Production database concurrency tests and protection against direct period-model/SQL changes. |
+| F6 / F9 | Posting reloads persisted state and accepts only issued sales invoices or received purchase invoices. Ledger posting/reversal and changed document/period services use the accounting connection. | Currency/discount/tax correctness; connection consistency in the remaining services and cross-connection rollback tests. |
+
+Regression coverage: [document protection](../tests/Documents/RecordProtectionTest.php),
+[ledger/period protection](../tests/Ledger/RecordProtectionTest.php),
+[authorization](../tests/Authorization/DefaultAccountingAuthorizerTest.php), and
+the [Filament discard workflow](../tests/Filament/InvoiceLayoutTest.php).
+CI validation of these changes is pending. Local PHP/Composer execution remains
+unavailable. F7–F8 and F10–F12 remain open; see the [upgrade notes](operations.md).
+
 ## Existing foundation
 
 | Area | Evidence in the reviewed code | Assessment |
@@ -135,7 +156,8 @@ it cannot establish production locking or immutable-storage behavior.
 Keep the public documentation to [architecture](architecture.md),
 [operations](operations.md), and this assessment. Deployment-specific procedures
 and evidence belong to the operator; do not recreate an internal roadmap archive
-in `docs/`. No compliance runtime fixes are implemented by this document.
+in `docs/`. Only the partial runtime corrections listed above are implemented;
+this assessment is not a release approval.
 
 [ao146]: https://www.gesetze-im-internet.de/ao_1977/__146.html
 [ao147]: https://www.gesetze-im-internet.de/ao_1977/__147.html

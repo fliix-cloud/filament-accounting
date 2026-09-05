@@ -14,7 +14,6 @@ use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Services\AuditLogger;
 use FilamentAccounting\Services\ResolveAccountingPeriod;
-use Illuminate\Support\Facades\DB;
 
 final class FirstPartyLedgerEngine implements LedgerEngine
 {
@@ -25,7 +24,7 @@ final class FirstPartyLedgerEngine implements LedgerEngine
 
     public function post(PostJournalCommand $command): JournalEntry
     {
-        return DB::transaction(function () use ($command): JournalEntry {
+        return (new LegalEntity)->getConnection()->transaction(function () use ($command): JournalEntry {
             $entity = LegalEntity::query()->lockForUpdate()->findOrFail($command->legalEntityId);
 
             if (filled($command->idempotencyKey)) {
@@ -106,7 +105,7 @@ final class FirstPartyLedgerEngine implements LedgerEngine
                 'source_type' => $entry->source_type,
             ]);
 
-            DB::afterCommit(fn () => JournalPosted::dispatch($entry->fresh(['lines'])));
+            $entity->getConnection()->afterCommit(fn () => JournalPosted::dispatch($entry->fresh(['lines'])));
 
             return $entry->fresh(['lines']) ?? $entry;
         });
@@ -114,7 +113,7 @@ final class FirstPartyLedgerEngine implements LedgerEngine
 
     public function reverse(ReverseJournalCommand $command): JournalEntry
     {
-        return DB::transaction(function () use ($command): JournalEntry {
+        return (new JournalEntry)->getConnection()->transaction(function () use ($command): JournalEntry {
             $original = JournalEntry::query()
                 ->lockForUpdate()
                 ->with('lines')

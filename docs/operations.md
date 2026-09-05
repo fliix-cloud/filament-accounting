@@ -20,6 +20,16 @@ does not make a system GoBD-compliant or certified.
 - Define retention, legal-hold, disposal, and access-review procedures for the
   applicable jurisdiction.
 
+## Access configuration
+
+The default authorizer denies abilities without an explicitly defined Laravel
+Gate. Define the mapped Gates in `authorization.abilities`, including the new
+`accounting.invoices.discard-purchase` permission, or supply an
+`AccountingAuthorizer` implementation. Each Gate must check the actual actor,
+role, and company. Authentication alone grants no accounting permission.
+This also applies to workbench installations; the test suite's permissive Gates
+are test fixtures only. Existing hosts must configure access before upgrading.
+
 ## Audit anchors
 
 Configure a Laravel disk outside the normal database trust boundary:
@@ -62,6 +72,17 @@ history and exported evidence.
 Do not cascade-delete issued documents, original attachments, posted journals,
 or audit evidence. Corrections use reversals. Closing a period blocks further
 posting; reopening requires authorization, a reason, and an audit event.
+
+Purchase drafts are now **discarded**, not deleted. The draft, positions, and
+original files stay available; the audit event records the actor and reason.
+Discarding does not cancel the supplier's invoice. The legacy
+`DeletePurchaseInvoiceDraft::handle($document, $reason)` service now requires
+a reason and retains evidence. Discarded drafts cannot be edited or posted.
+No automatic restoration or disposal workflow is provided yet.
+
+Model guards protect normal Eloquent mutations. Query-builder writes, raw SQL,
+privileged database access, and storage deletion still require additional
+controls; do not treat these guards as database-level immutability.
 
 The package does not determine statutory retention periods or prove storage
 immutability through Laravel's filesystem API. Operators must configure and

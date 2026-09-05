@@ -54,7 +54,7 @@ class JournalLine extends AccountingModel
     protected static function booted(): void
     {
         static::saving(function (self $line): void {
-            if (self::parentIsPosted($line)) {
+            if (($line->exists && $line->isDirty('journal_entry_id')) || self::parentIsPosted($line)) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.journal_line_immutable')
                 );
@@ -86,10 +86,9 @@ class JournalLine extends AccountingModel
             return false;
         }
 
-        $entry = $line->relationLoaded('journalEntry')
-            ? $line->journalEntry
-            : JournalEntry::query()->find($line->journal_entry_id);
-
-        return $entry instanceof JournalEntry && $entry->status === JournalStatus::Posted;
+        return JournalEntry::query()
+            ->whereIn('id', array_filter([$line->journal_entry_id, $line->getRawOriginal('journal_entry_id')]))
+            ->where('status', JournalStatus::Posted)
+            ->exists();
     }
 }

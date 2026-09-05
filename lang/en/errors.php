@@ -67,5 +67,8 @@ return [
     'ledger_account_invalid' => 'Every journal account must be active and belong to the posting legal entity.',
     'only_draft_invoice_editable' => 'Only draft invoices can be edited.',
     'only_draft_invoice_issuable' => 'Only a sales invoice draft can be issued.',
-    'only_purchase_invoice_draft_deletable' => 'Only a purchase invoice draft can be deleted.',
+    'only_purchase_invoice_draft_deletable' => 'Only an unposted purchase invoice draft can be discarded.',
+    'reason_required' => 'A non-empty reason is required.',
+    'attachment_immutable' => 'Retained attachment evidence cannot be changed or deleted.',
+    'document_not_ready_to_post' => 'Only an issued sales invoice or received purchase invoice can be posted.',
 ];
