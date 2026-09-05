@@ -36,8 +36,7 @@ final class GenericJournalCsvExporter implements AccountingExporter
             }
 
             // Export the records just verified, never a second read or live master data.
-            $entries = $ledger['entries']->filter(fn (JournalEntry $entry): bool =>
-                $entry->getRawOriginal('status') === JournalStatus::Posted->value
+            $entries = $ledger['entries']->filter(fn (JournalEntry $entry): bool => $entry->getRawOriginal('status') === JournalStatus::Posted->value
                 && $entry->getRawOriginal('posted_on') >= $from
                 && $entry->getRawOriginal('posted_on') <= $to
             )->sortBy([['posted_on', 'asc'], ['sequence', 'asc']]);

@@ -10,6 +10,7 @@ use FilamentAccounting\Contracts\LedgerEngine;
 use FilamentAccounting\Exceptions\AuditChainCompromisedException;
 use FilamentAccounting\Exceptions\JournalIntegrityException;
 use FilamentAccounting\Export\GenericJournalCsvExporter;
+use FilamentAccounting\Filament\Resources\JournalEntryResource\Pages\ViewJournalEntry;
 use FilamentAccounting\Ledger\JournalLineDraft;
 use FilamentAccounting\Ledger\PostJournalCommand;
 use FilamentAccounting\Ledger\ReverseJournalCommand;
@@ -20,6 +21,7 @@ use FilamentAccounting\Services\AuditLogger;
 use FilamentAccounting\Tests\TestCase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -30,8 +32,8 @@ class JournalIntegrityTest extends TestCase
     {
         $entity = $this->makeEntity();
         $this->actingAs($this->makeUser());
-        $entry = $this->post($entity);
-        $retry = $this->post($entity);
+        $entry = $this->postJournal($entity);
+        $retry = $this->postJournal($entity);
         $this->assertTrue($entry->is($retry));
         $event = AuditEvent::query()->where('operation', 'journal.posted')->sole();
         $snapshot = app(JournalSnapshot::class)->capture($entry->fresh('lines'));
@@ -76,7 +78,7 @@ class JournalIntegrityTest extends TestCase
     {
         $entity = $this->makeEntity();
         $this->actingAs($this->makeUser());
-        $entry = $this->post($entity);
+        $entry = $this->postJournal($entity);
         $connection = $entry->getConnection();
         $entries = $connection->table('accounting_journal_entries')->where('id', $entry->getKey());
         $lines = $connection->table('accounting_journal_lines')->where('journal_entry_id', $entry->getKey());
@@ -147,7 +149,7 @@ class JournalIntegrityTest extends TestCase
     public function missing_and_duplicate_posting_events_are_not_grandfathered_in(): void
     {
         $entity = $this->makeEntity();
-        $entry = $this->post($entity);
+        $entry = $this->postJournal($entity);
         $event = AuditEvent::query()->where('operation', 'journal.posted')->sole();
         app(AuditLogger::class)->log($entity, 'journal.posted', $entry, $event->payload);
         $result = app(JournalIntegrityVerifier::class)->verify((int) $entity->getKey());
@@ -173,7 +175,7 @@ class JournalIntegrityTest extends TestCase
     public function malformed_evidence_is_reported_without_crashing_the_command(mixed $snapshot, string $code): void
     {
         $entity = $this->makeEntity();
-        $entry = $this->post($entity);
+        $entry = $this->postJournal($entity);
         $event = AuditEvent::query()->where('operation', 'journal.posted')->sole();
         $payload = $event->payload;
         $payload['journal_snapshot'] = $snapshot;
@@ -186,7 +188,9 @@ class JournalIntegrityTest extends TestCase
     public function historical_csv_is_stable_after_master_data_changes_and_json_key_reordering(): void
     {
         $entity = $this->makeEntity();
-        $entry = $this->post($entity);
+        $this->actingAs($this->makeUser());
+        filament()->setCurrentPanel(filament()->getPanel('admin'));
+        $entry = $this->postJournal($entity);
         $exporter = app(GenericJournalCsvExporter::class);
         $before = $exporter->export($entity, '2026-03-01', '2026-03-31');
         $entity->ledgerAccounts()->where('code', '1200')->update(['code' => '1200-NEW', 'name' => 'Renamed bank']);
@@ -199,6 +203,8 @@ class JournalIntegrityTest extends TestCase
         $this->assertSame($before, $exporter->export($entity, '2026-03-01', '2026-03-31'));
         $this->assertStringNotContainsString('1200-NEW', $before);
         $this->assertStringContainsString('2026-3', $before);
+        Livewire::test(ViewJournalEntry::class, ['record' => $entry->getRouteKey()])
+            ->assertOk()->assertSee('1200')->assertDontSee('1200-NEW');
         $this->assertCount(1, explode("\n", trim($exporter->export($entity, '2026-04-01', '2026-04-30'))));
     }
 
@@ -211,7 +217,7 @@ class JournalIntegrityTest extends TestCase
             'last_event_hash' => str_repeat('0', 64), 'event_count' => 1, 'updated_at' => now(),
         ]);
         try {
-            $this->post($entity);
+            $this->postJournal($entity);
             $this->fail('Unsealed postings must not survive a failed audit append.');
         } catch (AuditChainCompromisedException) {
             $this->assertDatabaseCount('accounting_journal_entries', 0);
@@ -228,7 +234,7 @@ class JournalIntegrityTest extends TestCase
         config()->set('filament-accounting.audit.anchor.required', true);
         config()->set('filament-accounting.audit.anchor.immutable_storage_attested', true);
         $entity = $this->makeEntity();
-        $entry = $this->post($entity);
+        $entry = $this->postJournal($entity);
         $this->assertSame(0, Artisan::call('filament-accounting:audit-anchor', ['--legal-entity' => $entity->uuid, '--json' => true]));
 
         $connection = $entry->getConnection();
@@ -254,7 +260,7 @@ class JournalIntegrityTest extends TestCase
         app(GenericJournalCsvExporter::class)->export($entity, '2026-03-01', '2026-03-31');
     }
 
-    private function post(LegalEntity $entity): JournalEntry
+    private function postJournal(LegalEntity $entity): JournalEntry
     {
         return app(LedgerEngine::class)->post(new PostJournalCommand(
             legalEntityId: (int) $entity->getKey(), postedOn: '2026-03-10',
