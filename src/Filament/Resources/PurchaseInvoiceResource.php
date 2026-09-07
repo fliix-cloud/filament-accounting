@@ -2,11 +2,12 @@
 
 namespace FilamentAccounting\Filament\Resources;
 
-use Filament\Actions\DeleteAction;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
@@ -15,6 +16,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Enums\PaymentStatus;
@@ -74,9 +76,16 @@ class PurchaseInvoiceResource extends Resource
 
     public static function canDelete($record): bool
     {
-        return $record instanceof Document
+        return false;
+    }
+
+    public static function canDiscard(Document $record): bool
+    {
+        return $record->type === DocumentType::PurchaseInvoice
             && $record->document_status === DocumentStatus::Draft
-            && static::canViewAny();
+            && $record->posting_status === PostingStatus::Unposted
+            && (string) $record->legal_entity_id === (string) app(LegalEntityScope::class)->current()?->getKey()
+            && app(AccountingAuthorizer::class)->can('discard_purchase_invoices', $record);
     }
 
     public static function getEloquentQuery(): Builder
@@ -228,9 +237,17 @@ class PurchaseInvoiceResource extends Resource
                 ->label(__('filament-accounting::fields.assigned_transactions')),
         ])->recordActions([
             ...DocumentAttachmentActions::table(),
-            DeleteAction::make()
-                ->visible(fn (Document $record): bool => $record->document_status === DocumentStatus::Draft)
-                ->using(fn (Document $record): bool => app(DeletePurchaseInvoiceDraft::class)->handle($record)),
+            Action::make('discard')
+                ->label(__('filament-accounting::actions.discard_draft'))
+                ->icon('heroicon-o-archive-box')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->modalDescription(__('filament-accounting::actions.discard_draft_description'))
+                ->schema([
+                    Textarea::make('reason')->label(__('filament-accounting::fields.reason'))->required()->maxLength(2000),
+                ])
+                ->visible(fn (Document $record): bool => static::canDiscard($record))
+                ->action(fn (Document $record, array $data): bool => app(DeletePurchaseInvoiceDraft::class)->handle($record, $data['reason'])),
         ]);
     }
 

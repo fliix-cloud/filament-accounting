@@ -66,7 +66,7 @@ class JournalEntryResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['lines.ledgerAccount', 'period']);
+        return parent::getEloquentQuery()->with('lines');
     }
 
     public static function infolist(Schema $schema): Schema
@@ -79,7 +79,7 @@ class JournalEntryResource extends Resource
             RepeatableEntry::make('lines')
                 ->label(__('filament-accounting::fields.lines'))
                 ->schema([
-                    TextEntry::make('ledgerAccount.code')->label(__('filament-accounting::fields.code')),
+                    TextEntry::make('account_snapshot.code')->label(__('filament-accounting::fields.code')),
                     TextEntry::make('debit_minor')
                         ->label(__('filament-accounting::fields.debit'))
                         ->formatStateUsing(fn ($state, $record): string => MoneyFormatter::format((int) $state, $record->currency)),

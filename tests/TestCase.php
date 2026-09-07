@@ -23,6 +23,7 @@ use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 use FilamentAccounting\Services\SeedGermanProfile;
 use FilamentAccounting\Tests\Fixtures\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Livewire\LivewireServiceProvider;
 use Livewire\Mechanisms\DataStore;
@@ -42,6 +43,15 @@ abstract class TestCase extends Orchestra
         config()->set('filament-accounting.storage.disk', 'local');
         config()->set('filament-accounting.e_invoice.generate_on_issue', false);
         $this->app->instance(DataStore::class, new DataStore);
+        $this->defineAccountingGates();
+    }
+
+    protected function defineAccountingGates(): void
+    {
+        // Explicit full-access fixture permissions; authorization tests override this setup.
+        foreach (config('filament-accounting.authorization.abilities') as $ability) {
+            Gate::define($ability, fn (User $user): bool => true);
+        }
     }
 
     protected function getPackageProviders($app): array

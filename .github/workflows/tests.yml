@@ -41,7 +41,7 @@ jobs:
           php-version: '8.3'
           coverage: none
       - run: composer update --no-interaction --prefer-dist --no-progress
-      - run: composer format
+      - run: composer format -- --verbose
 
   phpstan:
     name: phpstan

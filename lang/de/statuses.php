@@ -7,6 +7,7 @@ return [
         'received' => 'Empfangen',
         'corrected' => 'Korrigiert',
         'cancelled' => 'Storniert',
+        'discarded' => 'Verworfener Entwurf',
     ],
     'posting' => [
         'unposted' => 'Ungebucht',

@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'journal_integrity_failed' => 'Die Prüfung der Buchungs- oder Audit-Daten ist fehlgeschlagen. Export abgebrochen; bitte mit filament-accounting:verify untersuchen.',
     'legal_entity_already_exists' => 'Für diese Instanz ist bereits ein Unternehmen eingerichtet.',
     'multiple_legal_entities' => 'Die Instanz enthält mehr als ein Unternehmen. Das Single-Mandanten-Datenmodell ist verletzt.',
     'tax_suggestion_confirmation_required' => 'Der vorgeschlagene Steuerfall ist nicht eindeutig und muss ausdrücklich bestätigt werden.',
@@ -67,5 +68,8 @@ return [
     'ledger_account_invalid' => 'Jedes Journal-Konto muss aktiv sein und zum buchenden Mandanten gehören.',
     'only_draft_invoice_editable' => 'Nur Rechnungsentwürfe können bearbeitet werden.',
     'only_draft_invoice_issuable' => 'Nur ein Ausgangsrechnungsentwurf kann freigegeben werden.',
-    'only_purchase_invoice_draft_deletable' => 'Nur ein Eingangsrechnungsentwurf kann gelöscht werden.',
+    'only_purchase_invoice_draft_deletable' => 'Nur ein ungebuchter Eingangsrechnungsentwurf kann verworfen werden.',
+    'reason_required' => 'Eine nicht leere Begründung ist erforderlich.',
+    'attachment_immutable' => 'Aufbewahrte Belegdateien dürfen nicht geändert oder gelöscht werden.',
+    'document_not_ready_to_post' => 'Nur eine ausgestellte Ausgangsrechnung oder empfangene Eingangsrechnung kann gebucht werden.',
 ];

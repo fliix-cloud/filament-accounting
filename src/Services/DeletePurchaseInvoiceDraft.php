@@ -2,38 +2,55 @@
 
 namespace FilamentAccounting\Services;
 
+use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
+use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Exceptions\DocumentException;
-use FilamentAccounting\Models\Attachment;
 use FilamentAccounting\Models\Document;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use FilamentAccounting\Models\LegalEntity;
+use FilamentAccounting\Ownership\LegalEntityScope;
 
+/** Retains the legacy service name; discards the draft without deleting evidence. */
 final class DeletePurchaseInvoiceDraft
 {
-    public function handle(Document $document): bool
+    public function __construct(
+        private readonly AccountingAuthorizer $authorizer,
+        private readonly LegalEntityScope $scope,
+        private readonly AuditLogger $audit,
+    ) {}
+
+    public function handle(Document $document, string $reason): bool
     {
-        if ($document->type !== DocumentType::PurchaseInvoice || $document->document_status !== DocumentStatus::Draft) {
-            throw new DocumentException(__('filament-accounting::errors.only_purchase_invoice_draft_deletable'));
-        }
+        return $document->getConnection()->transaction(function () use ($document, $reason): bool {
+            // Match the ledger/audit lock order: entity before business record.
+            $entity = LegalEntity::query()->lockForUpdate()->findOrFail($document->getRawOriginal('legal_entity_id'));
+            $document = Document::query()->lockForUpdate()->findOrFail($document->getKey());
+            $this->scope->assertModel($document);
+            $this->scope->assertSame($entity->getKey());
+            $this->authorizer->authorize('discard_purchase_invoices', $document);
 
-        $attachments = Attachment::query()
-            ->where('legal_entity_id', $document->legal_entity_id)
-            ->where('attachable_type', $document->getMorphClass())
-            ->where('attachable_id', $document->getKey())
-            ->get();
+            if ($document->type !== DocumentType::PurchaseInvoice
+                || $document->document_status !== DocumentStatus::Draft
+                || $document->posting_status !== PostingStatus::Unposted) {
+                throw new DocumentException(__('filament-accounting::errors.only_purchase_invoice_draft_deletable'));
+            }
 
-        DB::transaction(function () use ($document): void {
-            $document->lines()->delete();
-            $document->attachments()->delete();
-            $document->delete();
+            $reason = trim($reason);
+            if ($reason === '') {
+                throw new DocumentException(__('filament-accounting::errors.reason_required'));
+            }
+
+            $document->document_status = DocumentStatus::Discarded;
+            $document->save();
+
+            $this->audit->log($entity, 'document.purchase_draft_discarded', $document, [
+                'before' => DocumentStatus::Draft->value,
+                'after' => DocumentStatus::Discarded->value,
+                'attachments' => $document->attachments()->get(['uuid', 'sha256'])->toArray(),
+            ], $reason);
+
+            return true;
         });
-
-        $attachments->each(function (Attachment $attachment): void {
-            Storage::disk($attachment->disk)->delete($attachment->path);
-        });
-
-        return true;
     }
 }

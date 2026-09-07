@@ -6,6 +6,7 @@ use FilamentAccounting\Contracts\AccountingActorResolver;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Contracts\LedgerEngine;
 use FilamentAccounting\Enums\AccountRole;
+use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Events\DocumentPosted;
@@ -16,7 +17,6 @@ use FilamentAccounting\Models\AccountRoleAssignment;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\LegalEntity;
-use Illuminate\Support\Facades\DB;
 
 final class PostDocument
 {
@@ -32,12 +32,18 @@ final class PostDocument
     {
         $this->authorizer->authorize('post_documents', $document);
 
-        if ($document->posting_status === PostingStatus::Posted) {
-            return $document;
-        }
-
-        return DB::transaction(function () use ($document): Document {
+        return $document->getConnection()->transaction(function () use ($document): Document {
+            LegalEntity::query()->lockForUpdate()->findOrFail($document->getRawOriginal('legal_entity_id'));
             $document = Document::query()->lockForUpdate()->with('lines')->findOrFail($document->getKey());
+            $this->authorizer->authorize('post_documents', $document);
+            if ($document->posting_status === PostingStatus::Posted) {
+                return $document;
+            }
+            if ($document->posting_status !== PostingStatus::Unposted
+                || ! (($document->type === DocumentType::SalesInvoice && $document->document_status === DocumentStatus::Issued)
+                    || ($document->type === DocumentType::PurchaseInvoice && $document->document_status === DocumentStatus::Received))) {
+                throw new DocumentException(__('filament-accounting::errors.document_not_ready_to_post'));
+            }
             $entity = LegalEntity::query()->findOrFail($document->legal_entity_id);
             $actor = $this->actors->resolve();
             $lines = $this->journalLines($entity, $document);
@@ -66,7 +72,7 @@ final class PostDocument
                 'number' => $document->number,
             ]);
 
-            DB::afterCommit(fn () => DocumentPosted::dispatch($document->fresh()));
+            $document->getConnection()->afterCommit(fn () => DocumentPosted::dispatch($document->fresh()));
 
             return $document->fresh(['lines', 'openItem']) ?? $document;
         });
