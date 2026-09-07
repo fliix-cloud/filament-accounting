@@ -112,7 +112,15 @@ class PurchaseInvoiceResource extends Resource
             DatePicker::make('issue_date')->label(__('filament-accounting::fields.issue_date'))->required(),
             DatePicker::make('receipt_date')->label(__('filament-accounting::fields.receipt_date')),
             DatePicker::make('supply_date')->label(__('filament-accounting::fields.supply_date')),
-            Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable()->required(),
+            Select::make('currency')
+                ->label(__('filament-accounting::fields.currency'))
+                ->options(function (): array {
+                    $currency = (string) app(LegalEntityScope::class)->require()->base_currency;
+
+                    return [$currency => $currency];
+                })
+                ->default(fn (): string => (string) app(LegalEntityScope::class)->require()->base_currency)
+                ->required(),
             self::totalsSection(),
             Repeater::make('lines')
                 ->label(__('filament-accounting::fields.lines'))

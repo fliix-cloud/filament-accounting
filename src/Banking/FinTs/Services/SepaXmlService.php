@@ -47,6 +47,7 @@ class SepaXmlService
             (string) ($transfer->currency ?: 'EUR'),
             $transfer->purpose,
             $transfer->end_to_end_id,
+            $transfer->requested_execution_date?->toDateString(),
         );
     }
 

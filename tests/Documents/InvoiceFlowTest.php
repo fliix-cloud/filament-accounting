@@ -4,6 +4,7 @@ namespace FilamentAccounting\Tests\Documents;
 
 use FilamentAccounting\Enums\AccountRole;
 use FilamentAccounting\Enums\DocumentStatus;
+use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Enums\OpenItemKind;
 use FilamentAccounting\Enums\PaymentStatus;
 use FilamentAccounting\Enums\PostingStatus;
@@ -15,7 +16,10 @@ use FilamentAccounting\Models\JournalEntry;
 use FilamentAccounting\Models\PartyAddress;
 use FilamentAccounting\Models\PartyBankAccount;
 use FilamentAccounting\Models\PartyTaxId;
+use FilamentAccounting\Models\TaxCode;
+use FilamentAccounting\Models\TaxRuleVersion;
 use FilamentAccounting\Services\IssueSalesInvoice;
+use FilamentAccounting\Services\PostDocument;
 use FilamentAccounting\Services\RegisterPurchaseInvoice;
 use FilamentAccounting\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
@@ -383,5 +387,179 @@ class InvoiceFlowTest extends TestCase
         $this->assertCount(2, $taxLines);
         $this->assertSame(1900, (int) $taxLines->get('DE-19')?->credit_minor);
         $this->assertSame(700, (int) $taxLines->get('DE-7')?->credit_minor);
+    }
+
+    #[Test]
+    public function sales_credit_notes_reverse_the_invoice_journal_and_open_item_sign(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+
+        $document = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-10',
+            'currency' => 'EUR',
+            'type' => DocumentType::SalesCreditNote,
+            'lines' => [[
+                'description' => 'Credit',
+                'quantity' => '1',
+                'unit_price_minor' => 10000,
+                'tax_code' => 'DE-19',
+            ]],
+        ]);
+
+        $this->assertSame(DocumentType::SalesCreditNote, $document->type);
+        $this->assertSame(DocumentStatus::Issued, $document->document_status);
+        $this->assertSame(-11900, $document->openItem->original_minor);
+        $this->assertSame(OpenItemKind::Receivable, $document->openItem->kind);
+        $this->assertSame(-11900, $document->openItem->remainingMinor());
+        $this->assertStringStartsWith('GS2026-', (string) $document->number);
+
+        $journal = JournalEntry::query()
+            ->where('source_type', 'document')
+            ->where('source_id', (string) $document->getKey())
+            ->firstOrFail();
+        $ar = (int) AccountRoleAssignment::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('role', AccountRole::Receivable)
+            ->value('ledger_account_id');
+        $revenue = (int) AccountRoleAssignment::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('role', AccountRole::Revenue)
+            ->value('ledger_account_id');
+        $outputTax = (int) AccountRoleAssignment::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('role', AccountRole::OutputTax)
+            ->value('ledger_account_id');
+
+        $this->assertSame(11900, (int) $journal->lines->firstWhere('ledger_account_id', $ar)?->credit_minor);
+        $this->assertSame(10000, (int) $journal->lines->firstWhere('ledger_account_id', $revenue)?->debit_minor);
+        $this->assertSame(1900, (int) $journal->lines->firstWhere('ledger_account_id', $outputTax)?->debit_minor);
+    }
+
+    #[Test]
+    public function line_discounts_reduce_net_before_tax(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+
+        $document = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-10',
+            'currency' => 'EUR',
+            'lines' => [[
+                'description' => 'Discounted',
+                'quantity' => '1',
+                'unit_price_minor' => 10000,
+                'discount' => '10%',
+                'tax_code' => 'DE-19',
+            ]],
+        ]);
+
+        $this->assertSame(9000, $document->net_minor);
+        $this->assertSame(1710, $document->tax_minor);
+        $this->assertSame(10710, $document->gross_minor);
+        $this->assertSame('10%', $document->lines->firstOrFail()->discount);
+    }
+
+    #[Test]
+    public function drafts_cannot_be_posted_and_foreign_currency_is_rejected(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+        $service = app(IssueSalesInvoice::class);
+
+        $draft = $service->createDraft($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-10',
+            'currency' => 'EUR',
+            'lines' => [[
+                'description' => 'Draft',
+                'quantity' => '1',
+                'unit_price_minor' => 1000,
+                'tax_code' => 'DE-19',
+            ]],
+        ]);
+
+        try {
+            app(PostDocument::class)->handle($draft);
+            $this->fail('A draft must not be posted.');
+        } catch (DocumentException) {
+            $this->assertSame(PostingStatus::Unposted, $draft->fresh()->posting_status);
+        }
+
+        $this->expectException(DocumentException::class);
+        $service->createDraft($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-10',
+            'currency' => 'USD',
+            'lines' => [[
+                'description' => 'Foreign',
+                'quantity' => '1',
+                'unit_price_minor' => 1000,
+                'tax_code' => 'DE-19',
+            ]],
+        ]);
+    }
+
+    #[Test]
+    public function non_recoverable_purchase_tax_stays_on_the_expense_account(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $supplier = $this->makeParty($entity, ['is_customer' => false, 'is_supplier' => true, 'legal_name' => 'Supplier AG']);
+        $code = TaxCode::query()->create([
+            'legal_entity_id' => $entity->getKey(),
+            'code' => 'DE-NR',
+            'name' => 'Non-recoverable 19%',
+            'direction' => 'incoming',
+            'is_active' => true,
+        ]);
+        TaxRuleVersion::query()->create([
+            'tax_code_id' => $code->getKey(),
+            'valid_from' => '2007-01-01',
+            'valid_to' => null,
+            'rate_bp' => 1900,
+            'recoverable' => false,
+            'category' => 'standard',
+        ]);
+
+        $document = app(RegisterPurchaseInvoice::class)->handle($entity, [
+            'party_id' => $supplier->getKey(),
+            'supplier_invoice_number' => 'NR-1',
+            'issue_date' => '2026-03-11',
+            'currency' => 'EUR',
+            'lines' => [[
+                'description' => 'Entertainment',
+                'quantity' => '1',
+                'unit_price_minor' => 10000,
+                'tax_code' => 'DE-NR',
+                'classification_code' => 'other_operating_expense',
+            ]],
+        ]);
+
+        $this->assertFalse($document->lines->firstOrFail()->tax_recoverable);
+        $this->assertSame(11900, $document->gross_minor);
+
+        $journal = JournalEntry::query()
+            ->where('source_type', 'document')
+            ->where('source_id', (string) $document->getKey())
+            ->firstOrFail();
+        $expense = (int) $document->lines->firstOrFail()->ledger_account_id;
+        $inputTax = (int) AccountRoleAssignment::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('role', AccountRole::InputTax)
+            ->value('ledger_account_id');
+        $payable = (int) AccountRoleAssignment::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('role', AccountRole::Payable)
+            ->value('ledger_account_id');
+
+        $this->assertSame(11900, (int) $journal->lines->firstWhere('ledger_account_id', $expense)?->debit_minor);
+        $this->assertNull($journal->lines->firstWhere('ledger_account_id', $inputTax));
+        $this->assertSame(11900, (int) $journal->lines->firstWhere('ledger_account_id', $payable)?->credit_minor);
     }
 }

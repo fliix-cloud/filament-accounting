@@ -2,12 +2,14 @@
 
 namespace FilamentAccounting\Ledger;
 
+use Brick\Math\BigDecimal;
 use FilamentAccounting\Audit\JournalSnapshot;
 use FilamentAccounting\Contracts\LedgerEngine;
 use FilamentAccounting\Enums\JournalStatus;
 use FilamentAccounting\Enums\PeriodState;
 use FilamentAccounting\Events\JournalPosted;
 use FilamentAccounting\Exceptions\ClosedPeriodException;
+use FilamentAccounting\Exceptions\CurrencyMismatchException;
 use FilamentAccounting\Exceptions\UnbalancedJournalException;
 use FilamentAccounting\Models\JournalEntry;
 use FilamentAccounting\Models\JournalLine;
@@ -42,6 +44,7 @@ final class FirstPartyLedgerEngine implements LedgerEngine
             }
 
             $accounts = $this->assertLines($entity, $command->lines);
+            $this->assertCurrencyAndBalance($command);
 
             $period = $this->periods->covering($entity, $command->postedOn, lock: true);
 
@@ -49,21 +52,10 @@ final class FirstPartyLedgerEngine implements LedgerEngine
                 throw new ClosedPeriodException(__('filament-accounting::errors.period_closed'));
             }
 
-            $debits = 0;
-            $credits = 0;
-            foreach ($command->lines as $line) {
-                $debits += $line->baseDebitMinor;
-                $credits += $line->baseCreditMinor;
-            }
-
-            if ($debits !== $credits) {
-                throw new UnbalancedJournalException(__('filament-accounting::errors.unbalanced_journal'));
-            }
-
             $entry = new JournalEntry;
             $entry->fill([
                 'legal_entity_id' => $entity->getKey(),
-                'sequence' => $this->nextSequence($entity),
+                'sequence' => $this->nextSequence($entity, $command->postedOn),
                 'period_id' => $period->getKey(),
                 'period_snapshot' => [
                     'id' => (int) $period->getKey(),
@@ -246,13 +238,65 @@ final class FirstPartyLedgerEngine implements LedgerEngine
         return $accounts;
     }
 
-    private function nextSequence(LegalEntity $entity): string
+    private function assertCurrencyAndBalance(PostJournalCommand $command): void
     {
-        $year = now()->year;
+        $currency = strtoupper($command->currency);
+        $base = strtoupper($command->baseCurrency);
+
+        if ($currency !== $base) {
+            throw new CurrencyMismatchException(__('filament-accounting::errors.foreign_currency_unsupported'));
+        }
+
+        if (filled($command->exchangeRate) && ! $this->isUnityRate((string) $command->exchangeRate)) {
+            throw new CurrencyMismatchException(__('filament-accounting::errors.foreign_currency_unsupported'));
+        }
+
+        $transactionDebit = 0;
+        $transactionCredit = 0;
+        $baseDebit = 0;
+        $baseCredit = 0;
+
+        foreach ($command->lines as $line) {
+            if (strtoupper($line->currency) !== $currency) {
+                throw new CurrencyMismatchException(__('filament-accounting::errors.foreign_currency_unsupported'));
+            }
+
+            if ($line->debitMinor !== $line->baseDebitMinor || $line->creditMinor !== $line->baseCreditMinor) {
+                throw new UnbalancedJournalException(__('filament-accounting::errors.unbalanced_journal'));
+            }
+
+            $transactionDebit += $line->debitMinor;
+            $transactionCredit += $line->creditMinor;
+            $baseDebit += $line->baseDebitMinor;
+            $baseCredit += $line->baseCreditMinor;
+        }
+
+        if ($transactionDebit !== $transactionCredit || $baseDebit !== $baseCredit) {
+            throw new UnbalancedJournalException(__('filament-accounting::errors.unbalanced_journal'));
+        }
+    }
+
+    private function isUnityRate(string $rate): bool
+    {
+        try {
+            return BigDecimal::of(trim($rate))->compareTo(1) === 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function nextSequence(LegalEntity $entity, string $postedOn): string
+    {
+        $year = (int) substr($postedOn, 0, 4);
+
+        if ($year < 1000 || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $postedOn)) {
+            throw new UnbalancedJournalException(__('filament-accounting::errors.unbalanced_journal'));
+        }
+
         $last = JournalEntry::query()
             ->where('legal_entity_id', $entity->getKey())
             ->where('sequence', 'like', $year.'-%')
-            ->orderByDesc('id')
+            ->orderByDesc('sequence')
             ->lockForUpdate()
             ->value('sequence');
 

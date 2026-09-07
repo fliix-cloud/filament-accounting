@@ -22,6 +22,7 @@ use FilamentAccounting\Filament\Resources\BankStatementLineResource\Pages\ViewBa
 use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\Reconciliation;
 use FilamentAccounting\Models\ReconciliationSplit;
+use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Support\MoneyFormatter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -68,7 +69,8 @@ class BankStatementLineResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
+        return app(LegalEntityScope::class)
+            ->constrain(parent::getEloquentQuery())
             ->whereHas('bankAccount', fn (Builder $query): Builder => $query->where('is_active', true))
             ->with([
                 'bankAccount',

@@ -4,6 +4,7 @@ namespace FilamentAccounting\Banking\FinTs\Support;
 
 use DOMDocument;
 use DOMElement;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 final class SepaPainCreditTransfer
@@ -22,6 +23,7 @@ final class SepaPainCreditTransfer
         string $currency,
         ?string $purpose,
         ?string $endToEndId,
+        ?string $requestedExecutionDate = null,
     ): string {
         $isV09 = str_contains($schema, 'pain.001.001.09');
         $bicTag = $isV09 ? 'BICFI' : 'BIC';
@@ -54,10 +56,11 @@ final class SepaPainCreditTransfer
         $this->text($dom, $svc, 'Cd', 'SEPA');
 
         $execution = $payment->appendChild($dom->createElement('ReqdExctnDt'));
+        $executionDate = $this->executionDate($requestedExecutionDate);
         if ($isV09) {
-            $this->text($dom, $execution, 'Dt', '1999-01-01');
+            $this->text($dom, $execution, 'Dt', $executionDate);
         } else {
-            $execution->appendChild($dom->createTextNode('1999-01-01'));
+            $execution->appendChild($dom->createTextNode($executionDate));
         }
 
         $dbtr = $payment->appendChild($dom->createElement('Dbtr'));
@@ -171,5 +174,24 @@ final class SepaPainCreditTransfer
         $value = preg_replace('/\s+/', ' ', $value) ?? '';
 
         return mb_substr(trim($value), 0, $max);
+    }
+
+    private function executionDate(?string $requested): string
+    {
+        if (! filled($requested)) {
+            return '1999-01-01';
+        }
+
+        try {
+            $day = Carbon::parse($requested)->toDateString();
+        } catch (\Throwable) {
+            return '1999-01-01';
+        }
+
+        if ($day <= now()->toDateString()) {
+            return '1999-01-01';
+        }
+
+        return $day;
     }
 }

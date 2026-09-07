@@ -109,7 +109,15 @@ class SalesInvoiceResource extends Resource
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
             DatePicker::make('due_date')->label(__('filament-accounting::fields.due_date'))
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
-            Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable()->required()
+            Select::make('currency')
+                ->label(__('filament-accounting::fields.currency'))
+                ->options(function (): array {
+                    $currency = (string) app(LegalEntityScope::class)->require()->base_currency;
+
+                    return [$currency => $currency];
+                })
+                ->default(fn (): string => (string) app(LegalEntityScope::class)->require()->base_currency)
+                ->required()
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
             self::totalsSection(),
             Repeater::make('lines')

@@ -100,9 +100,7 @@ class TransferService
             );
         } catch (\Throwable $e) {
             $mapped = ErrorMapper::map($e);
-            $status = $mapped instanceof AmbiguousSubmissionException
-                ? PaymentStatus::Ambiguous
-                : PaymentStatus::Failed;
+            $status = ErrorMapper::paymentStatusAfterSubmit($mapped);
 
             DB::transaction(function () use ($transfer, $mapped, $status): void {
                 /** @var BankTransfer|null $locked */

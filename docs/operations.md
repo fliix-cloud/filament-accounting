@@ -17,6 +17,8 @@ does not make a system GoBD-compliant or certified.
   and integrity checks.
 - Record the deployed package version, commit, migrations, dependencies, and
   relevant configuration for every release.
+- Define the Laravel Gates listed in `authorization.abilities`, or provide a
+  custom `AccountingAuthorizer`. Authentication alone does not grant access.
 - Define retention, legal-hold, disposal, and access-review procedures for the
   applicable jurisdiction.
 

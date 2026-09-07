@@ -4,11 +4,11 @@ namespace FilamentAccounting\Services;
 
 use FilamentAccounting\Contracts\AccountingActorResolver;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
-use FilamentAccounting\Enums\DocumentDirection;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Exceptions\DocumentException;
+use FilamentAccounting\Exceptions\InvalidMoneyException;
 use FilamentAccounting\Models\CatalogItem;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\DocumentLine;
@@ -62,7 +62,9 @@ final class IssueSalesInvoice
             }
 
             $party = $this->party($entity, $payload['party_id'] ?? null);
+            $type = $this->salesType($payload['type'] ?? null);
             $currency = strtoupper((string) ($payload['currency'] ?? $entity->base_currency));
+            $this->assertBaseCurrency($entity, $currency);
             $issueDate = (string) ($payload['issue_date'] ?? now()->toDateString());
             $taxDate = (string) ($payload['supply_date'] ?? $issueDate);
             $actor = $this->actors->resolve();
@@ -70,8 +72,8 @@ final class IssueSalesInvoice
             $document = new Document;
             $document->fill([
                 'legal_entity_id' => $entity->getKey(),
-                'type' => DocumentType::SalesInvoice,
-                'direction' => DocumentDirection::Outgoing,
+                'type' => $type,
+                'direction' => $type->direction(),
                 'document_status' => DocumentStatus::Draft,
                 'posting_status' => PostingStatus::Unposted,
                 'party_id' => $party->getKey(),
@@ -115,6 +117,7 @@ final class IssueSalesInvoice
 
             $party = $this->party($entity, $payload['party_id'] ?? $document->party_id);
             $currency = strtoupper((string) ($payload['currency'] ?? $document->currency));
+            $this->assertBaseCurrency($entity, $currency);
             $issueDate = (string) ($payload['issue_date'] ?? $document->issue_date?->toDateString());
             $taxDate = (string) ($payload['supply_date'] ?? $issueDate);
 
@@ -148,7 +151,8 @@ final class IssueSalesInvoice
                 return $document;
             }
 
-            if ($document->document_status !== DocumentStatus::Draft || $document->type !== DocumentType::SalesInvoice) {
+            if ($document->document_status !== DocumentStatus::Draft
+                || ! in_array($document->type, [DocumentType::SalesInvoice, DocumentType::SalesCreditNote], true)) {
                 throw new DocumentException(__('filament-accounting::errors.only_draft_invoice_issuable'));
             }
 
@@ -162,7 +166,7 @@ final class IssueSalesInvoice
 
             $document->party_snapshot = $party->snapshot();
             $document->legal_entity_snapshot = $entity->invoiceSnapshot();
-            $document->number = $this->numbers->next($entity, DocumentType::SalesInvoice, $issueDate);
+            $document->number = $this->numbers->next($entity, $document->type, $issueDate);
             $document->document_status = DocumentStatus::Issued;
             $document->issued_by_type = $actor?->getMorphClass();
             $document->issued_by_id = $actor ? (string) $actor->getKey() : null;
@@ -182,6 +186,28 @@ final class IssueSalesInvoice
         }
 
         return $post ? $this->poster->handle($document) : $document;
+    }
+
+    private function salesType(mixed $type): DocumentType
+    {
+        if ($type === null || $type === '') {
+            return DocumentType::SalesInvoice;
+        }
+
+        $resolved = $type instanceof DocumentType ? $type : DocumentType::tryFrom((string) $type);
+        if (! $resolved instanceof DocumentType
+            || ! in_array($resolved, [DocumentType::SalesInvoice, DocumentType::SalesCreditNote], true)) {
+            throw new DocumentException(__('filament-accounting::errors.unsupported_document_type'));
+        }
+
+        return $resolved;
+    }
+
+    private function assertBaseCurrency(LegalEntity $entity, string $currency): void
+    {
+        if (strtoupper($currency) !== strtoupper((string) $entity->base_currency)) {
+            throw new DocumentException(__('filament-accounting::errors.foreign_currency_unsupported'));
+        }
     }
 
     private function party(LegalEntity $entity, mixed $partyId): Party
@@ -229,6 +255,15 @@ final class IssueSalesInvoice
                     ? ExactMoney::ofString((string) $input['unit_price'], $currency)->minorAmount
                     : ($catalog instanceof CatalogItem ? $catalog->default_unit_price_minor : 0));
             $lineNet = LineMoneyCalculator::netMinor($quantity, $unitPrice);
+            try {
+                $lineNet = LineMoneyCalculator::netAfterDiscount(
+                    $lineNet,
+                    array_key_exists('discount', $input) ? (string) $input['discount'] : null,
+                    $currency,
+                );
+            } catch (InvalidMoneyException $e) {
+                throw new DocumentException(__('filament-accounting::errors.invalid_line_discount'), 0, $e);
+            }
             $suggestion = $catalog instanceof CatalogItem
                 ? $this->taxSuggestions->suggest($entity, $party, $catalog->type, $date, $catalog->default_tax_code)
                 : null;

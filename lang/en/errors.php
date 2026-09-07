@@ -71,5 +71,8 @@ return [
     'only_purchase_invoice_draft_deletable' => 'Only an unposted purchase invoice draft can be discarded.',
     'reason_required' => 'A non-empty reason is required.',
     'attachment_immutable' => 'Retained attachment evidence cannot be changed or deleted.',
-    'document_not_ready_to_post' => 'Only an issued sales invoice or received purchase invoice can be posted.',
+    'document_not_ready_to_post' => 'Only issued sales documents or received purchase documents can be posted.',
+    'foreign_currency_unsupported' => 'Postings must use the legal entity base currency. Foreign-currency conversion is not implemented.',
+    'invalid_line_discount' => 'The line discount is invalid. Use a percent such as 10% or an amount in the document currency that does not exceed the line net.',
+    'unsupported_document_type' => 'This document type is not valid for the current workflow.',
 ];

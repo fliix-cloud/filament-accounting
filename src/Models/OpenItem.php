@@ -69,9 +69,13 @@ class OpenItem extends AccountingModel
 
     public function remainingMinor(): int
     {
-        $settled = (int) $this->settlements()
+        $settled = abs((int) $this->settlements()
             ->where('is_reversed', false)
-            ->sum('amount_minor');
+            ->sum('amount_minor'));
+
+        if ($this->original_minor < 0) {
+            return $this->original_minor + $settled;
+        }
 
         return $this->original_minor - $settled;
     }

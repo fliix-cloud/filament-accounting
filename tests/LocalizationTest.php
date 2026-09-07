@@ -29,6 +29,8 @@ class LocalizationTest extends TestCase
             'filament-accounting::fields.amount_mismatch_confirm',
             'filament-accounting::statuses.amount_match.mismatch',
             'filament-accounting::errors.unbalanced_journal',
+            'filament-accounting::errors.document_not_ready_to_post',
+            'filament-accounting::errors.foreign_currency_unsupported',
             'filament-accounting::errors.split_requires_multiple_allocations',
             'filament-accounting::notifications.reconciliation_finalized',
             'filament-accounting::validation.splits_must_balance',

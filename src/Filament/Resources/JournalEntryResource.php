@@ -14,6 +14,7 @@ use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\JournalEntryResource\Pages\ListJournalEntries;
 use FilamentAccounting\Filament\Resources\JournalEntryResource\Pages\ViewJournalEntry;
 use FilamentAccounting\Models\JournalEntry;
+use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Support\MoneyFormatter;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -66,7 +67,9 @@ class JournalEntryResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with('lines');
+        return app(LegalEntityScope::class)
+            ->constrain(parent::getEloquentQuery())
+            ->with('lines');
     }
 
     public static function infolist(Schema $schema): Schema

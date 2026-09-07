@@ -43,6 +43,7 @@ use FilamentAccounting\Banking\FinTs\Models\BankSyncRun;
 use FilamentAccounting\Banking\FinTs\Models\BankTransfer;
 use FilamentAccounting\Banking\FinTs\Models\StrongAuthenticationSession;
 use FilamentAccounting\Banking\FinTs\Support\ErrorMapper;
+use FilamentAccounting\Banking\FinTs\Support\SerializedFintsPayload;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -467,7 +468,7 @@ class StrongAuthenticationCoordinator
         }
 
         $client = $this->factory->make($connection, $persisted);
-        $action = unserialize($serialized, ['allowed_classes' => true]);
+        $action = SerializedFintsPayload::unserialize($serialized, requireObject: true);
 
         if (! $action instanceof BaseAction) {
             throw new ScaExpiredException('Stored FinTS action is invalid.');
