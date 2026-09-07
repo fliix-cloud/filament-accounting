@@ -155,9 +155,8 @@ class Document extends AccountingModel
                 ]);
             } elseif ($document->isDirty('document_status')) {
                 $allowed = match ($stored->type) {
-                    DocumentType::SalesInvoice => [DocumentStatus::Issued],
-                    DocumentType::PurchaseInvoice => [DocumentStatus::Received, DocumentStatus::Discarded],
-                    default => [],
+                    DocumentType::SalesInvoice, DocumentType::SalesCreditNote => [DocumentStatus::Issued],
+                    DocumentType::PurchaseInvoice, DocumentType::PurchaseCreditNote => [DocumentStatus::Received, DocumentStatus::Discarded],
                 };
                 if (! in_array($document->document_status, $allowed, true)) {
                     throw new PostedRecordImmutableException(__('filament-accounting::errors.document_immutable'));
