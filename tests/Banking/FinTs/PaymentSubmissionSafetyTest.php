@@ -7,9 +7,11 @@ use FilamentAccounting\Banking\FinTs\Enums\PaymentStatus;
 use FilamentAccounting\Banking\FinTs\Enums\ScaSessionState;
 use FilamentAccounting\Banking\FinTs\Enums\TransferType;
 use FilamentAccounting\Banking\FinTs\Exceptions\AmbiguousSubmissionException;
+use FilamentAccounting\Banking\FinTs\Exceptions\FinTsException;
 use FilamentAccounting\Banking\FinTs\Models\BankConnection;
 use FilamentAccounting\Banking\FinTs\Models\BankTransfer;
 use FilamentAccounting\Banking\FinTs\Services\TransferService;
+use FilamentAccounting\Banking\FinTs\Support\ErrorMapper;
 use FilamentAccounting\Models\AccountingBankAccount;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Tests\TestCase;
@@ -45,6 +47,15 @@ class PaymentSubmissionSafetyTest extends TestCase
 
         $this->assertSame(ScaSessionState::Done, $outcome->state);
         $this->assertSame(PaymentStatus::Submitted, $transfer->fresh()?->status);
+    }
+
+    #[Test]
+    public function unknown_post_submit_errors_are_ambiguous_not_failed(): void
+    {
+        $mapped = ErrorMapper::map(new \RuntimeException('connection reset'));
+
+        $this->assertInstanceOf(FinTsException::class, $mapped);
+        $this->assertSame(PaymentStatus::Ambiguous, ErrorMapper::paymentStatusAfterSubmit($mapped));
     }
 
     private function transfer(PaymentStatus $status): BankTransfer

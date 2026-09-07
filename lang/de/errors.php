@@ -71,5 +71,8 @@ return [
     'only_purchase_invoice_draft_deletable' => 'Nur ein ungebuchter Eingangsrechnungsentwurf kann verworfen werden.',
     'reason_required' => 'Eine nicht leere Begründung ist erforderlich.',
     'attachment_immutable' => 'Aufbewahrte Belegdateien dürfen nicht geändert oder gelöscht werden.',
-    'document_not_ready_to_post' => 'Nur eine ausgestellte Ausgangsrechnung oder empfangene Eingangsrechnung kann gebucht werden.',
+    'document_not_ready_to_post' => 'Nur freigegebene Ausgangsbelege oder empfangene Eingangsbelege können gebucht werden.',
+    'foreign_currency_unsupported' => 'Buchungen müssen in der Hauswährung des Mandanten erfolgen. Eine Fremdwährungsumrechnung ist nicht implementiert.',
+    'invalid_line_discount' => 'Der Positionsrabatt ist ungültig. Verwenden Sie einen Prozentsatz wie 10% oder einen Betrag in Belegwährung, der den Nettobetrag nicht übersteigt.',
+    'unsupported_document_type' => 'Diese Belegart ist für den aktuellen Vorgang nicht zulässig.',
 ];

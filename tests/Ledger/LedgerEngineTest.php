@@ -6,6 +6,7 @@ use FilamentAccounting\Contracts\LedgerEngine;
 use FilamentAccounting\Enums\JournalStatus;
 use FilamentAccounting\Enums\PeriodState;
 use FilamentAccounting\Exceptions\ClosedPeriodException;
+use FilamentAccounting\Exceptions\CurrencyMismatchException;
 use FilamentAccounting\Exceptions\PostedRecordImmutableException;
 use FilamentAccounting\Exceptions\UnbalancedJournalException;
 use FilamentAccounting\Ledger\JournalLineDraft;
@@ -256,4 +257,76 @@ class LedgerEngineTest extends TestCase
         $this->assertTrue($first->is($second));
         $this->assertSame(1, JournalEntry::query()->where('legal_entity_id', $entity->getKey())->where('idempotency_key', 'same-key')->count());
     }
+
+    #[Test]
+    public function journal_sequence_uses_the_posted_on_year(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $bank = (int) $entity->ledgerAccounts()->where('code', '1200')->value('id');
+        $revenue = (int) $entity->ledgerAccounts()->where('code', '8400')->value('id');
+
+        $entry = app(LedgerEngine::class)->post(new PostJournalCommand(
+            legalEntityId: (int) $entity->getKey(),
+            postedOn: '2025-12-31',
+            sourceType: 'manual',
+            sourceId: 'backdated',
+            currency: 'EUR',
+            baseCurrency: 'EUR',
+            lines: [
+                JournalLineDraft::debit($bank, 100, 'EUR'),
+                JournalLineDraft::credit($revenue, 100, 'EUR'),
+            ],
+        ));
+
+        $this->assertSame('2025-000001', $entry->sequence);
+    }
+
+    #[Test]
+    public function transaction_currency_must_balance_and_match_base_amounts(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $bank = (int) $entity->ledgerAccounts()->where('code', '1200')->value('id');
+        $revenue = (int) $entity->ledgerAccounts()->where('code', '8400')->value('id');
+
+        $this->expectException(UnbalancedJournalException::class);
+        app(LedgerEngine::class)->post(new PostJournalCommand(
+            legalEntityId: (int) $entity->getKey(),
+            postedOn: '2026-03-01',
+            sourceType: 'manual',
+            sourceId: 'tx-unbalanced',
+            currency: 'EUR',
+            baseCurrency: 'EUR',
+            lines: [
+                new JournalLineDraft($bank, 100, 0, 'EUR', 80, 0),
+                new JournalLineDraft($revenue, 0, 80, 'EUR', 0, 80),
+            ],
+        ));
+    }
+
+    #[Test]
+    public function foreign_currency_journals_are_rejected(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $bank = (int) $entity->ledgerAccounts()->where('code', '1200')->value('id');
+        $revenue = (int) $entity->ledgerAccounts()->where('code', '8400')->value('id');
+
+        $this->expectException(CurrencyMismatchException::class);
+        app(LedgerEngine::class)->post(new PostJournalCommand(
+            legalEntityId: (int) $entity->getKey(),
+            postedOn: '2026-03-01',
+            sourceType: 'manual',
+            sourceId: 'usd',
+            currency: 'USD',
+            baseCurrency: 'EUR',
+            exchangeRate: '0.92',
+            lines: [
+                JournalLineDraft::debit($bank, 100, 'USD'),
+                JournalLineDraft::credit($revenue, 100, 'USD'),
+            ],
+        ));
+    }
 }
+

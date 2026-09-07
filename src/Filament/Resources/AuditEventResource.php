@@ -10,6 +10,7 @@ use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Resources\AuditEventResource\Pages\ListAuditEvents;
 use FilamentAccounting\Filament\Resources\AuditEventResource\Pages\ViewAuditEvent;
 use FilamentAccounting\Models\AuditEvent;
+use FilamentAccounting\Ownership\LegalEntityScope;
 use Illuminate\Database\Eloquent\Builder;
 
 class AuditEventResource extends Resource
@@ -61,7 +62,9 @@ class AuditEventResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->orderByDesc('occurred_at');
+        return app(LegalEntityScope::class)
+            ->constrain(parent::getEloquentQuery())
+            ->orderByDesc('occurred_at');
     }
 
     public static function table(Table $table): Table

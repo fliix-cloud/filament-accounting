@@ -5,11 +5,11 @@ namespace FilamentAccounting\Services;
 use FilamentAccounting\Contracts\AccountingActorResolver;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Documents\ExpenseCategoryResolver;
-use FilamentAccounting\Enums\DocumentDirection;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Exceptions\DocumentException;
+use FilamentAccounting\Exceptions\InvalidMoneyException;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\DocumentLine;
 use FilamentAccounting\Models\LegalEntity;
@@ -55,15 +55,17 @@ final class RegisterPurchaseInvoice
             }
 
             $party = $this->party($entity, $payload['party_id'] ?? null, false);
+            $type = $this->purchaseType($payload['type'] ?? null);
             $currency = strtoupper((string) ($payload['currency'] ?? $entity->base_currency));
+            $this->assertBaseCurrency($entity, $currency);
             $issueDate = filled($payload['issue_date'] ?? null) ? (string) $payload['issue_date'] : null;
             $actor = $this->actors->resolve();
 
             $document = new Document;
             $document->fill([
                 'legal_entity_id' => $entity->getKey(),
-                'type' => DocumentType::PurchaseInvoice,
-                'direction' => DocumentDirection::Incoming,
+                'type' => $type,
+                'direction' => $type->direction(),
                 'supplier_invoice_number' => $payload['supplier_invoice_number'] ?? null,
                 'document_status' => DocumentStatus::Draft,
                 'posting_status' => PostingStatus::Unposted,
@@ -106,12 +108,14 @@ final class RegisterPurchaseInvoice
 
         return DB::transaction(function () use ($document, $entity, $payload): Document {
             $document = Document::query()->lockForUpdate()->whereKey($document->getKey())->firstOrFail();
-            if ($document->document_status !== DocumentStatus::Draft || $document->type !== DocumentType::PurchaseInvoice) {
+            if ($document->document_status !== DocumentStatus::Draft
+                || ! in_array($document->type, [DocumentType::PurchaseInvoice, DocumentType::PurchaseCreditNote], true)) {
                 throw new DocumentException(__('filament-accounting::errors.only_draft_invoice_editable'));
             }
 
             $party = $this->party($entity, $payload['party_id'] ?? $document->party_id);
             $currency = strtoupper((string) ($payload['currency'] ?? $document->currency));
+            $this->assertBaseCurrency($entity, $currency);
             $issueDate = (string) ($payload['issue_date'] ?? $document->issue_date?->toDateString() ?? now()->toDateString());
             $document->fill([
                 'party_id' => $party->getKey(),
@@ -144,7 +148,8 @@ final class RegisterPurchaseInvoice
             if ($document->document_status === DocumentStatus::Received) {
                 return $document;
             }
-            if ($document->document_status !== DocumentStatus::Draft || $document->type !== DocumentType::PurchaseInvoice) {
+            if ($document->document_status !== DocumentStatus::Draft
+                || ! in_array($document->type, [DocumentType::PurchaseInvoice, DocumentType::PurchaseCreditNote], true)) {
                 throw new DocumentException(__('filament-accounting::errors.only_draft_invoice_issuable'));
             }
             if ($document->lines->isEmpty()) {
@@ -169,7 +174,7 @@ final class RegisterPurchaseInvoice
             $issueDate = $document->issue_date?->toDateString() ?? now()->toDateString();
             $document->party_snapshot = $party->snapshot();
             $document->legal_entity_snapshot = $entity->invoiceSnapshot();
-            $document->number = $this->numbers->next($entity, DocumentType::PurchaseInvoice, $issueDate);
+            $document->number = $this->numbers->next($entity, $document->type, $issueDate);
             $document->document_status = DocumentStatus::Received;
             $document->issued_by_type = $actor?->getMorphClass();
             $document->issued_by_id = $actor ? (string) $actor->getKey() : null;
@@ -185,6 +190,28 @@ final class RegisterPurchaseInvoice
         });
 
         return $post ? $this->poster->handle($document) : $document;
+    }
+
+    private function purchaseType(mixed $type): DocumentType
+    {
+        if ($type === null || $type === '') {
+            return DocumentType::PurchaseInvoice;
+        }
+
+        $resolved = $type instanceof DocumentType ? $type : DocumentType::tryFrom((string) $type);
+        if (! $resolved instanceof DocumentType
+            || ! in_array($resolved, [DocumentType::PurchaseInvoice, DocumentType::PurchaseCreditNote], true)) {
+            throw new DocumentException(__('filament-accounting::errors.unsupported_document_type'));
+        }
+
+        return $resolved;
+    }
+
+    private function assertBaseCurrency(LegalEntity $entity, string $currency): void
+    {
+        if (strtoupper($currency) !== strtoupper((string) $entity->base_currency)) {
+            throw new DocumentException(__('filament-accounting::errors.foreign_currency_unsupported'));
+        }
     }
 
     private function party(LegalEntity $entity, mixed $partyId, bool $required = true): ?Party
@@ -242,6 +269,15 @@ final class RegisterPurchaseInvoice
                 ? (int) $input['unit_price_minor']
                 : ExactMoney::ofString((string) ($input['unit_price'] ?? '0'), $currency)->minorAmount;
             $lineNet = LineMoneyCalculator::netMinor($quantity, $unitPrice);
+            try {
+                $lineNet = LineMoneyCalculator::netAfterDiscount(
+                    $lineNet,
+                    array_key_exists('discount', $input) ? (string) $input['discount'] : null,
+                    $currency,
+                );
+            } catch (InvalidMoneyException $e) {
+                throw new DocumentException(__('filament-accounting::errors.invalid_line_discount'), 0, $e);
+            }
             $taxCodeValue = $input['tax_code'] ?? null;
             $version = filled($taxCodeValue) ? $this->taxRules->handle($entity, $taxCodeValue, $date) : null;
             if (! $version && ! array_key_exists('imported_tax_rate_bp', $input)) {

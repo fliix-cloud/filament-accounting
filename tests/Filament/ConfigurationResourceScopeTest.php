@@ -2,10 +2,16 @@
 
 namespace FilamentAccounting\Tests\Filament;
 
+use FilamentAccounting\Contracts\LedgerEngine;
+use FilamentAccounting\Filament\Resources\AuditEventResource;
+use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\CatalogItemResource;
+use FilamentAccounting\Filament\Resources\JournalEntryResource;
 use FilamentAccounting\Filament\Resources\LedgerAccountResource;
 use FilamentAccounting\Filament\Resources\PostingRuleResource;
 use FilamentAccounting\Filament\Resources\TaxCodeResource;
+use FilamentAccounting\Ledger\JournalLineDraft;
+use FilamentAccounting\Ledger\PostJournalCommand;
 use FilamentAccounting\Models\CatalogItem;
 use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 use FilamentAccounting\Tests\TestCase;
@@ -49,5 +55,50 @@ class ConfigurationResourceScopeTest extends TestCase
 
             $this->assertSame([$current->getKey()], $entityIds, $resource);
         }
+    }
+
+    #[Test]
+    public function journal_audit_and_bank_transaction_resources_only_query_the_current_entity(): void
+    {
+        $current = $this->makeEntity(['legal_name' => 'Current GmbH']);
+        $other = $this->makeEntity(['legal_name' => 'Other GmbH']);
+        $this->actingAs($this->makeUser());
+
+        foreach ([$current, $other] as $entity) {
+            $bank = (int) $entity->ledgerAccounts()->where('code', '1200')->value('id');
+            $revenue = (int) $entity->ledgerAccounts()->where('code', '8400')->value('id');
+            app(LedgerEngine::class)->post(new PostJournalCommand(
+                legalEntityId: (int) $entity->getKey(),
+                postedOn: '2026-03-01',
+                sourceType: 'manual',
+                sourceId: 'scope-'.$entity->getKey(),
+                currency: 'EUR',
+                baseCurrency: 'EUR',
+                lines: [
+                    JournalLineDraft::debit($bank, 1, 'EUR'),
+                    JournalLineDraft::credit($revenue, 1, 'EUR'),
+                ],
+            ));
+        }
+
+        app(SingleLegalEntityResolver::class)->bind($current);
+
+        foreach ([
+            JournalEntryResource::class,
+            AuditEventResource::class,
+        ] as $resource) {
+            $entityIds = $resource::getEloquentQuery()
+                ->pluck('legal_entity_id')
+                ->unique()
+                ->values()
+                ->all();
+
+            $this->assertSame([$current->getKey()], $entityIds, $resource);
+        }
+
+        $this->assertSame(
+            [],
+            BankStatementLineResource::getEloquentQuery()->pluck('legal_entity_id')->all(),
+        );
     }
 }

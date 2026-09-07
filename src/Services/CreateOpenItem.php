@@ -27,6 +27,9 @@ final class CreateOpenItem
             DocumentType::PurchaseInvoice, DocumentType::PurchaseCreditNote => OpenItemKind::Payable,
         };
 
+        $gross = abs((int) $document->gross_minor);
+        $original = $document->type->isCreditNote() ? -$gross : $gross;
+
         $item = new OpenItem;
         $item->fill([
             'legal_entity_id' => $document->legal_entity_id,
@@ -34,7 +37,7 @@ final class CreateOpenItem
             'party_id' => $document->party_id,
             'kind' => $kind,
             'currency' => $document->currency,
-            'original_minor' => (int) $document->gross_minor,
+            'original_minor' => $original,
             'due_on' => $document->due_date?->toDateString(),
             'is_reversed' => false,
         ]);

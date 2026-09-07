@@ -94,9 +94,7 @@ class DirectDebitService
             );
         } catch (\Throwable $e) {
             $mapped = ErrorMapper::map($e);
-            $status = $mapped instanceof AmbiguousSubmissionException
-                ? PaymentStatus::Ambiguous
-                : PaymentStatus::Failed;
+            $status = ErrorMapper::paymentStatusAfterSubmit($mapped);
 
             DB::transaction(function () use ($debit, $mapped, $status): void {
                 $locked = BankDirectDebit::query()->whereKey($debit->getKey())->lockForUpdate()->first();

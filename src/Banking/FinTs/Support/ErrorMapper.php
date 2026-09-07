@@ -5,12 +5,12 @@ namespace FilamentAccounting\Banking\FinTs\Support;
 use Fhp\CurlException;
 use Fhp\Protocol\ServerException;
 use Fhp\UnsupportedException;
+use FilamentAccounting\Banking\FinTs\Enums\PaymentStatus;
 use FilamentAccounting\Banking\FinTs\Exceptions\AmbiguousSubmissionException;
 use FilamentAccounting\Banking\FinTs\Exceptions\AuthenticationException;
 use FilamentAccounting\Banking\FinTs\Exceptions\BankRejectedException;
 use FilamentAccounting\Banking\FinTs\Exceptions\FinTsException;
 use FilamentAccounting\Banking\FinTs\Exceptions\FintsValidationException;
-use FilamentAccounting\Banking\FinTs\Exceptions\NetworkException;
 use FilamentAccounting\Banking\FinTs\Exceptions\RetryableException;
 use FilamentAccounting\Banking\FinTs\Exceptions\ScaExpiredException;
 use FilamentAccounting\Banking\FinTs\Exceptions\UnsupportedCapabilityException;
@@ -54,13 +54,7 @@ final class ErrorMapper
         }
 
         if ($e instanceof CurlException) {
-            $message = $e->getMessage();
-
-            if (str_contains(strtolower($message), 'timeout') || str_contains(strtolower($message), 'timed out')) {
-                return new AmbiguousSubmissionException(__('filament-accounting::banking/fints/errors.ambiguous'), 0, $e);
-            }
-
-            return new NetworkException(__('filament-accounting::banking/fints/errors.network'), 0, $e);
+            return new AmbiguousSubmissionException(__('filament-accounting::banking/fints/errors.ambiguous'), 0, $e);
         }
 
         if ($e instanceof UnsupportedException) {
@@ -94,6 +88,18 @@ final class ErrorMapper
         }
 
         return new FinTsException(__('filament-accounting::banking/fints/errors.generic'), 0, $e);
+    }
+
+    public static function paymentStatusAfterSubmit(FinTsException $mapped): PaymentStatus
+    {
+        if ($mapped instanceof BankRejectedException
+            || $mapped instanceof AuthenticationException
+            || $mapped instanceof FintsValidationException
+            || $mapped instanceof UnsupportedCapabilityException) {
+            return PaymentStatus::Failed;
+        }
+
+        return PaymentStatus::Ambiguous;
     }
 
     public static function sanitize(string $message): string

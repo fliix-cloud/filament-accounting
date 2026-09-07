@@ -10,12 +10,12 @@ use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Events\DocumentPosted;
+use FilamentAccounting\Exceptions\CurrencyMismatchException;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Ledger\JournalLineDraft;
 use FilamentAccounting\Ledger\PostJournalCommand;
 use FilamentAccounting\Models\AccountRoleAssignment;
 use FilamentAccounting\Models\Document;
-use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\LegalEntity;
 
 final class PostDocument
@@ -39,12 +39,14 @@ final class PostDocument
             if ($document->posting_status === PostingStatus::Posted) {
                 return $document;
             }
-            if ($document->posting_status !== PostingStatus::Unposted
-                || ! (($document->type === DocumentType::SalesInvoice && $document->document_status === DocumentStatus::Issued)
-                    || ($document->type === DocumentType::PurchaseInvoice && $document->document_status === DocumentStatus::Received))) {
+            if ($document->posting_status !== PostingStatus::Unposted || ! $this->isPostable($document)) {
                 throw new DocumentException(__('filament-accounting::errors.document_not_ready_to_post'));
             }
             $entity = LegalEntity::query()->findOrFail($document->legal_entity_id);
+            if (strtoupper((string) $document->currency) !== strtoupper((string) $entity->base_currency)) {
+                throw new CurrencyMismatchException(__('filament-accounting::errors.foreign_currency_unsupported'));
+            }
+
             $actor = $this->actors->resolve();
             $lines = $this->journalLines($entity, $document);
 
@@ -78,12 +80,23 @@ final class PostDocument
         });
     }
 
+    private function isPostable(Document $document): bool
+    {
+        return match ($document->type) {
+            DocumentType::SalesInvoice, DocumentType::SalesCreditNote => $document->document_status === DocumentStatus::Issued,
+            DocumentType::PurchaseInvoice, DocumentType::PurchaseCreditNote => $document->document_status === DocumentStatus::Received,
+        };
+    }
+
     /**
      * @return list<JournalLineDraft>
      */
     private function journalLines(LegalEntity $entity, Document $document): array
     {
         $currency = (string) $document->currency;
+        $creditNote = $document->type->isCreditNote();
+        $sales = in_array($document->type, [DocumentType::SalesInvoice, DocumentType::SalesCreditNote], true);
+        $gross = (int) $document->gross_minor;
         $drafts = [];
 
         $receivable = $this->accountForRole($entity, AccountRole::Receivable);
@@ -93,22 +106,16 @@ final class PostDocument
         $outputTax = $this->accountForRole($entity, AccountRole::OutputTax);
         $inputTax = $this->accountForRole($entity, AccountRole::InputTax);
 
-        $gross = (int) $document->gross_minor;
-        if (in_array($document->type, [DocumentType::SalesInvoice, DocumentType::SalesCreditNote], true)) {
-            $netByAccount = [];
-            foreach ($document->lines as $line) {
-                $accountId = $line->ledger_account_id ? (int) $line->ledger_account_id : $revenue;
-                $netByAccount[$accountId] = ($netByAccount[$accountId] ?? 0) + (int) $line->net_minor;
-            }
-
-            $drafts[] = JournalLineDraft::debit($receivable, $gross, $currency, $document->number);
-            foreach ($netByAccount as $accountId => $amount) {
+        if ($sales) {
+            $drafts[] = $this->signed(! $creditNote, $receivable, $gross, $currency, $document->number);
+            foreach ($this->netByAccount($document, $revenue, foldUnrecoverableTax: false) as $accountId => $amount) {
                 if ($amount !== 0) {
-                    $drafts[] = JournalLineDraft::credit((int) $accountId, $amount, $currency, $document->number);
+                    $drafts[] = $this->signed($creditNote, (int) $accountId, $amount, $currency, $document->number);
                 }
             }
-            foreach ($this->taxGroups($document) as $group) {
-                $drafts[] = JournalLineDraft::credit(
+            foreach ($this->taxGroups($document, onlyRecoverable: false) as $group) {
+                $drafts[] = $this->signed(
+                    $creditNote,
                     $outputTax,
                     $group['amount'],
                     $currency,
@@ -118,19 +125,14 @@ final class PostDocument
                 );
             }
         } else {
-            $netByAccount = [];
-            foreach ($document->lines as $line) {
-                $accountId = $line->ledger_account_id ? (int) $line->ledger_account_id : $expense;
-                $netByAccount[$accountId] = ($netByAccount[$accountId] ?? 0) + (int) $line->net_minor;
-            }
-
-            foreach ($netByAccount as $accountId => $amount) {
+            foreach ($this->netByAccount($document, $expense, foldUnrecoverableTax: true) as $accountId => $amount) {
                 if ($amount !== 0) {
-                    $drafts[] = JournalLineDraft::debit((int) $accountId, $amount, $currency, $document->number);
+                    $drafts[] = $this->signed(! $creditNote, (int) $accountId, $amount, $currency, $document->number);
                 }
             }
-            foreach ($this->taxGroups($document) as $group) {
-                $drafts[] = JournalLineDraft::debit(
+            foreach ($this->taxGroups($document, onlyRecoverable: true) as $group) {
+                $drafts[] = $this->signed(
+                    ! $creditNote,
                     $inputTax,
                     $group['amount'],
                     $currency,
@@ -139,7 +141,7 @@ final class PostDocument
                     $group['tax_rule_version_id'],
                 );
             }
-            $drafts[] = JournalLineDraft::credit($payable, $gross, $currency, $document->number);
+            $drafts[] = $this->signed($creditNote, $payable, $gross, $currency, $document->number);
         }
 
         if (count($drafts) < 2) {
@@ -150,12 +152,36 @@ final class PostDocument
     }
 
     /**
+     * @return array<int, int>
+     */
+    private function netByAccount(Document $document, int $fallbackAccountId, bool $foldUnrecoverableTax): array
+    {
+        $netByAccount = [];
+        foreach ($document->lines as $line) {
+            $accountId = $line->ledger_account_id ? (int) $line->ledger_account_id : $fallbackAccountId;
+            $amount = (int) $line->net_minor;
+            if ($foldUnrecoverableTax && $line->tax_recoverable === false) {
+                $amount += (int) $line->tax_minor;
+            }
+            $netByAccount[$accountId] = ($netByAccount[$accountId] ?? 0) + $amount;
+        }
+
+        return $netByAccount;
+    }
+
+    /**
      * @return list<array{amount: int, tax_code: string, tax_rule_version_id: int}>
      */
-    private function taxGroups(Document $document): array
+    private function taxGroups(Document $document, bool $onlyRecoverable): array
     {
         return $document->lines
-            ->filter(fn ($line): bool => (int) $line->tax_minor !== 0)
+            ->filter(function ($line) use ($onlyRecoverable): bool {
+                if ((int) $line->tax_minor === 0) {
+                    return false;
+                }
+
+                return ! ($onlyRecoverable && $line->tax_recoverable === false);
+            })
             ->groupBy(fn ($line): string => implode('|', [
                 (string) $line->tax_code,
                 (string) $line->tax_rule_version_id,
@@ -170,6 +196,20 @@ final class PostDocument
             ->all();
     }
 
+    private function signed(
+        bool $debit,
+        int $accountId,
+        int $minor,
+        string $currency,
+        ?string $description,
+        ?string $taxCode = null,
+        ?int $taxRuleVersionId = null,
+    ): JournalLineDraft {
+        return $debit
+            ? JournalLineDraft::debit($accountId, $minor, $currency, $description, $taxCode, $taxRuleVersionId)
+            : JournalLineDraft::credit($accountId, $minor, $currency, $description, $taxCode, $taxRuleVersionId);
+    }
+
     private function accountForRole(LegalEntity $entity, AccountRole $role): int
     {
         $assignment = AccountRoleAssignment::query()
@@ -177,20 +217,10 @@ final class PostDocument
             ->where('role', $role->value)
             ->first();
 
-        if ($assignment instanceof AccountRoleAssignment) {
-            return (int) $assignment->ledger_account_id;
-        }
-
-        $account = LedgerAccount::query()
-            ->where('legal_entity_id', $entity->getKey())
-            ->where('is_active', true)
-            ->orderBy('code')
-            ->first();
-
-        if (! $account) {
+        if (! $assignment instanceof AccountRoleAssignment) {
             throw new DocumentException(__('filament-accounting::errors.missing_account_role', ['role' => $role->value]));
         }
 
-        throw new DocumentException(__('filament-accounting::errors.missing_account_role', ['role' => $role->value]));
+        return (int) $assignment->ledger_account_id;
     }
 }

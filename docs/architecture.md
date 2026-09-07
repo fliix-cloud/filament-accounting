@@ -39,7 +39,8 @@ the UI but are not the security or accounting boundary.
 ## Accounting rules
 
 - Money uses integer minor units and exact decimal conversion, never floats.
-- A posted journal has at least two non-zero lines and balanced debits/credits.
+- Postings must use the legal entity base currency; foreign-currency conversion is not implemented.
+- A posted journal has at least two non-zero lines and balanced debits/credits in both transaction and base currency.
 - Posting is idempotent per Legal Entity and idempotency key.
 - Hard-closed periods reject new postings.
 - Posted journals and issued documents are immutable.
