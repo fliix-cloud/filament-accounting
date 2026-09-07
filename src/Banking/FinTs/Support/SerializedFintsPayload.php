@@ -2,7 +2,6 @@
 
 namespace FilamentAccounting\Banking\FinTs\Support;
 
-use Fhp\BaseAction;
 use FilamentAccounting\Banking\FinTs\Exceptions\ScaExpiredException;
 
 final class SerializedFintsPayload
@@ -25,22 +24,40 @@ final class SerializedFintsPayload
             throw new ScaExpiredException('Stored FinTS payload could not be inspected.');
         }
 
-        foreach ($matches[1] ?? [] as $class) {
+        foreach ($matches[1] as $class) {
             if (self::isAllowedClass($class)) {
                 continue;
             }
 
-            throw new ScaExpiredException('Stored FinTS payload contains a disallowed class.');
+            throw new ScaExpiredException("Stored FinTS payload contains a disallowed class [{$class}].");
         }
     }
 
     private static function isAllowedClass(string $class): bool
     {
-        if (str_starts_with($class, 'Fhp\\')
-            || in_array($class, [\DateTime::class, \DateTimeImmutable::class, \stdClass::class], true)) {
+        if ($class === \DateTime::class
+            || $class === \DateTimeImmutable::class
+            || $class === \stdClass::class
+            || str_starts_with($class, 'Fhp\\')) {
             return true;
         }
 
-        return class_exists($class) && is_subclass_of($class, BaseAction::class);
+        if (! class_exists($class)) {
+            return false;
+        }
+
+        foreach (class_parents($class) ?: [] as $parent) {
+            if (str_starts_with($parent, 'Fhp\\')) {
+                return true;
+            }
+        }
+
+        foreach (class_implements($class) ?: [] as $interface) {
+            if (str_starts_with($interface, 'Fhp\\')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
