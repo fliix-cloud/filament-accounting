@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'invoice_completion_failed' => 'Die Rechnung konnte nicht abgeschlossen werden. Bereits gespeicherte Dateien bleiben erhalten. Bitte prüfen Sie den Vorgang, bevor Sie ihn erneut abschließen.',
+    'artifacts_require_independent_commit' => 'Die Rechnungserstellung muss außerhalb einer bestehenden Buchhaltungstransaktion fortgesetzt werden.',
     'intake_requires_independent_commit' => 'Der Rechnungseingang muss außerhalb einer bestehenden Datenbanktransaktion gestartet werden.',
     'intake_processing_failed' => 'Die Verarbeitung wurde unterbrochen. Die bereits gespeicherten Dateien bleiben erhalten.',
     'intake_upload_failed' => 'Der Import konnte nicht abgeschlossen werden. Prüfen Sie den Vorgang unter „Offene Importe“. Falls kein Eingang angelegt wurde, prüfen Sie Dateityp, Dateigröße und Zugriffsrechte.',

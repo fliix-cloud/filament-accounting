@@ -26,6 +26,7 @@ final class PostDocument
         private readonly AccountingActorResolver $actors,
         private readonly CreateOpenItem $openItems,
         private readonly AuditLogger $audit,
+        private readonly GenerateInvoiceArtifacts $artifacts,
     ) {}
 
     public function handle(Document $document): Document
@@ -36,6 +37,9 @@ final class PostDocument
             LegalEntity::query()->lockForUpdate()->findOrFail($document->getRawOriginal('legal_entity_id'));
             $document = Document::query()->lockForUpdate()->with('lines')->findOrFail($document->getKey());
             $this->authorizer->authorize('post_documents', $document);
+            if (data_get($document->e_invoice_meta, 'artifacts_required', false) || $document->artifactSet()->exists()) {
+                $this->artifacts->verify($document);
+            }
             if ($document->posting_status === PostingStatus::Posted) {
                 return $document;
             }

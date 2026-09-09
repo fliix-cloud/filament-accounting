@@ -430,6 +430,22 @@ return new class extends Migration
             $table->index(['target_type', 'target_id']);
         });
 
+        Schema::create('accounting_invoice_artifact_sets', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('legal_entity_id')->constrained('accounting_legal_entities')->restrictOnDelete();
+            $table->foreignId('document_id')->unique()->constrained('accounting_documents')->restrictOnDelete();
+            $table->string('disk');
+            $table->json('manifest');
+            $table->json('snapshot');
+            $table->json('meta');
+            $table->char('evidence_sha256', 64);
+            $table->longText('pdf_base64');
+            $table->longText('xml');
+            $table->json('preserved_roles');
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('accounting_purchase_invoice_intakes', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
@@ -461,6 +477,7 @@ return new class extends Migration
     public function down(): void
     {
         $tables = [
+            'accounting_invoice_artifact_sets',
             'accounting_purchase_invoice_intakes',
             'accounting_audit_chain_heads',
             'accounting_audit_events',

@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'invoice_completion_failed' => 'The invoice could not be completed. Preserved files remain available. Please review the operation before completing it again.',
+    'artifacts_require_independent_commit' => 'Invoice generation must run outside an existing accounting transaction.',
     'intake_requires_independent_commit' => 'Invoice intake must start outside an existing database transaction.',
     'intake_processing_failed' => 'Processing was interrupted. Files already preserved remain available.',
     'intake_upload_failed' => 'Import could not be completed. Check Open imports. If no intake was created, check file type, size, and access permissions.',

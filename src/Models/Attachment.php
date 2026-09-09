@@ -63,7 +63,7 @@ class Attachment extends AccountingModel
 
         static::deleting(function (self $attachment): void {
             $stored = self::query()->findOrFail($attachment->getRawOriginal($attachment->getKeyName()));
-            if (in_array($stored->source_type, ['original_invoice', 'embedded_e_invoice', 'supplied_e_invoice'], true)) {
+            if (in_array($stored->source_type, ['original_invoice', 'embedded_e_invoice', 'supplied_e_invoice', 'generated_pdf', 'generated_xml'], true)) {
                 throw new PostedRecordImmutableException(__('filament-accounting::errors.attachment_immutable'));
             }
         });

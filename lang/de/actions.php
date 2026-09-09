@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'complete_issuance' => 'Abschließen',
     'discard_draft' => 'Entwurf verwerfen',
     'discard_draft_description' => 'Der Entwurf und die Originaldateien bleiben einsehbar. Die Lieferantenrechnung wird dadurch nicht storniert.',
     'download_attachment' => ':name herunterladen',

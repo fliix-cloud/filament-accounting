@@ -31,6 +31,7 @@ use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\EditSalesIn
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\ListSalesInvoices;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\ViewSalesInvoice;
 use FilamentAccounting\Filament\Support\InvoiceInfolist;
+use FilamentAccounting\Filament\Support\SalesInvoiceCompletionAction;
 use FilamentAccounting\Models\CatalogItem;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\Party;
@@ -85,7 +86,7 @@ class SalesInvoiceResource extends Resource
     {
         return app(LegalEntityScope::class)->constrain(parent::getEloquentQuery())
             ->where('type', DocumentType::SalesInvoice)
-            ->with(['party', 'lines.document', 'attachments', 'openItem.settlements', 'settlements.reconciliation.statementLine'])
+            ->with(['party', 'lines.document', 'attachments', 'artifactSet:id,document_id,completed_at', 'openItem.settlements', 'settlements.reconciliation.statementLine'])
             ->withCount('settlements');
     }
 
@@ -281,12 +282,19 @@ class SalesInvoiceResource extends Resource
                     ->label(__('filament-accounting::fields.assigned_transactions')),
             ])
             ->recordActions([
+                SalesInvoiceCompletionAction::make(),
                 Action::make('issue')
+                    ->databaseTransaction(false)
                     ->label(__('filament-accounting::actions.issue'))
                     ->visible(fn (Document $record): bool => $record->document_status->value === 'draft')
                     ->action(function (Document $record, IssueSalesInvoice $issuer): void {
-                        $issuer->issue($record);
-                        Notification::make()->title(__('filament-accounting::notifications.invoice_issued'))->success()->send();
+                        try {
+                            $issuer->issue($record);
+                            Notification::make()->title(__('filament-accounting::notifications.invoice_issued'))->success()->send();
+                        } catch (\Throwable $exception) {
+                            report($exception);
+                            Notification::make()->danger()->title(__('filament-accounting::errors.invoice_completion_failed'))->send();
+                        }
                     }),
             ]);
     }

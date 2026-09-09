@@ -53,7 +53,7 @@ baseline; the detailed findings retain that baseline as their reference.
 
 | Findings | Implemented in this change | Still required |
 | --- | --- | --- |
-| F11 / F9 | New `StoreAttachment` writes use owner-scoped, per-attempt paths, retain files after failure, and verify existing bytes on retry. Generated-artifact failure cleanup is removed; complete pairs are verified and reused across renderer upgrades. | General orphan recovery, safe recovery of partial outgoing pairs, production storage controls, and an authoritative issuance manifest. |
+| F11 / F9 | New `StoreAttachment` writes retain files after failure and verify retries. Outgoing invoices now commit a fixed PDF/XML set, render snapshot, paths, hashes, and preparation evidence before file writes. Retries use staged bytes, recover missing attachment references, and verify contents before posting. Issuance uses the accounting connection. Filament offers “Complete invoice” for interrupted issuance. | General orphan recovery, production concurrency/storage/restore evidence, independent verification/export of the complete artifact dataset, and a deployment migration. |
 | F1 / F3 / F7 / F9 / F11 | A committed intake manifest and verified private raw files precede parsing. PDF, standalone XML, and PDF/XML pairs are supported. Identity includes roles and contents. Attempts are audited; retry reuses preserved inputs. Business rollback retains intake evidence. Purchase registration uses the accounting connection. Source-total mismatches block conversion. Filament exposes open imports, safe downloads, and retry within purchase invoices. | Production concurrency and crash tests, complete conformance/accounting conversion checks, derived-file orphan recovery, and independent verification of intake/document relationships. |
 | F1 / F3 | Purchase draft disposal retains the document, lines, PDF/XML, and actor/reason evidence. It requires a dedicated permission, current company scope, and a locked persisted draft. UI offers “Discard draft”; physical deletion is disabled. Invalid accepted imports are now retained independently of drafts. | Complete operational review/correction of blocked intakes and production retention evidence. |
 | F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. | Bulk/SQL write prevention, concurrent mutation evidence, and controlled correction workflows. |
@@ -190,12 +190,9 @@ The base DEV migration adds `accounting_purchase_invoice_intakes`. Rebuild only
 disposable DEV databases. Old imports are not automatically attached to fabricated
 intake history. No production migration or backfill is supplied.
 
-The general `StoreAttachment` and generated-artifact workflows still need broader
-orphan recovery. Generated invoice retries retain XML after PDF failure, verify
-existing files, reject partial/ambiguous pairs, and preserve a complete pair across
-renderer upgrades. An authoritative issuance manifest and safe recovery of partial
-outgoing pairs remain open. If all generated attachment rows disappear, generation
-cannot yet distinguish missing metadata from first generation.
+General `StoreAttachment` writes still need broader orphan recovery. The outgoing
+invoice continuation below now provides a fixed artifact set and recovery of
+partial file writes and missing attachment references.
 
 Intake manifest and preservation events join the existing audit chain, but the
 verification command does not yet reconcile every intake/document relation against
@@ -203,11 +200,67 @@ independently anchored evidence. Model guards and row locks do not prevent raw S
 or privileged storage changes. Production concurrency, create-only/immutable
 storage controls, restoration, monitoring, and operator response still need evidence.
 
+### Implemented: recoverable outgoing invoice sets (F2 / F3 / F9 / F11)
+
+[GenerateInvoiceArtifacts](../src/Services/GenerateInvoiceArtifacts.php) now
+commits an [InvoiceArtifactSet](../src/Models/InvoiceArtifactSet.php) before its
+first filesystem write. The set holds the exact XML and base64-encoded PDF,
+the rendered document snapshot, renderer/template metadata, planned object paths,
+filenames, sizes, and hashes. Its evidence digest is recorded in a preparation
+audit event. The staged bytes are retained as evidence, not deleted after upload.
+
+Each file write, read-back verification, attachment reference, and preservation
+marker is processed under accounting-connection locks. A retry uses the committed
+bytes even after renderer or configuration changes. Objects found at their planned
+paths after an interrupted metadata commit are verified and reused; missing
+attachment rows can be reconstructed from the set. Missing files already marked
+preserved, changed bytes, duplicate references, changed render-source values, and
+altered local preparation evidence block continuation. Generated attachments and
+the set reject model deletion; preservation markers cannot be reset through models.
+If the set disappears but its preparation event remains, regeneration is refused
+even when every attachment row is also absent.
+
+Verification compares staged bytes, manifest, current render-source snapshot,
+attachment metadata/files, and the preparation event's payload, canonical payload,
+and hash. These are local checks. A coordinated privileged rewrite still requires
+the existing full-chain/independent-anchor checks; the generic verification/export
+commands do not yet reconcile every artifact set automatically.
+
+[IssueSalesInvoice](../src/Services/IssueSalesInvoice.php) freezes the artifact
+requirement when issuing. Changing the current generation setting cannot skip
+an already-required artifact step. Issuance and its sequence/audit updates use the
+accounting connection; generation requires an independent commit and rejects an
+enclosing accounting transaction. [PostDocument](../src/Services/PostDocument.php)
+verifies required or existing sets before posting. A retry keeps the invoice number
+and uses existing posting idempotency to avoid a second journal.
+
+Filament exposes **Complete invoice** only for issued invoices with pending
+completion and the required permissions. The action is available in the sales
+list and invoice view and runs without an outer transaction. It reports failure
+without deleting evidence; successful completion leads to the existing invoice
+view. No additional accounting fields or artifact-version choices are required.
+
+[InvoiceArtifactTest](../tests/Documents/InvoiceArtifactTest.php) covers repeated
+metadata failure, PDF storage failure, renderer upgrades, lost attachment rows,
+lost authoritative sets, stale models after source tampering, staged-byte and
+preparation-event tampering, model deletion guards, denied access, outer-transaction
+rejection, separate accounting-connection recovery, and Filament completion with
+exactly one invoice number and journal. Local tests use real commits and fake
+storage; production concurrency and crash/restore behavior remain release gates.
+The full local suite passed on Herd PHP 8.4.25 with **228 tests and 2,172
+assertions**. PHPStan reported no errors and the full Pint check passed.
+
+The base DEV migration adds `accounting_invoice_artifact_sets`. Include this table
+and its staged contents in retention, backup, restore, and future audit exports.
+Existing generated attachments without a set are not silently adopted. Rebuild
+only disposable DEV databases; no production migration or evidence backfill is
+provided. First rendering can be retried if it failed before committing a set,
+because no artifact file has yet been written by this workflow.
+
 ### Next slices
 
-1. Finish the authoritative issued-artifact workflow and recovery of interrupted
-   outgoing invoices (F11), using the same principle of simple user actions and
-   server-side evidence preservation.
+1. Integrate intake and outgoing artifact sets into scheduled verification,
+   independent evidence checks, and the complete machine-readable export.
 2. Extend intake verification and operator monitoring, and prove concurrent
    duplicate requests, process termination, and recovery on the selected
    production database/storage setup (F2 / F7 / F9 / F11).

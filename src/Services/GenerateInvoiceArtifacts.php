@@ -2,92 +2,232 @@
 
 namespace FilamentAccounting\Services;
 
+use FilamentAccounting\Audit\AuditEventHasher;
+use FilamentAccounting\Audit\CanonicalJson;
+use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Contracts\EInvoiceAdapter;
 use FilamentAccounting\Contracts\InvoiceRenderer;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Models\Attachment;
+use FilamentAccounting\Models\AuditEvent;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\DocumentLine;
+use FilamentAccounting\Models\InvoiceArtifactSet;
 use FilamentAccounting\Models\LegalEntity;
+use FilamentAccounting\Ownership\LegalEntityScope;
 use horstoeko\zugferd\ZugferdDocumentPdfMerger;
 use horstoeko\zugferd\ZugferdDocumentPdfReaderExt;
 use horstoeko\zugferd\ZugferdDocumentReader;
 use horstoeko\zugferd\ZugferdDocumentValidator;
 use horstoeko\zugferd\ZugferdXsdValidator;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 final class GenerateInvoiceArtifacts
 {
     public function __construct(
         private readonly EInvoiceAdapter $eInvoice,
         private readonly InvoiceRenderer $renderer,
-        private readonly StoreAttachment $attachments,
         private readonly VerifyAttachmentIntegrity $integrity,
+        private readonly AccountingAuthorizer $authorizer,
+        private readonly LegalEntityScope $entities,
+        private readonly AuditLogger $audit,
+        private readonly CanonicalJson $canonical,
+        private readonly AuditEventHasher $eventHasher,
     ) {}
 
     /** @return array{pdf: Attachment, xml: Attachment} */
     public function handle(Document $document): array
     {
-        if ($document->type !== DocumentType::SalesInvoice || $document->document_status !== DocumentStatus::Issued) {
-            throw new DocumentException(__('filament-accounting::errors.only_issued_sales_invoice_exportable'));
+        $entity = $this->entities->require();
+        $this->entities->assertSame($document->legal_entity_id, $entity);
+        $this->authorizer->authorize('issue_invoices', $entity);
+        if ($entity->getConnection()->transactionLevel() !== 0) {
+            throw new DocumentException(__('filament-accounting::errors.artifacts_require_independent_commit'));
+        }
+        $document = Document::query()->where('legal_entity_id', $entity->getKey())->with('lines')->findOrFail($document->getKey());
+        $attempt = (string) Str::uuid();
+        $this->audit->log($entity, 'invoice_artifacts.attempt_started', $document, correlationId: $attempt);
+        try {
+            $set = $this->prepare($entity, $document);
+            foreach (['xml', 'pdf'] as $role) {
+                $entity->getConnection()->transaction(function () use ($entity, $document, $set, $role): void {
+                    LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
+                    $locked = InvoiceArtifactSet::query()->whereKey($set->getKey())->lockForUpdate()->firstOrFail();
+                    $current = Document::query()->with('lines')->findOrFail($document->getKey());
+                    $this->assertEvidence($current, $locked);
+                    $file = $locked->manifest[$role];
+                    $disk = Storage::disk($locked->disk);
+                    if (! ($locked->preserved_roles[$role] ?? false) && ! $disk->exists($file['path'])) {
+                        $bytes = $role === 'xml' ? $locked->xml : base64_decode($locked->pdf_base64, true);
+                        if (! is_string($bytes) || ! $disk->put($file['path'], $bytes, ['visibility' => 'private'])) {
+                            throw new DocumentException(__('filament-accounting::errors.attachment_write_failed'));
+                        }
+                    }
+                    $stored = $disk->get($file['path']);
+                    if (! is_string($stored) || strlen($stored) !== $file['size'] || hash('sha256', $stored) !== $file['sha256']) {
+                        throw new DocumentException(__('filament-accounting::errors.attachment_integrity_failed'));
+                    }
+                    $attachments = $current->attachments()->where('source_type', 'generated_'.$role)->get();
+                    if ($attachments->count() > 1) {
+                        throw new DocumentException(__('filament-accounting::errors.invoice_originals_incomplete'));
+                    }
+                    if ($attachments->isEmpty()) {
+                        Attachment::query()->create([
+                            'legal_entity_id' => $entity->getKey(), 'attachable_type' => $current->getMorphClass(),
+                            'attachable_id' => $current->getKey(), 'original_filename' => $file['filename'],
+                            'mime_type' => $role === 'xml' ? 'application/xml' : 'application/pdf',
+                            'size' => $file['size'], 'sha256' => $file['sha256'], 'disk' => $locked->disk,
+                            'path' => $file['path'], 'source_type' => 'generated_'.$role,
+                            'structured_payload' => $role === 'xml' ? $locked->xml : null,
+                            'meta' => $locked->meta + ($role === 'pdf' ? [
+                                'embedded_xml_sha256' => $locked->manifest['xml']['sha256'], 'pdfa_part' => 3, 'pdfa_conformance' => 'B',
+                            ] : []),
+                        ]);
+                    } else {
+                        $this->assertAttachment($attachments->first(), $locked, $role);
+                    }
+                    $locked->preserved_roles = $locked->preserved_roles + [$role => true];
+                    if (count($locked->preserved_roles) === 2 && $locked->completed_at === null) {
+                        $locked->completed_at = now();
+                    }
+                    $locked->save();
+                    $this->audit->log($entity, 'invoice_artifacts.file_preserved', $current, ['role' => $role, 'sha256' => $file['sha256']]);
+                });
+            }
+            $this->verify($document);
+            $this->audit->log($entity, 'invoice_artifacts.completed', $document, correlationId: $attempt);
+        } catch (\Throwable $exception) {
+            try {
+                $this->audit->log($entity, 'invoice_artifacts.failed', $document, ['exception' => $exception::class], correlationId: $attempt);
+            } catch (\Throwable $loggingFailure) {
+                report($loggingFailure);
+            }
+            throw $exception;
         }
 
-        $document->loadMissing('lines');
-        $version = (string) (($document->legal_entity_snapshot ?? [])['invoice_template_version'] ?? $this->renderer->version());
-        $existing = Attachment::query()
-            ->where('legal_entity_id', $document->legal_entity_id)
-            ->where('attachable_type', $document->getMorphClass())
-            ->where('attachable_id', $document->getKey())
-            ->whereIn('source_type', ['generated_pdf', 'generated_xml'])
-            ->get();
-        foreach ($existing as $attachment) {
-            $this->integrity->handle($attachment);
-        }
-        if ($existing->isNotEmpty() && ($existing->count() !== 2
-            || $existing->where('source_type', 'generated_pdf')->count() !== 1
-            || $existing->where('source_type', 'generated_xml')->count() !== 1)) {
+        return [
+            'pdf' => Attachment::query()->where('attachable_type', $document->getMorphClass())->where('attachable_id', $document->getKey())->where('source_type', 'generated_pdf')->sole(),
+            'xml' => Attachment::query()->where('attachable_type', $document->getMorphClass())->where('attachable_id', $document->getKey())->where('source_type', 'generated_xml')->sole(),
+        ];
+    }
+
+    public function verify(Document $document): void
+    {
+        $document = Document::query()->with('lines')->findOrFail($document->getKey());
+        $set = InvoiceArtifactSet::query()->where('document_id', $document->getKey())->first();
+        if (! $set instanceof InvoiceArtifactSet || $set->completed_at === null) {
             throw new DocumentException(__('filament-accounting::errors.invoice_originals_incomplete'));
         }
-        $existing = $existing->keyBy('source_type');
-        if ($existing->has('generated_pdf') && $existing->has('generated_xml')) {
-            /** @var Attachment $pdf */
-            $pdf = $existing->get('generated_pdf');
-            /** @var Attachment $xml */
-            $xml = $existing->get('generated_xml');
-
-            return ['pdf' => $pdf, 'xml' => $xml];
+        $this->assertEvidence($document, $set);
+        foreach (['pdf', 'xml'] as $role) {
+            $attachments = $document->attachments()->where('source_type', 'generated_'.$role)->get();
+            if ($attachments->count() !== 1 || ! ($set->preserved_roles[$role] ?? false)) {
+                throw new DocumentException(__('filament-accounting::errors.invoice_originals_incomplete'));
+            }
+            $this->assertAttachment($attachments->first(), $set, $role);
         }
+    }
 
-        $snapshot = $this->snapshot($document);
-        $xml = $this->eInvoice->generate($snapshot);
-        $this->validateXml($xml);
-        $basePdf = $this->renderer->render($snapshot);
-        $pdf = (new ZugferdDocumentPdfMerger($xml, $basePdf))->generateDocument()->downloadString();
-        $embeddedXml = ZugferdDocumentPdfReaderExt::getInvoiceDocumentContentFromContent($pdf);
-        if (! hash_equals(hash('sha256', $xml), hash('sha256', $embeddedXml))) {
-            throw new DocumentException(__('filament-accounting::errors.embedded_xml_mismatch'));
+    private function assertAttachment(?Model $attachment, InvoiceArtifactSet $set, string $role): void
+    {
+        $file = $set->manifest[$role];
+        $meta = $set->meta + ($role === 'pdf' ? [
+            'embedded_xml_sha256' => $set->manifest['xml']['sha256'], 'pdfa_part' => 3, 'pdfa_conformance' => 'B',
+        ] : []);
+        if (! $attachment instanceof Attachment || $attachment->disk !== $set->disk
+            || $attachment->legal_entity_id !== $set->legal_entity_id || $attachment->path !== $file['path']
+            || $attachment->sha256 !== $file['sha256'] || $attachment->size !== $file['size']
+            || $attachment->original_filename !== $file['filename']
+            || $attachment->mime_type !== ($role === 'xml' ? 'application/xml' : 'application/pdf')
+            || ($role === 'xml' && $attachment->structured_payload !== $set->xml)
+            || $this->canonical->encode($attachment->meta) !== $this->canonical->encode($meta)) {
+            throw new DocumentException(__('filament-accounting::errors.attachment_integrity_failed'));
         }
+        $this->integrity->handle($attachment);
+    }
 
-        $entity = LegalEntity::query()->findOrFail($document->legal_entity_id);
-        $meta = [
-            'generated_at' => now()->toIso8601String(),
-            'profile' => (string) config('filament-accounting.e_invoice.default_profile', 'en16931'),
-            'renderer' => $this->renderer->key(),
-            'renderer_version' => $this->renderer->version(),
-            'template' => (string) (($document->legal_entity_snapshot ?? [])['invoice_template_key'] ?? 'default'),
-            'template_version' => $version,
-        ];
-        $basename = 'invoice-'.($document->number ?: $document->uuid);
-        $xmlAttachment = $this->attachments->handle($entity, $document, $basename.'.xml', $xml, 'generated_xml', $meta);
+    private function assertEvidence(Document $document, InvoiceArtifactSet $set): void
+    {
+        $evidence = hash('sha256', $this->canonical->encode([$set->disk, $set->manifest, $set->snapshot, $set->meta]));
+        $events = AuditEvent::query()->where('legal_entity_id', $document->legal_entity_id)
+            ->where('target_type', $document->getMorphClass())->where('target_id', (string) $document->getKey())
+            ->where('operation', 'invoice_artifacts.prepared')->get();
+        $pdf = base64_decode($set->pdf_base64, true);
+        $event = $events->first();
+        if ($document->legal_entity_id !== $set->legal_entity_id || $document->getKey() !== $set->document_id
+            || $document->type !== DocumentType::SalesInvoice || $document->document_status !== DocumentStatus::Issued
+            || $evidence !== $set->evidence_sha256 || $events->count() !== 1
+            || ! $event instanceof AuditEvent
+            || data_get($event->payload, 'evidence_sha256') !== $evidence
+            || $this->canonical->encode($event->payload) !== $event->canonical_payload
+            || $this->eventHasher->hash($event->getAttributes()) !== $event->event_hash
+            || $this->canonical->encode($this->snapshot($document)) !== $this->canonical->encode($set->snapshot)
+            || ! is_string($pdf) || hash('sha256', $pdf) !== ($set->manifest['pdf']['sha256'] ?? null)
+            || strlen($pdf) !== ($set->manifest['pdf']['size'] ?? null)
+            || hash('sha256', $set->xml) !== ($set->manifest['xml']['sha256'] ?? null)
+            || strlen($set->xml) !== ($set->manifest['xml']['size'] ?? null)) {
+            throw new DocumentException(__('filament-accounting::errors.attachment_integrity_failed'));
+        }
+    }
 
-        $pdfAttachment = $this->attachments->handle($entity, $document, $basename.'.pdf', $pdf, 'generated_pdf', $meta + [
-            'embedded_xml_sha256' => $xmlAttachment->sha256,
-            'pdfa_part' => 3,
-            'pdfa_conformance' => 'B',
-        ]);
+    private function prepare(LegalEntity $entity, Document $document): InvoiceArtifactSet
+    {
+        return $entity->getConnection()->transaction(function () use ($entity, $document): InvoiceArtifactSet {
+            LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
+            $document = Document::query()->with('lines')->whereKey($document->getKey())->lockForUpdate()->firstOrFail();
+            if ($document->type !== DocumentType::SalesInvoice || $document->document_status !== DocumentStatus::Issued) {
+                throw new DocumentException(__('filament-accounting::errors.only_issued_sales_invoice_exportable'));
+            }
+            $existing = InvoiceArtifactSet::query()->where('document_id', $document->getKey())->first();
+            if ($existing instanceof InvoiceArtifactSet) {
+                $this->assertEvidence($document, $existing);
 
-        return ['pdf' => $pdfAttachment, 'xml' => $xmlAttachment];
+                return $existing;
+            }
+            if ($document->attachments()->whereIn('source_type', ['generated_pdf', 'generated_xml'])->exists()
+                || AuditEvent::query()->where('legal_entity_id', $entity->getKey())->where('target_type', $document->getMorphClass())
+                    ->where('target_id', (string) $document->getKey())->where('operation', 'invoice_artifacts.prepared')->exists()) {
+                throw new DocumentException(__('filament-accounting::errors.invoice_originals_incomplete'));
+            }
+            $snapshot = $this->snapshot($document);
+            $xml = $this->eInvoice->generate($snapshot);
+            $this->validateXml($xml);
+            $pdf = (new ZugferdDocumentPdfMerger($xml, $this->renderer->render($snapshot)))->generateDocument()->downloadString();
+            if ($xml !== ZugferdDocumentPdfReaderExt::getInvoiceDocumentContentFromContent($pdf)) {
+                throw new DocumentException(__('filament-accounting::errors.embedded_xml_mismatch'));
+            }
+            $disk = (string) config('filament-accounting.storage.disk', 'local');
+            if ($disk === 'public') {
+                throw new DocumentException(__('filament-accounting::errors.public_disk_forbidden'));
+            }
+            $directory = trim((string) config('filament-accounting.storage.attachments_directory', 'accounting/attachments'), '/');
+            $prefix = $directory.'/issued/'.Str::uuid();
+            $manifest = [];
+            foreach (['xml' => $xml, 'pdf' => $pdf] as $role => $bytes) {
+                if ($bytes === '' || strlen($bytes) > (int) config('filament-accounting.storage.maximum_attachment_bytes', 15 * 1024 * 1024)) {
+                    throw new DocumentException(__('filament-accounting::errors.invalid_attachment'));
+                }
+                $manifest[$role] = ['path' => $prefix.'/'.$role.'.'.$role, 'filename' => 'invoice-'.$document->uuid.'.'.$role,
+                    'sha256' => hash('sha256', $bytes), 'size' => strlen($bytes)];
+            }
+            $meta = ['generated_at' => now()->toIso8601String(), 'profile' => (string) config('filament-accounting.e_invoice.default_profile', 'en16931'),
+                'renderer' => $this->renderer->key(), 'renderer_version' => $this->renderer->version(),
+                'template' => $snapshot['seller']['invoice_template_key'] ?? 'default',
+                'template_version' => $snapshot['seller']['invoice_template_version'] ?? $this->renderer->version()];
+            $evidence = hash('sha256', $this->canonical->encode([$disk, $manifest, $snapshot, $meta]));
+            $set = InvoiceArtifactSet::query()->create([
+                'legal_entity_id' => $entity->getKey(), 'document_id' => $document->getKey(), 'disk' => $disk,
+                'manifest' => $manifest, 'snapshot' => $snapshot, 'meta' => $meta, 'evidence_sha256' => $evidence,
+                'pdf_base64' => base64_encode($pdf), 'xml' => $xml, 'preserved_roles' => [],
+            ]);
+            $this->audit->log($entity, 'invoice_artifacts.prepared', $document, ['evidence_sha256' => $evidence, 'manifest' => $manifest]);
+
+            return $set;
+        });
     }
 
     private function validateXml(string $xml): void

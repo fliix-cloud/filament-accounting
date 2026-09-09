@@ -14,10 +14,10 @@ use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\DocumentLine;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Party;
+use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Support\ExactMoney;
 use FilamentAccounting\Support\LineMoneyCalculator;
 use FilamentAccounting\Tax\SalesTaxSuggestionService;
-use Illuminate\Support\Facades\DB;
 
 final class IssueSalesInvoice
 {
@@ -30,6 +30,7 @@ final class IssueSalesInvoice
         private readonly ResolveTaxRuleVersion $taxRules,
         private readonly SalesTaxSuggestionService $taxSuggestions,
         private readonly GenerateInvoiceArtifacts $artifacts,
+        private readonly LegalEntityScope $entities,
     ) {}
 
     /**
@@ -49,7 +50,8 @@ final class IssueSalesInvoice
     {
         $this->authorizer->authorize('create_draft_invoices', $entity);
 
-        return DB::transaction(function () use ($entity, $payload): Document {
+        return $entity->getConnection()->transaction(function () use ($entity, $payload): Document {
+            LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
             if (filled($payload['idempotency_key'] ?? null)) {
                 $existing = Document::query()
                     ->where('legal_entity_id', $entity->getKey())
@@ -108,7 +110,8 @@ final class IssueSalesInvoice
         $entity = LegalEntity::query()->findOrFail($document->legal_entity_id);
         $this->authorizer->authorize('create_draft_invoices', $document);
 
-        return DB::transaction(function () use ($document, $entity, $payload): Document {
+        return $entity->getConnection()->transaction(function () use ($document, $entity, $payload): Document {
+            LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
             $document = Document::query()->lockForUpdate()->whereKey($document->getKey())->firstOrFail();
 
             if ($document->document_status !== DocumentStatus::Draft) {
@@ -141,10 +144,20 @@ final class IssueSalesInvoice
 
     public function issue(Document $document, bool $post = true): Document
     {
-        $entity = LegalEntity::query()->findOrFail($document->legal_entity_id);
+        $entity = $this->entities->require();
+        $this->entities->assertSame($document->legal_entity_id, $entity);
         $this->authorizer->authorize('issue_invoices', $entity);
+        $document = Document::query()->where('legal_entity_id', $entity->getKey())->findOrFail($document->getKey());
+        $needsArtifacts = (bool) ($document->document_status === DocumentStatus::Draft
+            ? config('filament-accounting.e_invoice.generate_on_issue', true)
+            : data_get($document->e_invoice_meta, 'artifacts_required', config('filament-accounting.e_invoice.generate_on_issue', true)))
+            || $document->artifactSet()->exists();
+        if ($needsArtifacts && $entity->getConnection()->transactionLevel() !== 0) {
+            throw new DocumentException(__('filament-accounting::errors.artifacts_require_independent_commit'));
+        }
 
-        $document = DB::transaction(function () use ($document, $entity): Document {
+        $document = $entity->getConnection()->transaction(function () use ($document, $entity, $needsArtifacts): Document {
+            LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
             $document = Document::query()->lockForUpdate()->with(['lines', 'party'])->whereKey($document->getKey())->firstOrFail();
 
             if ($document->document_status === DocumentStatus::Issued) {
@@ -171,6 +184,7 @@ final class IssueSalesInvoice
             $document->issued_by_type = $actor?->getMorphClass();
             $document->issued_by_id = $actor ? (string) $actor->getKey() : null;
             $document->issued_at = now();
+            $document->e_invoice_meta = array_merge($document->e_invoice_meta ?? [], ['artifacts_required' => $needsArtifacts]);
             $document->save();
 
             $this->audit->log($entity, 'document.issued', $document, [
@@ -181,7 +195,7 @@ final class IssueSalesInvoice
             return $document->fresh(['lines', 'openItem']) ?? $document;
         });
 
-        if ((bool) config('filament-accounting.e_invoice.generate_on_issue', true)) {
+        if (data_get($document->e_invoice_meta, 'artifacts_required', $needsArtifacts) || $document->artifactSet()->exists()) {
             $this->artifacts->handle($document);
         }
 

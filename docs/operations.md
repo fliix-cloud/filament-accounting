@@ -139,12 +139,31 @@ upload page and retry action disable their outer transactions. Integrations must
 respect the same boundary. Two-connection SQLite regression tests verify rollback
 isolation; production concurrency and storage controls still need validation.
 
-Generated invoice retries verify existing bytes and reuse a complete PDF/XML pair
-across renderer upgrades. An existing partial or ambiguous pair blocks generation.
-There is no automatic outgoing-artifact recovery or authoritative issuance inventory yet;
-preserve retained objects and investigate failures. If all generated attachment
-rows are absent, generation cannot yet distinguish lost metadata from a first
-attempt. File retention alone does not close this evidence gap.
+Outgoing invoices commit an authoritative artifact set before writing files. It
+contains the exact PDF/XML bytes, render-source snapshot, renderer metadata,
+planned paths and hashes, with a digest in the preparation audit event. Include
+`accounting_invoice_artifact_sets` and its staged contents in backup, retention,
+and restore procedures. The contents remain stored after completion.
+
+For interrupted outgoing invoices, use **Complete invoice** in the sales list or
+invoice view. It finishes required files and posting using the existing number and
+staged bytes, including after renderer/configuration changes. Missing attachment
+references can be reconstructed from a verified set; existing objects are reused.
+Previously preserved files that disappear or change require investigation and
+verified restoration. The application does not silently replace them. Missing sets
+with surviving preparation evidence and ambiguous references block completion.
+
+Direct artifact generation and issuance with required artifacts must run outside
+an enclosing accounting transaction. The Filament issue/completion actions disable
+their outer transactions. Posting verifies required or existing sets before it
+proceeds. Model guards protect generated attachments and staged sets; raw SQL,
+privileged storage changes, and coordinated evidence rewrites require independent
+controls. Scheduled verification and portable export do not yet cover all artifact
+set relationships; full-chain and external-anchor checks remain necessary.
+
+The DEV base migration adds `accounting_invoice_artifact_sets`. Existing generated
+attachments without a set are not automatically accepted as authoritative history.
+Rebuild disposable development databases only; no production backfill is supplied.
 
 The base DEV migration adds `accounting_purchase_invoice_intakes`. Rebuild only
 disposable development fixtures. Existing imports are not automatically assigned

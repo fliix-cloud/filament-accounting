@@ -6,6 +6,7 @@ use Filament\Resources\Pages\ViewRecord;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
 use FilamentAccounting\Filament\Support\DocumentAttachmentActions;
 use FilamentAccounting\Filament\Support\DocumentSettlementActions;
+use FilamentAccounting\Filament\Support\SalesInvoiceCompletionAction;
 use FilamentAccounting\Models\Document;
 
 class ViewSalesInvoice extends ViewRecord
@@ -17,7 +18,7 @@ class ViewSalesInvoice extends ViewRecord
         $record = $this->getRecord();
 
         return $record instanceof Document
-            ? [...DocumentAttachmentActions::make($record), ...DocumentSettlementActions::make($record)]
+            ? [SalesInvoiceCompletionAction::make(), ...DocumentAttachmentActions::make($record), ...DocumentSettlementActions::make($record)]
             : [];
     }
 }

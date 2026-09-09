@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'complete_issuance' => 'Complete invoice',
     'discard_draft' => 'Discard draft',
     'discard_draft_description' => 'The draft and original files remain available for inspection. This does not cancel the supplier invoice.',
     'download_attachment' => 'Download :name',

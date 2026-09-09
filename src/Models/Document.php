@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
+ * @property-read InvoiceArtifactSet|null $artifactSet
  * @property string $uuid
  * @property int $legal_entity_id
  * @property DocumentType $type
@@ -184,6 +185,12 @@ class Document extends AccountingModel
                 );
             }
         });
+    }
+
+    /** @return HasOne<InvoiceArtifactSet, $this> */
+    public function artifactSet(): HasOne
+    {
+        return $this->hasOne(InvoiceArtifactSet::class);
     }
 
     public function party(): BelongsTo
