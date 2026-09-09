@@ -7,7 +7,6 @@ use FilamentAccounting\Exceptions\AccountingException;
 use FilamentAccounting\Models\Attachment;
 use FilamentAccounting\Models\LegalEntity;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -40,53 +39,43 @@ final class StoreAttachment
             ->where('source_type', $sourceType)
             ->first();
         if ($existing instanceof Attachment) {
-            if (! Storage::disk($existing->disk)->exists($existing->path)) {
-                $this->writeAndVerify($existing->disk, $existing->path, $contents, $hash);
-            }
+            $this->verifyStored($existing->disk, $existing->path, $hash);
 
             return $existing;
         }
 
         $directory = trim((string) config('filament-accounting.storage.attachments_directory', 'accounting/attachments'), '/');
-        $basename = Str::slug(pathinfo($filename, PATHINFO_FILENAME)) ?: 'attachment';
         $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
-        $path = $directory.'/'.$entity->uuid.'/'.$hash.'-'.$basename.'.'.$extension;
-        $written = false;
+        $owner = hash('sha256', $attachable->getMorphClass().':'.$attachable->getKey());
+        $path = $directory.'/'.$entity->uuid.'/'.$owner.'/'.Str::uuid().'.'.$extension;
 
-        try {
-            $this->writeAndVerify($disk, $path, $contents, $hash);
-            $written = true;
+        // Each attempt owns a separate object. Retain it on failure: the database
+        // and filesystem cannot commit atomically, and this may be an original.
+        $this->writeAndVerify($disk, $path, $contents, $hash);
 
-            return DB::transaction(function () use ($entity, $attachable, $filename, $contents, $sourceType, $meta, $hash, $mime, $disk, $path): Attachment {
-                $actor = $this->actors->resolve();
-                $attachment = new Attachment;
-                $attachment->fill([
-                    'legal_entity_id' => $entity->getKey(),
-                    'attachable_type' => $attachable->getMorphClass(),
-                    'attachable_id' => $attachable->getKey(),
-                    'original_filename' => $filename,
-                    'mime_type' => $mime,
-                    'size' => strlen($contents),
-                    'sha256' => $hash,
-                    'disk' => $disk,
-                    'path' => $path,
-                    'source_type' => $sourceType,
-                    'structured_payload' => str_contains($mime, 'xml') ? $contents : null,
-                    'meta' => $meta,
-                    'uploaded_by_type' => $actor?->getMorphClass(),
-                    'uploaded_by_id' => $actor ? (string) $actor->getKey() : null,
-                ]);
-                $attachment->save();
+        return $entity->getConnection()->transaction(function () use ($entity, $attachable, $filename, $contents, $sourceType, $meta, $hash, $mime, $disk, $path): Attachment {
+            $actor = $this->actors->resolve();
+            $attachment = new Attachment;
+            $attachment->fill([
+                'legal_entity_id' => $entity->getKey(),
+                'attachable_type' => $attachable->getMorphClass(),
+                'attachable_id' => $attachable->getKey(),
+                'original_filename' => $filename,
+                'mime_type' => $mime,
+                'size' => strlen($contents),
+                'sha256' => $hash,
+                'disk' => $disk,
+                'path' => $path,
+                'source_type' => $sourceType,
+                'structured_payload' => str_contains($mime, 'xml') ? $contents : null,
+                'meta' => $meta,
+                'uploaded_by_type' => $actor?->getMorphClass(),
+                'uploaded_by_id' => $actor ? (string) $actor->getKey() : null,
+            ]);
+            $attachment->save();
 
-                return $attachment;
-            });
-        } catch (\Throwable $exception) {
-            if ($written) {
-                Storage::disk($disk)->delete($path);
-            }
-
-            throw $exception;
-        }
+            return $attachment;
+        });
     }
 
     private function assertAttachable(LegalEntity $entity, Model $attachable): void
@@ -143,13 +132,21 @@ final class StoreAttachment
 
     private function writeAndVerify(string $disk, string $path, string $contents, string $hash): void
     {
+        if (Storage::disk($disk)->exists($path)) {
+            throw new AccountingException(__('filament-accounting::errors.attachment_write_failed'));
+        }
+
         if (! Storage::disk($disk)->put($path, $contents, ['visibility' => 'private'])) {
             throw new AccountingException(__('filament-accounting::errors.attachment_write_failed'));
         }
 
+        $this->verifyStored($disk, $path, $hash);
+    }
+
+    private function verifyStored(string $disk, string $path, string $hash): void
+    {
         $stored = Storage::disk($disk)->get($path);
-        if (hash('sha256', $stored) !== $hash) {
-            Storage::disk($disk)->delete($path);
+        if (! is_string($stored) || hash('sha256', $stored) !== $hash) {
             throw new AccountingException(__('filament-accounting::errors.attachment_integrity_failed'));
         }
     }

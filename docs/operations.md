@@ -95,6 +95,22 @@ Discarding does not cancel the supplier's invoice. The legacy
 a reason and retains evidence. Discarded drafts cannot be edited or posted.
 No automatic restoration or disposal workflow is provided yet.
 
+New attachment objects have owner-scoped paths with a unique filename per write
+attempt. Identical content on different records or under different source types
+does not share a new storage object. Retries verify the existing object's hash;
+missing or changed bytes fail instead of being silently replaced. Investigate
+these failures and restore verified originals through the operator's recovery
+procedure before retrying.
+
+Storage writes and database commits are not atomic. Failed verification,
+metadata saves, or an enclosing transaction rollback can leave retained objects
+without attachment rows. The service deliberately does not delete these files.
+Preserve them for investigation; there is no automatic orphan disposal or durable
+intake recovery inventory yet. UUID paths and existence checks do not establish
+storage immutability or atomic create-only behavior; independently enforced
+storage permissions/versioning remain required. Concurrent first uploads may
+create duplicate records and objects. Previously stored paths remain readable.
+
 Model guards protect normal Eloquent mutations. Query-builder writes, raw SQL,
 privileged database access, and storage deletion still require additional
 controls; do not treat these guards as database-level immutability.

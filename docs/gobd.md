@@ -47,12 +47,13 @@ conformance, DATEV compatibility, or statutory financial statements.
 
 ## Implementation progress
 
-Updated: 5 September 2026. The table below tracks changes after the reviewed
+Updated: 9 September 2026. The table below tracks changes after the reviewed
 baseline; the detailed findings retain that baseline as their reference.
 **No finding is fully closed and the compliance verdict is unchanged.**
 
 | Findings | Implemented in this change | Still required |
 | --- | --- | --- |
+| F11 / F9 | New attachment writes use owner-scoped, per-attempt object paths. Failed writes, verification, and metadata saves no longer delete files. Retries verify retained bytes and reject missing or changed originals without replacing them. Attachment metadata uses the accounting entity's transaction connection. | Durable intake/recovery inventory, concurrent-request deduplication, production storage controls, and the authoritative issued-artifact/retry workflow remain open. Retained objects can lack metadata after failure or rollback. |
 | F1 / F3 | Purchase draft disposal now retains the document, lines, PDF/XML, and an actor/reason audit event. It requires a dedicated permission, current company scope, and a locked persisted draft. UI offers “Discard draft”; physical deletion is disabled. | Preserve failed/rejected imports before parsing; complete intake history and recovery workflows. |
 | F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. | Bulk/SQL write prevention, concurrent mutation evidence, and controlled correction workflows. |
 | F2 / F8 / F10 | Each ledger posting includes a versioned full journal snapshot and SHA-256 digest in its audit event. Verification compares both directions and detects changed/missing journal data. Account/period values are frozen at posting. CSV exports use checked historical records and refuse integrity failures; the journal UI uses historical account codes. | Bind document, attachment, settlement, and other business contents to evidence; protect storage and database privileges; complete the machine-readable audit export. This is journal tamper detection, not prevention of privileged SQL writes. |
@@ -70,7 +71,11 @@ passed all 184 tests on PHP 8.3/8.4/8.5, PHPStan, Pint, and Composer validation
 (1,843 assertions on PHP 8.3). This includes balanced SQL changes, missing/duplicate
 evidence, snapshot validation, rollback, stable historical CSV/UI values, and a
 coordinated local-hash rewrite detected by an external anchor.
-Local PHP/Composer execution remains unavailable. These tests do not establish
+The attachment-storage continuation was tested locally with Herd PHP 8.4;
+regressions cover separate objects for identical content, failed metadata saves,
+failed storage verification, and missing/corrupt retry evidence. The full suite
+passed 204 tests with 1,916 assertions; all seven attachment tests also passed
+after shortening the storage paths. PHPStan reported no errors. These tests do not establish
 production concurrency or storage immutability. F7–F12 are not fully resolved;
 see [operations](operations.md).
 
@@ -170,7 +175,7 @@ auditor-style export/restore exercise. Existing [CI](../.github/workflows/tests.
 uses SQLite in memory and [fake storage](../tests/Attachments/AttachmentStorageTest.php);
 it cannot establish production locking or immutable-storage behavior.
 
-Keep the public documentation to [architecture](architecture.md),
+Keep the public documentation to [installation](install.md), [architecture](architecture.md),
 [operations](operations.md), and this assessment. Deployment-specific procedures
 and evidence belong to the operator; do not recreate an internal roadmap archive
 in `docs/`. Only the partial runtime corrections listed above are implemented;
