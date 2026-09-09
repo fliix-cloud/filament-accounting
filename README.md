@@ -40,6 +40,9 @@ accounting jurisdiction, not the user's nationality.
 
 ## Installation
 
+For the complete setup, including production permissions and first company setup,
+see [Installation und Inbetriebnahme](docs/install.md).
+
 Install the product package and its migrations:
 
 ```bash
@@ -89,6 +92,7 @@ Artisan commands, routes, and view/translation namespaces remain unchanged.
 
 ## Documentation
 
+- [Installation und Inbetriebnahme](docs/install.md) — installation, panel, permissions, company setup, and operations
 - [Architecture](docs/architecture.md) — scope, boundaries, accounting rules,
   reconciliation, e-invoices, and extension points
 - [Operations](docs/operations.md) — production responsibilities, audit anchors,
