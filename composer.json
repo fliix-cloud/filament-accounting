@@ -1,9 +1,9 @@
 {
-    "name": "fliix-cloud/filament-accounting",
-    "description": "Laravel 13 / Filament v5 double-entry accounting package with German-first compliance profiles",
+    "name": "fliix-cloud/filament-fints-accounting",
+    "description": "Laravel 13 / Filament v5 Germany-first accounting with integrated FinTS banking and European workflows",
     "type": "library",
     "license": "MIT",
-    "homepage": "https://github.com/fliix-cloud/filament-accounting",
+    "homepage": "https://github.com/fliix-cloud/filament-fints-accounting",
     "keywords": [
         "laravel",
         "filament",

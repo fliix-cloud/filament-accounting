@@ -93,7 +93,7 @@ final class PhpFintsClientFactory implements FintsClientFactory
 
         if (config('filament-accounting.banking.fints.product.derive_version_from_package')) {
             try {
-                $version = InstalledVersions::getPrettyVersion('fliix-cloud/filament-accounting');
+                $version = InstalledVersions::getPrettyVersion('fliix-cloud/filament-fints-accounting');
                 if (is_string($version) && $version !== '') {
                     return $version;
                 }

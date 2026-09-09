@@ -5,7 +5,7 @@
 $ErrorActionPreference = "Stop"
 
 $demo = Join-Path $env:USERPROFILE "Herd\filament-fints-demo"
-$accounting = "C:\Code\filament-accounting"
+$accounting = "C:\Code\filament-fints-accounting"
 
 function Assert-Command($name) {
     if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
@@ -50,13 +50,16 @@ if ($null -ne $composerConfig.repositories) {
 }
 
 Invoke-Checked "Configuring the Accounting path repository" {
-    composer config --json repositories.filament-accounting $accountingRepository
+    composer config --json repositories.filament-fints-accounting $accountingRepository
+}
+if ($composerConfig.require.PSObject.Properties.Name -contains "fliix-cloud/filament-accounting") {
+    Invoke-Checked "Removing the old Accounting package requirement" { composer remove fliix-cloud/filament-accounting --no-update --no-interaction }
 }
 Invoke-Checked "Updating the Accounting packages" {
-    composer require fliix-cloud/filament-accounting:dev-main --with-dependencies --no-interaction
+    composer require fliix-cloud/filament-fints-accounting:dev-main --with-dependencies --no-interaction
 }
 
-foreach ($pkg in @("filament-accounting")) {
+foreach ($pkg in @("filament-fints-accounting")) {
     $path = Join-Path $demo "vendor\fliix-cloud\$pkg"
     if (Test-Path $path) {
         $item = Get-Item $path

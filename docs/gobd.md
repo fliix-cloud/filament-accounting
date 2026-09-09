@@ -1,6 +1,6 @@
 # GoBD readiness
 
-Reviewed: 5 September 2026, [commit 99b2218](https://github.com/fliix-cloud/filament-accounting/tree/99b221895511d8c42c1228b36bd3e9f75c0d3e39).
+Reviewed: 5 September 2026, [commit 99b2218](https://github.com/fliix-cloud/filament-fints-accounting/tree/99b221895511d8c42c1228b36bd3e9f75c0d3e39).
 
 ## Verdict
 
@@ -65,7 +65,7 @@ Regression coverage: [document protection](../tests/Documents/RecordProtectionTe
 [authorization](../tests/Authorization/DefaultAccountingAuthorizerTest.php),
 the [Filament discard workflow](../tests/Filament/InvoiceLayoutTest.php), and
 [journal evidence/export tests](../tests/Audit/JournalIntegrityTest.php).
-[CI for implementation commit d8aa32c](https://github.com/fliix-cloud/filament-accounting/actions/runs/33958922570)
+[CI for implementation commit d8aa32c](https://github.com/fliix-cloud/filament-fints-accounting/actions/runs/33958922570)
 passed all 184 tests on PHP 8.3/8.4/8.5, PHPStan, Pint, and Composer validation
 (1,843 assertions on PHP 8.3). This includes balanced SQL changes, missing/duplicate
 evidence, snapshot validation, rollback, stable historical CSV/UI values, and a
@@ -88,7 +88,7 @@ disposable DEV databases; no backfill or legacy-evidence acceptance is supplied.
 | Documents and tax | Party/company snapshots, confirmed expense categories, [TaxRuleVersion](../src/Models/TaxRuleVersion.php) reference/overlap checks, [invoice tests](../tests/Documents/InvoiceFlowTest.php) | Partial lifecycle protection |
 | Banking and reconciliation | Source versions, booked-only finalization, exact splits and settlements; [import tests](../tests/Banking/UnifiedBankTransactionImporterTest.php), [reconciliation tests](../tests/Reconciliation/ReconciliationTest.php), [payment safety tests](../tests/Banking/FinTs/PaymentSubmissionSafetyTest.php) | Good mechanisms; not proof of complete bank records |
 | Audit and files | Canonical event chain, external anchors, offline evidence verification, SHA-256 checks on attachment reads; [audit tests](../tests/Audit/AuditAnchorTest.php), [attachment tests](../tests/Attachments/AttachmentStorageTest.php) | Detects specific failures, not all business-data changes |
-| Quality checks | [Baseline CI](https://github.com/fliix-cloud/filament-accounting/actions/runs/33943471032): PHPUnit on PHP 8.3/8.4/8.5, PHPStan, Pint, Composer validation passed | Existing suite is green; compliance gaps remain |
+| Quality checks | [Baseline CI](https://github.com/fliix-cloud/filament-fints-accounting/actions/runs/33943471032): PHPUnit on PHP 8.3/8.4/8.5, PHPStan, Pint, Composer validation passed | Existing suite is green; compliance gaps remain |
 
 ## Baseline findings and acceptance criteria
 

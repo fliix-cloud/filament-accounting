@@ -1,4 +1,4 @@
-# filament-accounting
+# filament-fints-accounting
 
 Laravel 13 / Filament v5 accounting package with a first-party ledger, German-first invoicing, integrated FinTS banking, reconciliation, and e-invoice storage.
 
@@ -23,6 +23,15 @@ Filament, persistence, tenancy, and banking workflows live in this package.
 
 Installing this package does not make a host “GoBD certified”. Compliance also depends on deployment, permissions, backups, retention, and procedure.
 
+## Regional scope
+
+Designed for Germany-first accounting and FinTS-enabled bank connections, with
+European workflows such as SEPA and EU VAT treatments. FinTS is a
+[German banking standard](https://www.hbci-zka.de/); support depends on the bank
+and does not cover every European bank. U.S. banking and U.S. accounting/tax
+workflows are outside the supported scope. Suitability depends on the bank and
+accounting jurisdiction, not the user's nationality.
+
 ## Requirements
 
 - PHP 8.3+
@@ -34,7 +43,7 @@ Installing this package does not make a host “GoBD certified”. Compliance al
 Install the product package and its migrations:
 
 ```bash
-composer require fliix-cloud/filament-accounting
+composer require fliix-cloud/filament-fints-accounting
 php artisan filament-accounting:install --migrate --country=DE
 php artisan filament-accounting:verify
 ```
@@ -70,6 +79,13 @@ commands are `filament-accounting:sync-institutes`,
 The project is pre-release. Development databases use the final schema directly;
 after schema changes, recreate them with `php artisan migrate:fresh --seed`.
 There is no data-upgrade or consolidation workflow.
+
+## Package rename
+
+The Composer package is now `fliix-cloud/filament-fints-accounting`. Existing hosts
+should replace the old Composer requirement and update any local path repository.
+The `FilamentAccounting` PHP namespace, `filament-accounting` configuration,
+Artisan commands, routes, and view/translation namespaces remain unchanged.
 
 ## Documentation
 

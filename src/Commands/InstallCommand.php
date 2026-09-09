@@ -11,7 +11,7 @@ class InstallCommand extends Command
         {--migrate : Run package migrations}
         {--country=DE : Opinionated company profile to prepare}';
 
-    protected $description = 'Install the Filament Accounting package';
+    protected $description = 'Install the Filament FinTS Accounting package';
 
     public function handle(): int
     {
@@ -35,7 +35,7 @@ class InstallCommand extends Command
         }
 
         $this->newLine();
-        $this->info('filament-accounting installed.');
+        $this->info('filament-fints-accounting installed.');
         $this->line('Next steps:');
         $this->line('  1. Register FilamentAccountingPlugin::make() on the desired Filament panel.');
         $this->line('  2. Complete the company setup wizard; the DE profile is seeded automatically.');
