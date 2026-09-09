@@ -111,6 +111,24 @@ storage immutability or atomic create-only behavior; independently enforced
 storage permissions/versioning remain required. Concurrent first uploads may
 create duplicate records and objects. Previously stored paths remain readable.
 
+Import and invoice-generation errors now retain saved files and metadata, and
+propagate the original failure. Purchase imports check company scope and
+permission before lookup or supplier creation. Their identity includes separately
+supplied XML; retry and receipt verify the expected PDF/XML attachments. Missing,
+ambiguous, or damaged originals block continuation instead of being replaced.
+Previously created drafts and suppliers remain available after a later failure.
+
+Generated invoice retries verify existing bytes and reuse a complete PDF/XML pair
+across renderer upgrades. An existing partial or ambiguous pair blocks generation.
+There is no automatic recovery action or durable intake/issuance inventory yet;
+preserve retained objects and investigate failures. If all generated attachment
+rows are absent, generation cannot yet distinguish lost metadata from a first
+attempt. File retention alone does not close this evidence gap.
+
+New structured purchase imports record an expected XML hash. Older structured
+DEV drafts without it fail verification; PDF-plus-XML import identity also changed.
+Rebuild disposable development fixtures. No production backfill is provided.
+
 Model guards protect normal Eloquent mutations. Query-builder writes, raw SQL,
 privileged database access, and storage deletion still require additional
 controls; do not treat these guards as database-level immutability.

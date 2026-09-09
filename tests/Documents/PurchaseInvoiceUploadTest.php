@@ -3,7 +3,11 @@
 namespace FilamentAccounting\Tests\Documents;
 
 use FilamentAccounting\Enums\DocumentStatus;
+use FilamentAccounting\Exceptions\AccountingException;
+use FilamentAccounting\Exceptions\AuthorizationException;
 use FilamentAccounting\Exceptions\DocumentException;
+use FilamentAccounting\Models\Attachment;
+use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Models\PartyTaxId;
 use FilamentAccounting\Services\ImportPurchaseInvoice;
@@ -11,11 +15,131 @@ use FilamentAccounting\Services\IssueSalesInvoice;
 use FilamentAccounting\Services\ReadAttachment;
 use FilamentAccounting\Services\RegisterPurchaseInvoice;
 use FilamentAccounting\Tests\TestCase;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 
 class PurchaseInvoiceUploadTest extends TestCase
 {
+    #[Test]
+    public function denied_import_cannot_create_a_supplier_or_return_a_previously_imported_document(): void
+    {
+        Storage::fake('purchase-imports');
+        config()->set('filament-accounting.storage.disk', 'purchase-imports');
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $service = app(ImportPurchaseInvoice::class);
+        $service->handle($entity, 'invoice.pdf', $this->plainPdf(), 'invoice.xml', $this->ublInvoice());
+        Gate::define(config('filament-accounting.authorization.abilities.register_purchase_invoices'), fn () => false);
+
+        foreach ([$this->ublInvoice(), str_replace('Vendor GmbH', 'Other supplier', $this->ublInvoice())] as $xml) {
+            try {
+                $service->handle($entity, 'invoice.pdf', $this->plainPdf(), 'invoice.xml', $xml);
+                $this->fail('Every import attempt requires authorization.');
+            } catch (AuthorizationException) {
+                $this->assertDatabaseCount('accounting_documents', 1);
+                $this->assertDatabaseCount('accounting_parties', 1);
+                $this->assertDatabaseCount('accounting_attachments', 2);
+            }
+        }
+    }
+
+    #[Test]
+    public function different_companion_xml_is_not_silently_treated_as_the_same_import(): void
+    {
+        Storage::fake('purchase-imports');
+        config()->set('filament-accounting.storage.disk', 'purchase-imports');
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $service = app(ImportPurchaseInvoice::class);
+        $first = $service->handle($entity, 'invoice.pdf', $this->plainPdf(), 'invoice.xml', $this->ublInvoice());
+        $changedXml = str_replace('INV-42', 'INV-43', $this->ublInvoice());
+        $second = $service->handle($entity, 'invoice.pdf', $this->plainPdf(), 'invoice.xml', $changedXml);
+
+        $this->assertNotSame($first->document->getKey(), $second->document->getKey());
+        $this->assertFalse($second->idempotentRetry);
+        $this->assertSame('INV-43', $second->document->supplier_invoice_number);
+        $this->assertSame($changedXml, app(ReadAttachment::class)->handle($second->document->attachments->firstWhere('source_type', 'supplied_e_invoice')));
+        $this->assertDatabaseCount('accounting_documents', 2);
+        $this->assertDatabaseCount('accounting_attachments', 4);
+    }
+
+    #[Test]
+    public function failed_xml_save_retains_pdf_draft_and_original_error_and_blocks_incomplete_retries(): void
+    {
+        Storage::fake('purchase-imports');
+        config()->set('filament-accounting.storage.disk', 'purchase-imports');
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $failure = new \RuntimeException('XML metadata unavailable');
+        Attachment::creating(function (Attachment $attachment) use ($failure): void {
+            if ($attachment->source_type === 'supplied_e_invoice') {
+                throw $failure;
+            }
+        });
+
+        try {
+            app(ImportPurchaseInvoice::class)->handle($entity, 'invoice.pdf', $this->plainPdf(), 'invoice.xml', $this->ublInvoice());
+            $this->fail('The XML failure must propagate unchanged.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame($failure, $exception);
+        }
+
+        $document = Document::query()->sole();
+        $pdf = $document->attachments()->sole();
+        $disk = Storage::disk('purchase-imports');
+        $this->assertSame($this->plainPdf(), $disk->get($pdf->path));
+        $this->assertCount(2, $disk->allFiles());
+        $this->assertContains($this->ublInvoice(), array_map(fn (string $path) => $disk->get($path), $disk->allFiles()));
+        $this->assertSame(DocumentStatus::Draft, $document->document_status);
+        $this->assertCount(1, $document->lines);
+        $this->assertNotNull($document->party);
+
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            try {
+                app(ImportPurchaseInvoice::class)->handle($entity, 'invoice.pdf', $this->plainPdf(), 'invoice.xml', $this->ublInvoice());
+                $this->fail('Incomplete imports must not report success.');
+            } catch (DocumentException $exception) {
+                $this->assertSame(__('filament-accounting::errors.invoice_originals_incomplete'), $exception->getMessage());
+            }
+        }
+        $this->assertDatabaseCount('accounting_documents', 1);
+        $this->assertDatabaseCount('accounting_attachments', 1);
+        $this->assertCount(2, $disk->allFiles());
+        $this->assertSame($this->plainPdf(), $disk->get($pdf->path));
+
+        $this->expectExceptionMessage(__('filament-accounting::errors.invoice_originals_incomplete'));
+        app(RegisterPurchaseInvoice::class)->receive($document, false);
+    }
+
+    #[Test]
+    public function import_retry_checks_both_originals_and_never_replaces_missing_or_corrupt_bytes(): void
+    {
+        Storage::fake('purchase-imports');
+        config()->set('filament-accounting.storage.disk', 'purchase-imports');
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $service = app(ImportPurchaseInvoice::class);
+        $result = $service->handle($entity, 'invoice.pdf', $this->plainPdf(), 'invoice.xml', $this->ublInvoice());
+        $disk = Storage::disk('purchase-imports');
+        foreach ($result->document->attachments as $attachment) {
+            $original = $disk->get($attachment->path);
+            foreach (['corrupted', null] as $contents) {
+                $contents === null ? $disk->delete($attachment->path) : $disk->put($attachment->path, $contents);
+                try {
+                    $service->handle($entity, 'invoice.pdf', $this->plainPdf(), 'invoice.xml', $this->ublInvoice());
+                    $this->fail('Broken originals must block retry.');
+                } catch (AccountingException $exception) {
+                    $this->assertSame(__('filament-accounting::errors.attachment_integrity_failed'), $exception->getMessage());
+                }
+                $this->assertSame($contents, $disk->get($attachment->path));
+                $this->assertDatabaseCount('accounting_documents', 1);
+                $this->assertDatabaseCount('accounting_attachments', 2);
+            }
+            $disk->put($attachment->path, $original);
+        }
+    }
+
     #[Test]
     public function pdf_with_separate_ubl_creates_one_unconfirmed_prefilled_draft_and_retries_idempotently(): void
     {
@@ -161,6 +285,7 @@ class PurchaseInvoiceUploadTest extends TestCase
     public function standalone_xml_is_rejected_because_a_purchase_invoice_requires_pdf(): void
     {
         $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
 
         $this->expectException(DocumentException::class);
         $this->expectExceptionMessage(__('filament-accounting::errors.purchase_invoice_pdf_required'));

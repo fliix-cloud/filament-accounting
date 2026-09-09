@@ -15,6 +15,7 @@ return [
     'invalid_xml' => 'The uploaded XML is not well formed.',
     'attachment_write_failed' => 'The private attachment could not be stored.',
     'attachment_integrity_failed' => 'The stored attachment failed its integrity check.',
+    'invoice_originals_incomplete' => 'The stored invoice files are incomplete or ambiguous. Please have this operation reviewed before continuing.',
     'only_issued_sales_invoice_exportable' => 'Only issued sales invoices can produce final PDF/XML artifacts.',
     'embedded_xml_mismatch' => 'The XML embedded in the PDF does not match the separately stored invoice XML.',
     'purchase_classification_required' => 'Every purchase line needs an expense category and an expense or inventory account.',

@@ -53,7 +53,8 @@ baseline; the detailed findings retain that baseline as their reference.
 
 | Findings | Implemented in this change | Still required |
 | --- | --- | --- |
-| F11 / F9 | New attachment writes use owner-scoped, per-attempt object paths. Failed writes, verification, and metadata saves no longer delete files. Retries verify retained bytes and reject missing or changed originals without replacing them. Attachment metadata uses the accounting entity's transaction connection. | Durable intake/recovery inventory, concurrent-request deduplication, production storage controls, and the authoritative issued-artifact/retry workflow remain open. Retained objects can lack metadata after failure or rollback. |
+| F11 / F9 | New attachment writes use owner-scoped, per-attempt object paths. Within `StoreAttachment`, failed writes, verification, and metadata saves no longer delete files. Its retries verify retained bytes and reject missing or changed originals without replacing them. Attachment metadata uses the accounting entity's transaction connection. | Durable intake/recovery inventory, concurrent-request deduplication, production storage controls, and the authoritative issued-artifact/retry workflow remain open. Retained objects can lack metadata after failure or rollback. |
+| F1 / F3 / F7 / F11 | Import and artifact-generation failure paths retain saved files and metadata and propagate the original exception. Imports authorize before supplier creation or retry lookup, include supplied XML in identity, and verify expected original hashes before retry success and receipt. Artifact retries verify existing bytes, reject partial/ambiguous pairs, and retain a complete pair across renderer upgrades. | Intake before parsing, durable processing/attempt history, safe recovery of incomplete pairs and orphan objects, concurrent processing, and independently bound document/artifact evidence. No new Filament fields were added. |
 | F1 / F3 | Purchase draft disposal now retains the document, lines, PDF/XML, and an actor/reason audit event. It requires a dedicated permission, current company scope, and a locked persisted draft. UI offers “Discard draft”; physical deletion is disabled. | Preserve failed/rejected imports before parsing; complete intake history and recovery workflows. |
 | F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. | Bulk/SQL write prevention, concurrent mutation evidence, and controlled correction workflows. |
 | F2 / F8 / F10 | Each ledger posting includes a versioned full journal snapshot and SHA-256 digest in its audit event. Verification compares both directions and detects changed/missing journal data. Account/period values are frozen at posting. CSV exports use checked historical records and refuse integrity failures; the journal UI uses historical account codes. | Bind document, attachment, settlement, and other business contents to evidence; protect storage and database privileges; complete the machine-readable audit export. This is journal tamper detection, not prevention of privileged SQL writes. |
@@ -79,11 +80,136 @@ after shortening the storage paths. PHPStan reported no errors. These tests do n
 production concurrency or storage immutability. F7–F12 are not fully resolved;
 see [operations](operations.md).
 
+The caller-failure continuation passed the full local suite on Herd PHP 8.4.25:
+211 tests, 1,995 assertions. New [import regressions](../tests/Documents/PurchaseInvoiceUploadTest.php)
+and [artifact regressions](../tests/Documents/InvoiceArtifactTest.php) cover
+injected metadata failures after object writes, retained bytes/rows and original
+exceptions, incomplete and repeated retries, missing/corrupt PDF and XML,
+changed companion XML, denied import access, and renderer upgrades. After the
+final type-guard correction, all 14 affected tests passed again (128 assertions);
+PHPStan and the full Pint check passed as well.
+
 **Development schema:** there are no installed/production databases to migrate.
 The base migration now includes journal `period_snapshot` and line
 `account_snapshot` JSON columns. Drafts may omit them; posted entries without
 complete snapshots and exactly one posting event fail verification. Rebuild
 disposable DEV databases; no backfill or legacy-evidence acceptance is supplied.
+
+## Next work package: preserve originals without complicating Filament
+
+Targeted continuation: 9 September 2026. The first slice below is implemented;
+the intake and recovery work remains planned. This is not a new repository-wide
+audit. Graph discovery and coverage
+checks failed with `Transport closed`; the linked files were read directly.
+Local regression results are recorded above.
+
+### Implemented first slice: failure and retry protection (F1 / F2 / F7 / F11)
+
+The preceding attachment-service improvements left these caller-level gaps,
+now corrected in this slice:
+
+- [ImportPurchaseInvoice](../src/Services/ImportPurchaseInvoice.php) no longer
+  deletes objects, attachment rows, draft lines, or suppliers on later failure.
+  This removes the storage deletion that ran before the model deletion guard
+  and could mask the original error.
+- Import identity includes supplied XML; existing drafts are checked against
+  the input and expected PDF/XML hashes. [VerifyPurchaseInvoiceOriginals](../src/Services/VerifyPurchaseInvoiceOriginals.php)
+  requires exactly one matching attachment per expected role and verifies its
+  bytes. Receipt runs the same check. Incomplete imports remain blocked, including
+  when a PDF row exists but the XML metadata save failed.
+- [GenerateInvoiceArtifacts](../src/Services/GenerateInvoiceArtifacts.php) retains
+  XML when PDF storage fails, verifies existing files before returning, rejects
+  partial or ambiguous pairs, and reuses a complete pair across renderer upgrades.
+
+**Boundary:** this is fail-closed protection, not automatic recovery. Retained
+drafts remain available, but durable intake/attempt states, an incomplete-operation
+filter, and a recovery action are still absent. Metadata-save failures can leave
+objects without rows. A generated pair with no surviving rows cannot yet be
+distinguished from first generation. Generated-file model deletion, raw database
+changes, concurrent generation, and independently anchored artifact identity
+still need protection; this slice does not establish an authoritative issuance
+manifest. Import hash metadata is not independently anchored either.
+
+The expected structured hash is new import metadata; older structured DEV drafts
+without it fail verification. PDF-plus-XML imports also use a new identity key.
+Rebuild disposable DEV fixtures rather than inventing historical evidence; no
+production upgrade/backfill is supplied. This slice adds no Filament form fields.
+
+### Next: durable intake before parsing (F1 / F3 / F7 / F9 / F11)
+
+Create a company-scoped intake record independent of the booking draft. Authorize
+the actor and company before accepting input. Record the intake identity, actor,
+time, expected object paths, original filenames, sizes and hashes, processing
+attempts, error state, and eventual document link. Persist the intake intent
+before writing objects; verify and record preservation before parsing or creating
+supplier/document data. An interrupted write must remain discoverable even when
+attachment metadata was not saved. Do not put this evidence solely inside a
+transaction that draft creation can roll back.
+
+Accept PDF, standalone XML, and PDF with companion XML. Import identity must
+include the company and all supplied contents with their roles; enforce unique
+processing under concurrent requests. Preserve each attempt's history and verify
+existing objects on retry. Recovery must finish the same intake without duplicate
+drafts or replacement of retained originals.
+
+[StoreAttachment](../src/Services/StoreAttachment.php) currently checks MIME and
+parses XML before writing, so calling it earlier is insufficient for malformed
+input. Provide a private raw-intake path with authorization and size limits;
+retain rejected content as inert bytes, never render it inline or resolve XML
+entities. Distinguish upload rejection before acceptance from a preserved intake
+that failed parsing. Never claim successful preservation after a storage failure.
+
+Separate extraction success, format/business-rule validation, and eligibility
+for booking. Reconcile source totals with calculated totals and block unsupported
+conversions while keeping the original and an actionable explanation.
+
+Update [PurchaseInvoiceUploadTest](../tests/Documents/PurchaseInvoiceUploadTest.php):
+it currently requires standalone XML rejection and no retained objects for unsafe
+XML. Replace those expectations with accepted standalone invoices and safely
+retained, blocked invalid input. Add malformed XML, conflicting embedded/supplied
+XML, source-total mismatch, interrupted-write recovery, cross-company access,
+concurrent duplicate requests, and accounting-connection rollback scenarios.
+Prove locking on the selected production database; SQLite tests alone do not
+close the concurrency gate.
+
+### Filament simplicity is an acceptance criterion
+
+The normal purchase flow remains **upload → review → book**. Extend the existing
+[purchase upload page](../src/Filament/Resources/PurchaseInvoiceResource/Pages/CreatePurchaseInvoice.php)
+to accept PDF or XML in the main field; keep companion XML optional and secondary.
+Detect the format automatically. Do not ask users to choose parsers, archive
+policies, hash versions, or recovery modes.
+
+Show incomplete intakes within the purchase-invoice area even when no draft
+exists. Use a short status and concrete next action, for example “Gespeichert –
+Prüfung erforderlich” or “Verarbeitung unterbrochen – erneut versuchen”. Show
+“Gespeichert” only after verified preservation. Offer retry only for recoverable
+failures; integrity failures require investigation and must block booking.
+Keep technical diagnostics and processing history in expandable details.
+Successful processing should lead directly to the existing invoice review.
+
+Do not add a separate compliance dashboard, a mandatory approval wizard, or
+routine archive settings. Enforce permissions, preservation, deduplication, and
+integrity checks in services; hiding a button is not authorization. UI acceptance
+must cover standalone XML upload, a failed intake without a draft, an authorized
+retry, and a blocked integrity failure with a useful message.
+
+### Following slices
+
+1. Finish the authoritative issued-artifact workflow: retain and verify the
+   issued PDF/XML pair across retries and renderer upgrades; expose interrupted
+   issuance without requiring users to manage artifact versions (F11).
+2. Complete service authorization and accounting-connection consistency, then
+   finalized business evidence and controlled corrections (F2–F4 / F8–F9).
+3. Complete supported tax cases, bank catch-up completeness, and the related
+   exception handling (F6 / F12).
+4. Deliver read-only inspection and the complete linked export, followed by
+   production concurrency, storage, restore, and operating evidence (F10 and
+   release gates below).
+
+This ordering prioritizes a demonstrated original-loss path and its recovery
+foundation. It does not downgrade the other open P0 findings or authorize a
+readiness claim before all release gates pass.
 
 ## Existing foundation
 

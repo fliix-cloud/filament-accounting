@@ -2,20 +2,20 @@
 
 namespace FilamentAccounting\Services;
 
+use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Documents\Data\EInvoiceParseResult;
 use FilamentAccounting\Documents\Data\PurchaseInvoiceUploadResult;
 use FilamentAccounting\Documents\UblEInvoiceParser;
 use FilamentAccounting\Documents\ZugferdEInvoiceAdapter;
 use FilamentAccounting\Enums\PartyAddressRole;
 use FilamentAccounting\Exceptions\DocumentException;
-use FilamentAccounting\Models\Attachment;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Models\PartyAddress;
 use FilamentAccounting\Models\PartyTaxId;
+use FilamentAccounting\Ownership\LegalEntityScope;
 use horstoeko\zugferd\ZugferdDocumentPdfReaderExt;
-use Illuminate\Support\Facades\Storage;
 
 final class ImportPurchaseInvoice
 {
@@ -24,6 +24,9 @@ final class ImportPurchaseInvoice
         private readonly UblEInvoiceParser $ubl,
         private readonly RegisterPurchaseInvoice $invoices,
         private readonly StoreAttachment $attachments,
+        private readonly VerifyPurchaseInvoiceOriginals $originals,
+        private readonly AccountingAuthorizer $authorizer,
+        private readonly LegalEntityScope $entities,
     ) {}
 
     public function handle(
@@ -33,18 +36,31 @@ final class ImportPurchaseInvoice
         ?string $xmlFilename = null,
         ?string $xmlContents = null,
     ): PurchaseInvoiceUploadResult {
+        $this->entities->assertSame($entity->getKey());
+        $this->authorizer->authorize('register_purchase_invoices', $entity);
+
         if (strtolower((string) pathinfo($filename, PATHINFO_EXTENSION)) !== 'pdf') {
             throw new DocumentException(__('filament-accounting::errors.purchase_invoice_pdf_required'));
         }
 
         $hash = hash('sha256', $contents);
-        $retry = Attachment::query()
+        $identity = $xmlContents === null ? $hash
+            : hash('sha256', 'purchase-pdf-xml-v1:'.$hash.':'.hash('sha256', $xmlContents));
+        if ($xmlContents !== null && (! is_string($xmlFilename)
+            || strtolower((string) pathinfo($xmlFilename, PATHINFO_EXTENSION)) !== 'xml')) {
+            throw new DocumentException(__('filament-accounting::errors.invalid_e_invoice'));
+        }
+        $retry = Document::query()
             ->where('legal_entity_id', $entity->getKey())
-            ->where('sha256', $hash)
-            ->where('source_type', 'original_invoice')
+            ->where('idempotency_key', $identity)
             ->first();
-        if ($retry?->attachable instanceof Document) {
-            $document = $retry->attachable;
+        if ($retry instanceof Document) {
+            $document = $retry;
+            if (data_get($document->e_invoice_meta, 'source_sha256') !== $hash
+                || ($xmlContents !== null && data_get($document->e_invoice_meta, 'structured_sha256') !== hash('sha256', $xmlContents))) {
+                throw new DocumentException(__('filament-accounting::errors.invoice_originals_incomplete'));
+            }
+            $this->originals->handle($document);
 
             return new PurchaseInvoiceUploadResult(
                 $document,
@@ -77,7 +93,7 @@ final class ImportPurchaseInvoice
             $eInvoiceSourceType = $embeddedXml !== null ? 'embedded_e_invoice' : 'supplied_e_invoice';
             $format = ($embeddedXml !== null ? 'hybrid-' : 'pdf+').$supplied->formatKey;
         }
-        [$party, $match, $supplierCreated] = $parsed ? $this->matchSupplier($entity, $parsed) : [null, 'unmatched', false];
+        [$party, $match] = $parsed ? $this->matchSupplier($entity, $parsed) : [null, 'unmatched', false];
         $lines = $parsed ? array_map(fn (array $line): array => $this->importedLine($line), $parsed->lines) : [];
         $meta = [
             'structured' => $parsed instanceof EInvoiceParseResult,
@@ -85,50 +101,39 @@ final class ImportPurchaseInvoice
             'validated' => $parsed instanceof EInvoiceParseResult && $parsed->valid,
             'supplier_match' => $match,
             'source_sha256' => $hash,
+            'structured_sha256' => $eInvoiceXml !== null ? hash('sha256', $eInvoiceXml) : null,
             'source_totals' => $parsed ? [
                 'net_minor' => $parsed->netMinor,
                 'tax_minor' => $parsed->taxMinor,
                 'gross_minor' => $parsed->grossMinor,
             ] : null,
         ];
-        $existingDraft = Document::query()
-            ->where('legal_entity_id', $entity->getKey())
-            ->where('idempotency_key', $hash)
-            ->first();
-        $document = null;
-        try {
-            $document = $this->invoices->createDraft($entity, [
-                'party_id' => $party?->getKey(),
-                'supplier_invoice_number' => $parsed?->documentNumber ?: null,
-                'issue_date' => $parsed?->issueDate,
-                'currency' => $parsed instanceof EInvoiceParseResult ? $parsed->currency : $entity->base_currency,
-                'lines' => $lines,
-                'e_invoice_meta' => $meta,
-                'idempotency_key' => $hash,
-            ]);
-            $this->attachments->handle($entity, $document, $filename, $contents, 'original_invoice', [
-                'format' => $format,
-                'structured' => $parsed instanceof EInvoiceParseResult,
-            ]);
-            if ($eInvoiceXml !== null && $eInvoiceFilename !== null) {
-                $this->attachments->handle(
-                    $entity,
-                    $document,
-                    $eInvoiceFilename,
-                    $eInvoiceXml,
-                    $eInvoiceSourceType,
-                    ['format' => $parsed?->formatKey, 'extracted_from_sha256' => $hash],
-                );
-            }
-        } catch (\Throwable $exception) {
-            if ($document instanceof Document && ! $existingDraft instanceof Document) {
-                $this->cleanup($document);
-            }
-            if ($supplierCreated && $party instanceof Party && ! $party->documents()->exists()) {
-                $party->delete();
-            }
-            throw $exception;
+        // Retain the draft, supplier and every saved object if a later step fails.
+        // The manifest prevents an incomplete import from being accepted on retry.
+        $document = $this->invoices->createDraft($entity, [
+            'party_id' => $party?->getKey(),
+            'supplier_invoice_number' => $parsed?->documentNumber ?: null,
+            'issue_date' => $parsed?->issueDate,
+            'currency' => $parsed instanceof EInvoiceParseResult ? $parsed->currency : $entity->base_currency,
+            'lines' => $lines,
+            'e_invoice_meta' => $meta,
+            'idempotency_key' => $identity,
+        ]);
+        $this->attachments->handle($entity, $document, $filename, $contents, 'original_invoice', [
+            'format' => $format,
+            'structured' => $parsed instanceof EInvoiceParseResult,
+        ]);
+        if ($eInvoiceXml !== null && $eInvoiceFilename !== null) {
+            $this->attachments->handle(
+                $entity,
+                $document,
+                $eInvoiceFilename,
+                $eInvoiceXml,
+                $eInvoiceSourceType,
+                ['format' => $parsed?->formatKey, 'extracted_from_sha256' => $hash],
+            );
         }
+        $this->originals->handle($document);
 
         return new PurchaseInvoiceUploadResult($document->fresh(['lines', 'attachments']) ?? $document, $parsed instanceof EInvoiceParseResult, $format, $match);
     }
@@ -273,20 +278,5 @@ final class ImportPurchaseInvoice
             'classification_confirmed' => false,
             'tax_confirmed' => false,
         ];
-    }
-
-    private function cleanup(Document $document): void
-    {
-        $attachments = Attachment::query()
-            ->where('legal_entity_id', $document->legal_entity_id)
-            ->where('attachable_type', $document->getMorphClass())
-            ->where('attachable_id', $document->getKey())
-            ->get();
-        foreach ($attachments as $attachment) {
-            Storage::disk($attachment->disk)->delete($attachment->path);
-            $attachment->delete();
-        }
-        $document->lines()->delete();
-        $document->delete();
     }
 }

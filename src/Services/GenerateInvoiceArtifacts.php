@@ -16,7 +16,6 @@ use horstoeko\zugferd\ZugferdDocumentPdfReaderExt;
 use horstoeko\zugferd\ZugferdDocumentReader;
 use horstoeko\zugferd\ZugferdDocumentValidator;
 use horstoeko\zugferd\ZugferdXsdValidator;
-use Illuminate\Support\Facades\Storage;
 
 final class GenerateInvoiceArtifacts
 {
@@ -24,6 +23,7 @@ final class GenerateInvoiceArtifacts
         private readonly EInvoiceAdapter $eInvoice,
         private readonly InvoiceRenderer $renderer,
         private readonly StoreAttachment $attachments,
+        private readonly VerifyAttachmentIntegrity $integrity,
     ) {}
 
     /** @return array{pdf: Attachment, xml: Attachment} */
@@ -40,11 +40,17 @@ final class GenerateInvoiceArtifacts
             ->where('attachable_type', $document->getMorphClass())
             ->where('attachable_id', $document->getKey())
             ->whereIn('source_type', ['generated_pdf', 'generated_xml'])
-            ->get()
-            ->keyBy('source_type');
-        if ($existing->has('generated_pdf') && $existing->has('generated_xml')
-            && data_get($existing->get('generated_pdf')?->meta, 'renderer_version') === $this->renderer->version()
-            && data_get($existing->get('generated_pdf')?->meta, 'template_version') === $version) {
+            ->get();
+        foreach ($existing as $attachment) {
+            $this->integrity->handle($attachment);
+        }
+        if ($existing->isNotEmpty() && ($existing->count() !== 2
+            || $existing->where('source_type', 'generated_pdf')->count() !== 1
+            || $existing->where('source_type', 'generated_xml')->count() !== 1)) {
+            throw new DocumentException(__('filament-accounting::errors.invoice_originals_incomplete'));
+        }
+        $existing = $existing->keyBy('source_type');
+        if ($existing->has('generated_pdf') && $existing->has('generated_xml')) {
             /** @var Attachment $pdf */
             $pdf = $existing->get('generated_pdf');
             /** @var Attachment $xml */
@@ -75,17 +81,11 @@ final class GenerateInvoiceArtifacts
         $basename = 'invoice-'.($document->number ?: $document->uuid);
         $xmlAttachment = $this->attachments->handle($entity, $document, $basename.'.xml', $xml, 'generated_xml', $meta);
 
-        try {
-            $pdfAttachment = $this->attachments->handle($entity, $document, $basename.'.pdf', $pdf, 'generated_pdf', $meta + [
-                'embedded_xml_sha256' => $xmlAttachment->sha256,
-                'pdfa_part' => 3,
-                'pdfa_conformance' => 'B',
-            ]);
-        } catch (\Throwable $exception) {
-            $xmlAttachment->delete();
-            Storage::disk($xmlAttachment->disk)->delete($xmlAttachment->path);
-            throw $exception;
-        }
+        $pdfAttachment = $this->attachments->handle($entity, $document, $basename.'.pdf', $pdf, 'generated_pdf', $meta + [
+            'embedded_xml_sha256' => $xmlAttachment->sha256,
+            'pdfa_part' => 3,
+            'pdfa_conformance' => 'B',
+        ]);
 
         return ['pdf' => $pdfAttachment, 'xml' => $xmlAttachment];
     }

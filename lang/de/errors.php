@@ -15,6 +15,7 @@ return [
     'invalid_xml' => 'Die hochgeladene XML-Datei ist nicht wohlgeformt.',
     'attachment_write_failed' => 'Der private Anhang konnte nicht gespeichert werden.',
     'attachment_integrity_failed' => 'Die Integritätsprüfung des gespeicherten Anhangs ist fehlgeschlagen.',
+    'invoice_originals_incomplete' => 'Die gespeicherten Rechnungsdateien sind unvollständig oder nicht eindeutig. Bitte lassen Sie den Vorgang prüfen, bevor Sie fortfahren.',
     'only_issued_sales_invoice_exportable' => 'Finale PDF-/XML-Artefakte können nur für freigegebene Ausgangsrechnungen erzeugt werden.',
     'embedded_xml_mismatch' => 'Das in die PDF-Datei eingebettete XML weicht vom separat gespeicherten Rechnungs-XML ab.',
     'purchase_classification_required' => 'Jede Eingangsrechnungsposition benötigt eine Aufwandskategorie und ein Aufwands- oder Bestandskonto.',

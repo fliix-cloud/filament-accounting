@@ -28,6 +28,7 @@ final class RegisterPurchaseInvoice
         private readonly AuditLogger $audit,
         private readonly ResolveTaxRuleVersion $taxRules,
         private readonly ExpenseCategoryResolver $expenseCategories,
+        private readonly VerifyPurchaseInvoiceOriginals $originals,
     ) {}
 
     /** @param array<string, mixed> $payload */
@@ -145,6 +146,7 @@ final class RegisterPurchaseInvoice
 
         $document = DB::transaction(function () use ($document, $entity): Document {
             $document = Document::query()->lockForUpdate()->with(['lines', 'party'])->whereKey($document->getKey())->firstOrFail();
+            $this->originals->handle($document);
             if ($document->document_status === DocumentStatus::Received) {
                 return $document;
             }
