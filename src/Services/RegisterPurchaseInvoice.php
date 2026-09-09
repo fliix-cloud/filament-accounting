@@ -16,7 +16,6 @@ use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Support\ExactMoney;
 use FilamentAccounting\Support\LineMoneyCalculator;
-use Illuminate\Support\Facades\DB;
 
 final class RegisterPurchaseInvoice
 {
@@ -44,7 +43,7 @@ final class RegisterPurchaseInvoice
     {
         $this->authorizer->authorize('register_purchase_invoices', $entity);
 
-        return DB::transaction(function () use ($entity, $payload, $reviewed): Document {
+        return $entity->getConnection()->transaction(function () use ($entity, $payload, $reviewed): Document {
             if (filled($payload['idempotency_key'] ?? null)) {
                 $existing = Document::query()
                     ->where('legal_entity_id', $entity->getKey())
@@ -107,7 +106,7 @@ final class RegisterPurchaseInvoice
         $entity = LegalEntity::query()->findOrFail($document->legal_entity_id);
         $this->authorizer->authorize('register_purchase_invoices', $document);
 
-        return DB::transaction(function () use ($document, $entity, $payload): Document {
+        return $entity->getConnection()->transaction(function () use ($document, $entity, $payload): Document {
             $document = Document::query()->lockForUpdate()->whereKey($document->getKey())->firstOrFail();
             if ($document->document_status !== DocumentStatus::Draft
                 || ! in_array($document->type, [DocumentType::PurchaseInvoice, DocumentType::PurchaseCreditNote], true)) {
@@ -144,7 +143,7 @@ final class RegisterPurchaseInvoice
         $entity = LegalEntity::query()->findOrFail($document->legal_entity_id);
         $this->authorizer->authorize('register_purchase_invoices', $document);
 
-        $document = DB::transaction(function () use ($document, $entity): Document {
+        $document = $entity->getConnection()->transaction(function () use ($document, $entity): Document {
             $document = Document::query()->lockForUpdate()->with(['lines', 'party'])->whereKey($document->getKey())->firstOrFail();
             $this->originals->handle($document);
             if ($document->document_status === DocumentStatus::Received) {

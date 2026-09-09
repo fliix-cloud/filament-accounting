@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'intake_requires_independent_commit' => 'Invoice intake must start outside an existing database transaction.',
+    'intake_processing_failed' => 'Processing was interrupted. Files already preserved remain available.',
+    'intake_upload_failed' => 'Import could not be completed. Check Open imports. If no intake was created, check file type, size, and access permissions.',
+    'intake_totals_mismatch' => 'Calculated amounts do not match the original invoice totals. The invoice remains preserved for review.',
     'journal_integrity_failed' => 'Journal or audit evidence failed verification. Export refused; investigate with filament-accounting:verify.',
     'legal_entity_already_exists' => 'A company has already been configured for this instance.',
     'multiple_legal_entities' => 'The instance contains more than one company and violates the single-company data model.',

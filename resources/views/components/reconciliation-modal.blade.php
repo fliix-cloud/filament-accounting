@@ -9,10 +9,8 @@
         if (modal) window.dispatchEvent(new CustomEvent('close-modal', { detail: { id: modal.id } }));
     "
 >
-    <p style="margin-bottom: .75rem; text-align: right;">
-        <a href="{{ $fallbackUrl }}" class="fi-link">
-            {{ __('filament-accounting::actions.open_fallback_page') }}
-        </a>
+    <p style="margin-bottom: 0.75rem; text-align: right">
+        <a href="{{ $fallbackUrl }}" class="fi-link"> {{ __('filament-accounting::actions.open_fallback_page') }} </a>
     </p>
     <livewire:filament-accounting.reconciliation-assistant
         :line="$line"

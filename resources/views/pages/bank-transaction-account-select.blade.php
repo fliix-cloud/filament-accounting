@@ -6,17 +6,28 @@
     $valueStyle = 'font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 1.125rem; font-weight: 600; letter-spacing: -0.02em;';
 @endphp
 
-<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2rem; margin-bottom: 1.5rem;">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2rem; margin-bottom: 1.5rem">
     <div style="display: inline-block; width: min(100%, {{ $selectCh }}ch); max-width: 100%;">
-        <label for="accounting-bank-transaction-account" class="fi-fo-field-label" style="margin-bottom: 0.25rem; display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.875rem; font-weight: 500;">
+        <label
+            for="accounting-bank-transaction-account"
+            class="fi-fo-field-label"
+            style="
+                margin-bottom: 0.25rem;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.25rem;
+                font-size: 0.875rem;
+                font-weight: 500;
+            "
+        >
             {{ __('filament-accounting::fields.account') }}
-            <sup style="color: #dc2626;">*</sup>
+            <sup style="color: #dc2626">*</sup>
         </label>
-        <x-filament::input.wrapper style="width: 100%;">
+        <x-filament::input.wrapper style="width: 100%">
             <x-filament::input.select
                 id="accounting-bank-transaction-account"
                 wire:model.live="accountId"
-                style="width: 100%;"
+                style="width: 100%"
             >
                 <option value="">{{ __('filament-accounting::fields.select_account') }}</option>
                 @foreach ($accounts as $account)
@@ -25,14 +36,14 @@
             </x-filament::input.select>
         </x-filament::input.wrapper>
         @unless (filled($selectedAccountId))
-            <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #6b7280;">
+            <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #6b7280">
                 {{ __('filament-accounting::fields.select_account_help') }}
             </p>
         @endunless
     </div>
 
     @if ($selectedAccount)
-        <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2rem;">
+        <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2rem">
             @if ($summary['booked_balance'])
                 <div>
                     <div style="{{ $labelStyle }}">{{ __('filament-accounting::fields.booked_balance') }}</div>

@@ -7,6 +7,10 @@
     @endif
 
     @if (filled($challengeUrl ?? null))
-        <img src="{{ $challengeUrl }}" alt="{{ __('filament-accounting::banking/fints/sca.challenge_image') }}" class="max-w-sm" />
+        <img
+            src="{{ $challengeUrl }}"
+            alt="{{ __('filament-accounting::banking/fints/sca.challenge_image') }}"
+            class="max-w-sm"
+        />
     @endif
 </div>

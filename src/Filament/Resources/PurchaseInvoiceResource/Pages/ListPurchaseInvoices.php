@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages;
 
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
@@ -19,6 +20,8 @@ class ListPurchaseInvoices extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [CreateAction::make()];
+        return [CreateAction::make(), Action::make('intakes')
+            ->label(__('filament-accounting::fields.open_intakes'))
+            ->url(PurchaseInvoiceResource::getUrl('intakes'))];
     }
 }

@@ -105,29 +105,53 @@ procedure before retrying.
 Storage writes and database commits are not atomic. Failed verification,
 metadata saves, or an enclosing transaction rollback can leave retained objects
 without attachment rows. The service deliberately does not delete these files.
-Preserve them for investigation; there is no automatic orphan disposal or durable
-intake recovery inventory yet. UUID paths and existence checks do not establish
+Preserve them for investigation; there is no automatic orphan disposal for general
+attachment writes. Purchase intake now has the separate inventory described below.
+UUID paths and existence checks do not establish
 storage immutability or atomic create-only behavior; independently enforced
 storage permissions/versioning remain required. Concurrent first uploads may
 create duplicate records and objects. Previously stored paths remain readable.
 
-Import and invoice-generation errors now retain saved files and metadata, and
-propagate the original failure. Purchase imports check company scope and
-permission before lookup or supplier creation. Their identity includes separately
-supplied XML; retry and receipt verify the expected PDF/XML attachments. Missing,
-ambiguous, or damaged originals block continuation instead of being replaced.
-Previously created drafts and suppliers remain available after a later failure.
+Purchase imports authorize the actor and company, then commit an intake manifest
+before writing input files. Paths, names, hashes, sizes, roles, and actor identity
+remain discoverable even if processing fails before creating a draft. Each file
+is verified before preservation is recorded; only then does parsing start.
+PDF, standalone XML, and PDF with companion XML are supported. Invalid accepted
+inputs are retained privately as inert bytes and cannot be booked.
+
+In purchase invoices, **Open imports** lists incomplete processing, including
+intakes with no document. Verified originals can be downloaded as attachments;
+they are not rendered inline. Use **Process again** for preserved interrupted
+processing. For incomplete initial preservation, upload the same files again.
+Changed or missing previously preserved bytes require investigation and verified
+restoration; retry never replaces them. Corrected input creates a separate intake.
+
+Supplier/draft/attachment-reference creation and intake completion share the
+accounting connection's transaction. New business records roll back on failure;
+the previously committed intake survives. Correlated audit events record attempt
+starts and outcomes. If an outcome cannot be saved, monitoring must investigate
+the retained start event and open intake. The original processing error is retained.
+
+Call `ImportPurchaseInvoice::handle(...)` or `resume($intake)` outside an enclosing
+accounting transaction. The service rejects outer transactions before accepting
+input, because their rollback would erase preservation evidence. The Filament
+upload page and retry action disable their outer transactions. Integrations must
+respect the same boundary. Two-connection SQLite regression tests verify rollback
+isolation; production concurrency and storage controls still need validation.
 
 Generated invoice retries verify existing bytes and reuse a complete PDF/XML pair
 across renderer upgrades. An existing partial or ambiguous pair blocks generation.
-There is no automatic recovery action or durable intake/issuance inventory yet;
+There is no automatic outgoing-artifact recovery or authoritative issuance inventory yet;
 preserve retained objects and investigate failures. If all generated attachment
 rows are absent, generation cannot yet distinguish lost metadata from a first
 attempt. File retention alone does not close this evidence gap.
 
-New structured purchase imports record an expected XML hash. Older structured
-DEV drafts without it fail verification; PDF-plus-XML import identity also changed.
-Rebuild disposable development fixtures. No production backfill is provided.
+The base DEV migration adds `accounting_purchase_invoice_intakes`. Rebuild only
+disposable development fixtures. Existing imports are not automatically assigned
+an intake history; no production migration or evidence backfill is provided.
+Extraction success is not full e-invoice conformance. Source-total mismatch blocks
+conversion while preserving the original, but full format/business-rule validation
+and all tax/rounding cases remain open. See [GoBD readiness](gobd.md).
 
 Model guards protect normal Eloquent mutations. Query-builder writes, raw SQL,
 privileged database access, and storage deletion still require additional

@@ -9,8 +9,11 @@
         <x-filament::section>
             <x-slot name="heading">{{ __('filament-accounting::navigation.bank_transactions') }}</x-slot>
             <p>{{ __('filament-accounting::fields.select_line') }}</p>
-            <p style="margin-top: .75rem;">
-                <a href="{{ \FilamentAccounting\Filament\Resources\BankStatementLineResource::getUrl() }}" class="fi-link">
+            <p style="margin-top: 0.75rem">
+                <a
+                    href="{{ \FilamentAccounting\Filament\Resources\BankStatementLineResource::getUrl() }}"
+                    class="fi-link"
+                >
                     {{ __('filament-accounting::navigation.bank_transactions') }}
                 </a>
             </p>

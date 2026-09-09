@@ -430,6 +430,25 @@ return new class extends Migration
             $table->index(['target_type', 'target_id']);
         });
 
+        Schema::create('accounting_purchase_invoice_intakes', function (Blueprint $table) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->foreignId('legal_entity_id')->constrained('accounting_legal_entities')->restrictOnDelete();
+            $table->char('identity', 64);
+            $table->string('disk');
+            $table->json('files');
+            $table->json('preserved_files');
+            $table->string('status', 24)->default('pending');
+            $table->text('last_error')->nullable();
+            $table->foreignId('document_id')->nullable()->constrained('accounting_documents')->restrictOnDelete();
+            $table->string('created_by_type')->nullable();
+            $table->string('created_by_id', 64)->nullable();
+            $table->timestamp('preserved_at')->nullable();
+            $table->timestamps();
+            $table->unique(['legal_entity_id', 'identity'], 'acct_purchase_intake_identity');
+            $table->index(['legal_entity_id', 'status'], 'acct_purchase_intake_status');
+        });
+
         Schema::create('accounting_audit_chain_heads', function (Blueprint $table) {
             $table->foreignId('legal_entity_id')->primary()->constrained('accounting_legal_entities')->restrictOnDelete();
             $table->unsignedBigInteger('last_sequence');
@@ -442,6 +461,7 @@ return new class extends Migration
     public function down(): void
     {
         $tables = [
+            'accounting_purchase_invoice_intakes',
             'accounting_audit_chain_heads',
             'accounting_audit_events',
             'accounting_attachments',

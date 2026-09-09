@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'intake_requires_independent_commit' => 'Der Rechnungseingang muss außerhalb einer bestehenden Datenbanktransaktion gestartet werden.',
+    'intake_processing_failed' => 'Die Verarbeitung wurde unterbrochen. Die bereits gespeicherten Dateien bleiben erhalten.',
+    'intake_upload_failed' => 'Der Import konnte nicht abgeschlossen werden. Prüfen Sie den Vorgang unter „Offene Importe“. Falls kein Eingang angelegt wurde, prüfen Sie Dateityp, Dateigröße und Zugriffsrechte.',
+    'intake_totals_mismatch' => 'Die berechneten Beträge stimmen nicht mit den Summen der Originalrechnung überein. Die Rechnung bleibt zur Prüfung gespeichert.',
     'journal_integrity_failed' => 'Die Prüfung der Buchungs- oder Audit-Daten ist fehlgeschlagen. Export abgebrochen; bitte mit filament-accounting:verify untersuchen.',
     'legal_entity_already_exists' => 'Für diese Instanz ist bereits ein Unternehmen eingerichtet.',
     'multiple_legal_entities' => 'Die Instanz enthält mehr als ein Unternehmen. Das Single-Mandanten-Datenmodell ist verletzt.',

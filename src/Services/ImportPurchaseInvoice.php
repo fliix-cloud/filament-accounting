@@ -9,13 +9,16 @@ use FilamentAccounting\Documents\UblEInvoiceParser;
 use FilamentAccounting\Documents\ZugferdEInvoiceAdapter;
 use FilamentAccounting\Enums\PartyAddressRole;
 use FilamentAccounting\Exceptions\DocumentException;
+use FilamentAccounting\Models\Attachment;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Models\PartyAddress;
 use FilamentAccounting\Models\PartyTaxId;
+use FilamentAccounting\Models\PurchaseInvoiceIntake;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use horstoeko\zugferd\ZugferdDocumentPdfReaderExt;
+use Illuminate\Support\Str;
 
 final class ImportPurchaseInvoice
 {
@@ -27,6 +30,8 @@ final class ImportPurchaseInvoice
         private readonly VerifyPurchaseInvoiceOriginals $originals,
         private readonly AccountingAuthorizer $authorizer,
         private readonly LegalEntityScope $entities,
+        private readonly PurchaseInvoiceIntakeStore $intakes,
+        private readonly AuditLogger $audit,
     ) {}
 
     public function handle(
@@ -36,41 +41,99 @@ final class ImportPurchaseInvoice
         ?string $xmlFilename = null,
         ?string $xmlContents = null,
     ): PurchaseInvoiceUploadResult {
+        $inputs = ['primary' => ['filename' => $filename, 'contents' => $contents]];
+        if ($xmlContents !== null) {
+            $inputs['companion'] = ['filename' => $xmlFilename ?? '', 'contents' => $xmlContents];
+        }
+        $intake = $this->intakes->prepare($entity, $inputs);
+
+        return $this->execute($entity, $intake, $inputs);
+    }
+
+    public function resume(PurchaseInvoiceIntake $intake): PurchaseInvoiceUploadResult
+    {
+        $entity = $this->entities->require();
+        $this->entities->assertSame($intake->legal_entity_id, $entity);
+
+        return $this->execute($entity, $intake, []);
+    }
+
+    /** @param array<string, array{filename: string, contents: string}> $inputs */
+    private function execute(LegalEntity $entity, PurchaseInvoiceIntake $intake, array $inputs): PurchaseInvoiceUploadResult
+    {
+        $this->intakes->authorize($entity);
+        $intake = PurchaseInvoiceIntake::query()->where('legal_entity_id', $entity->getKey())->findOrFail($intake->getKey());
+        $attempt = (string) Str::uuid();
+        $this->audit->log($entity, 'purchase_intake.attempt_started', $intake, correlationId: $attempt);
+        try {
+            $this->intakes->preserve($entity, $intake, $inputs);
+
+            return $entity->getConnection()->transaction(function () use ($entity, $intake, $attempt): PurchaseInvoiceUploadResult {
+                LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
+                $intake = PurchaseInvoiceIntake::query()->whereKey($intake->getKey())->lockForUpdate()->firstOrFail();
+                $contents = $this->intakes->read($entity, $intake);
+                if ($intake->document_id !== null) {
+                    $document = Document::query()->where('legal_entity_id', $entity->getKey())->findOrFail($intake->document_id);
+                    $this->originals->handle($document);
+                    $result = new PurchaseInvoiceUploadResult($document,
+                        (bool) data_get($document->e_invoice_meta, 'structured', false),
+                        (string) data_get($document->e_invoice_meta, 'format', 'pdf'),
+                        (string) data_get($document->e_invoice_meta, 'supplier_match', 'unmatched'), true);
+                } else {
+                    $result = $this->buildDocument($entity, $intake, $contents);
+                }
+                $intake->document_id = $result->document->getKey();
+                $intake->status = 'complete';
+                $intake->last_error = null;
+                $intake->save();
+                $this->audit->log($entity, 'purchase_intake.completed', $intake, ['document_id' => $intake->document_id], correlationId: $attempt);
+
+                return $result;
+            });
+        } catch (\Throwable $exception) {
+            // The independently committed intake survives the business rollback.
+            // A failure to record the outcome must not mask the processing error.
+            try {
+                $entity->getConnection()->transaction(function () use ($entity, $intake, $exception, $attempt): void {
+                    LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
+                    $locked = PurchaseInvoiceIntake::query()->whereKey($intake->getKey())->lockForUpdate()->firstOrFail();
+                    $integrityFailed = $exception->getMessage() === __('filament-accounting::errors.attachment_integrity_failed');
+                    if ($locked->status !== 'complete' || $integrityFailed) {
+                        $locked->status = $locked->preserved_at === null ? 'pending'
+                            : ($exception instanceof DocumentException ? 'blocked' : 'failed');
+                        if ($integrityFailed) {
+                            $locked->status = 'integrity_failed';
+                        }
+                        $locked->last_error = $exception instanceof DocumentException
+                            ? mb_substr($exception->getMessage(), 0, 2000)
+                            : __('filament-accounting::errors.intake_processing_failed');
+                        $locked->save();
+                    }
+                    $this->audit->log($entity, 'purchase_intake.failed', $locked, ['exception' => $exception::class], correlationId: $attempt);
+                });
+            } catch (\Throwable $recordingFailure) {
+                report($recordingFailure);
+            }
+            throw $exception;
+        }
+    }
+
+    /** @param array<string, string> $inputs */
+    private function buildDocument(LegalEntity $entity, PurchaseInvoiceIntake $intake, array $inputs): PurchaseInvoiceUploadResult
+    {
+        $filename = $intake->files['primary']['filename'];
+        $contents = $inputs['primary'];
+        $xmlFilename = $intake->files['companion']['filename'] ?? null;
+        $xmlContents = $inputs['companion'] ?? null;
         $this->entities->assertSame($entity->getKey());
         $this->authorizer->authorize('register_purchase_invoices', $entity);
 
-        if (strtolower((string) pathinfo($filename, PATHINFO_EXTENSION)) !== 'pdf') {
-            throw new DocumentException(__('filament-accounting::errors.purchase_invoice_pdf_required'));
-        }
-
         $hash = hash('sha256', $contents);
-        $identity = $xmlContents === null ? $hash
-            : hash('sha256', 'purchase-pdf-xml-v1:'.$hash.':'.hash('sha256', $xmlContents));
+        $identity = 'intake:'.$intake->uuid;
         if ($xmlContents !== null && (! is_string($xmlFilename)
             || strtolower((string) pathinfo($xmlFilename, PATHINFO_EXTENSION)) !== 'xml')) {
             throw new DocumentException(__('filament-accounting::errors.invalid_e_invoice'));
         }
-        $retry = Document::query()
-            ->where('legal_entity_id', $entity->getKey())
-            ->where('idempotency_key', $identity)
-            ->first();
-        if ($retry instanceof Document) {
-            $document = $retry;
-            if (data_get($document->e_invoice_meta, 'source_sha256') !== $hash
-                || ($xmlContents !== null && data_get($document->e_invoice_meta, 'structured_sha256') !== hash('sha256', $xmlContents))) {
-                throw new DocumentException(__('filament-accounting::errors.invoice_originals_incomplete'));
-            }
-            $this->originals->handle($document);
-
-            return new PurchaseInvoiceUploadResult(
-                $document,
-                (bool) data_get($document->e_invoice_meta, 'structured', false),
-                (string) data_get($document->e_invoice_meta, 'format', 'pdf'),
-                (string) data_get($document->e_invoice_meta, 'supplier_match', 'unmatched'),
-                true,
-            );
-        }
-
         [$parsed, $embeddedXml, $format] = $this->inspect($filename, $contents);
         $eInvoiceXml = $embeddedXml;
         $eInvoiceFilename = $embeddedXml !== null
@@ -98,7 +161,11 @@ final class ImportPurchaseInvoice
         $meta = [
             'structured' => $parsed instanceof EInvoiceParseResult,
             'format' => $format,
-            'validated' => $parsed instanceof EInvoiceParseResult && $parsed->valid,
+            'validated' => false,
+            'extracted' => $parsed instanceof EInvoiceParseResult,
+            'validation_status' => 'not_checked',
+            'intake_id' => $intake->getKey(),
+            'original_format' => strtolower((string) pathinfo($filename, PATHINFO_EXTENSION)),
             'supplier_match' => $match,
             'source_sha256' => $hash,
             'structured_sha256' => $eInvoiceXml !== null ? hash('sha256', $eInvoiceXml) : null,
@@ -108,8 +175,7 @@ final class ImportPurchaseInvoice
                 'gross_minor' => $parsed->grossMinor,
             ] : null,
         ];
-        // Retain the draft, supplier and every saved object if a later step fails.
-        // The manifest prevents an incomplete import from being accepted on retry.
+        // Business writes share one transaction; retained intake bytes are independent.
         $document = $this->invoices->createDraft($entity, [
             'party_id' => $party?->getKey(),
             'supplier_invoice_number' => $parsed?->documentNumber ?: null,
@@ -119,29 +185,53 @@ final class ImportPurchaseInvoice
             'e_invoice_meta' => $meta,
             'idempotency_key' => $identity,
         ]);
-        $this->attachments->handle($entity, $document, $filename, $contents, 'original_invoice', [
-            'format' => $format,
-            'structured' => $parsed instanceof EInvoiceParseResult,
-        ]);
+        if ($parsed !== null && ($document->net_minor !== $parsed->netMinor
+            || $document->tax_minor !== $parsed->taxMinor || $document->gross_minor !== $parsed->grossMinor)) {
+            throw new DocumentException(__('filament-accounting::errors.intake_totals_mismatch'));
+        }
+        $this->linkOriginal($intake, $document, 'primary', 'original_invoice');
         if ($eInvoiceXml !== null && $eInvoiceFilename !== null) {
-            $this->attachments->handle(
-                $entity,
-                $document,
-                $eInvoiceFilename,
-                $eInvoiceXml,
-                $eInvoiceSourceType,
-                ['format' => $parsed?->formatKey, 'extracted_from_sha256' => $hash],
-            );
+            if (isset($intake->files['companion'])) {
+                $this->linkOriginal($intake, $document, 'companion', $eInvoiceSourceType);
+            } elseif (strtolower((string) pathinfo($filename, PATHINFO_EXTENSION)) === 'xml') {
+                // Standalone XML is the original itself, not a second required file.
+            } else {
+                $this->attachments->handle(
+                    $entity,
+                    $document,
+                    $eInvoiceFilename,
+                    $eInvoiceXml,
+                    $eInvoiceSourceType,
+                    ['format' => $parsed?->formatKey, 'extracted_from_sha256' => $hash],
+                );
+            }
         }
         $this->originals->handle($document);
 
         return new PurchaseInvoiceUploadResult($document->fresh(['lines', 'attachments']) ?? $document, $parsed instanceof EInvoiceParseResult, $format, $match);
     }
 
+    private function linkOriginal(PurchaseInvoiceIntake $intake, Document $document, string $role, string $source): void
+    {
+        $file = $intake->files[$role];
+        Attachment::query()->create([
+            'legal_entity_id' => $intake->legal_entity_id, 'attachable_type' => $document->getMorphClass(),
+            'attachable_id' => $document->getKey(), 'original_filename' => $file['filename'],
+            'mime_type' => strtolower((string) pathinfo($file['filename'], PATHINFO_EXTENSION)) === 'xml' ? 'application/xml' : 'application/pdf',
+            'size' => $file['size'], 'sha256' => $file['sha256'], 'disk' => $intake->disk, 'path' => $file['path'],
+            'source_type' => $source, 'meta' => ['intake_id' => $intake->getKey(), 'role' => $role],
+        ]);
+    }
+
     /** @return array{0: EInvoiceParseResult|null, 1: string|null, 2: string} */
     private function inspect(string $filename, string $contents): array
     {
         $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
+        if ($extension === 'xml') {
+            $parsed = $this->parseXml($contents, $filename);
+
+            return [$parsed, $contents, $parsed->formatKey];
+        }
         if ($extension === 'pdf') {
             if (! str_starts_with($contents, '%PDF-')) {
                 throw new DocumentException(__('filament-accounting::errors.invalid_pdf'));
@@ -160,6 +250,9 @@ final class ImportPurchaseInvoice
 
     private function parseXml(string $contents, string $filename): EInvoiceParseResult
     {
+        if (stripos($contents, '<!DOCTYPE') !== false) {
+            throw new DocumentException(__('filament-accounting::errors.unsafe_xml'));
+        }
         $parsed = match (true) {
             $this->cii->supports('application/xml', $contents) => $this->cii->parse($contents, $filename),
             $this->ubl->supports($contents) => $this->ubl->parse($contents, $filename),

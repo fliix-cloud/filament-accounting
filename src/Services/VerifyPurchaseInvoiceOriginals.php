@@ -18,7 +18,7 @@ final class VerifyPurchaseInvoiceOriginals
         }
 
         $expected = ['original_invoice' => $meta['source_sha256']];
-        if ($meta['structured'] ?? false) {
+        if (($meta['structured'] ?? false) && ($meta['original_format'] ?? 'pdf') !== 'xml') {
             $source = str_starts_with((string) ($meta['format'] ?? ''), 'hybrid-')
                 ? 'embedded_e_invoice' : 'supplied_e_invoice';
             $expected[$source] = $meta['structured_sha256'] ?? null;

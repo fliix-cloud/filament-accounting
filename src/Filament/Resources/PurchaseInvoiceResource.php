@@ -24,6 +24,7 @@ use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\CreatePurchaseInvoice;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\EditPurchaseInvoice;
+use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ListPurchaseInvoiceIntakes;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ListPurchaseInvoices;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource\Pages\ViewPurchaseInvoice;
 use FilamentAccounting\Filament\Support\DocumentAttachmentActions;
@@ -264,6 +265,7 @@ class PurchaseInvoiceResource extends Resource
         return [
             'index' => ListPurchaseInvoices::route('/'),
             'create' => CreatePurchaseInvoice::route('/create'),
+            'intakes' => ListPurchaseInvoiceIntakes::route('/imports'),
             'edit' => EditPurchaseInvoice::route('/{record}/edit'),
             'view' => ViewPurchaseInvoice::route('/{record}'),
         ];
