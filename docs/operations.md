@@ -58,6 +58,22 @@ php artisan filament-accounting:verify --json
 Both commands return a non-zero exit code on failure. Monitor that result and
 retain the versioned JSON output.
 
+`filament-accounting:verify --json` now emits schema version **2**. Update report
+consumers accordingly. The per-entity `invoice_evidence` section includes
+`intake_count`, `artifact_set_count`, `issues`, and `pending`. It checks retained
+purchase originals and outgoing PDF/XML sets, including their audit references,
+preservation state, and completed invoice links. Missing or changed evidence
+causes a non-zero exit code; storage read failures are also reported as failures.
+The command is read-only and requires no authenticated Filament user.
+
+Monitor `pending` separately: preserved but blocked imports and interrupted,
+unposted invoice generation produce warnings, while the exit code can remain zero
+when integrity is sound. Review them through **Open imports** or **Complete
+invoice** in Filament. A missing input that was never preserved may require the
+original upload again. Never use verification as a repair or regeneration command.
+Retain reports and investigate affected record IDs; schedule this file-reading
+check with the real dataset's storage latency and entity-lock duration in mind.
+
 Export and verify portable audit evidence with:
 
 ```bash
@@ -68,14 +84,18 @@ php artisan filament-accounting:audit-verify-file exports/audit-evidence.json --
 The export is tamper-evident, not digitally signed. An auditor still needs an
 independently obtained anchor or hash to rule out replacement of both database
 history and exported evidence.
+These export/file-verification commands retain their existing schema version 1
+and cover audit events and anchors only. They do not yet export and independently
+verify the retained invoice files, intake sets, or complete accounting relations.
 
 Every ledger posting stores a versioned journal snapshot and digest inside its
 audit event. `filament-accounting:verify` compares the stored journal against
 that evidence, including missing records and altered historical account/period
 values. The generic CSV exporter checks the entity's ledger, chain, and configured
 anchors before exporting the verified historical values; corruption outside the
-requested date range also blocks the export. Documents and settlements do not
-yet have equivalent content verification.
+requested date range also blocks the export. The scheduled check now also verifies
+invoice originals and outgoing render evidence. Complete converted purchase-line
+and settlement snapshots are still missing.
 
 These checks detect journal changes; they do not prevent privileged SQL writes.
 Independent anchors remain necessary to detect a coordinated rewrite of the

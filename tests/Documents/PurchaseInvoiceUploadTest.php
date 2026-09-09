@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Tests\Documents;
 
+use FilamentAccounting\Audit\InvoiceEvidenceVerifier;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Exceptions\AccountingException;
 use FilamentAccounting\Exceptions\AuthorizationException;
@@ -81,6 +82,9 @@ class PurchaseInvoiceUploadTest extends TestCase
         $this->assertSame(1, DB::connection('intake_accounting')->table('accounting_documents')->count());
         $this->assertSame(1, DB::connection('intake_accounting')->table('accounting_parties')->count());
         $this->assertSame(1, AuditEvent::query()->where('operation', 'purchase_intake.completed')->count());
+        $inspection = app(InvoiceEvidenceVerifier::class)->verify((int) $entity->getKey());
+        $this->assertSame([], $inspection['issues']);
+        $this->assertSame([], $inspection['pending']);
     }
 
     #[Test]

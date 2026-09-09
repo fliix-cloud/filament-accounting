@@ -53,8 +53,8 @@ baseline; the detailed findings retain that baseline as their reference.
 
 | Findings | Implemented in this change | Still required |
 | --- | --- | --- |
-| F11 / F9 | New `StoreAttachment` writes retain files after failure and verify retries. Outgoing invoices now commit a fixed PDF/XML set, render snapshot, paths, hashes, and preparation evidence before file writes. Retries use staged bytes, recover missing attachment references, and verify contents before posting. Issuance uses the accounting connection. Filament offers “Complete invoice” for interrupted issuance. | General orphan recovery, production concurrency/storage/restore evidence, independent verification/export of the complete artifact dataset, and a deployment migration. |
-| F1 / F3 / F7 / F9 / F11 | A committed intake manifest and verified private raw files precede parsing. PDF, standalone XML, and PDF/XML pairs are supported. Identity includes roles and contents. Attempts are audited; retry reuses preserved inputs. Business rollback retains intake evidence. Purchase registration uses the accounting connection. Source-total mismatches block conversion. Filament exposes open imports, safe downloads, and retry within purchase invoices. | Production concurrency and crash tests, complete conformance/accounting conversion checks, derived-file orphan recovery, and independent verification of intake/document relationships. |
+| F11 / F9 | New `StoreAttachment` writes retain files after failure and verify retries. Outgoing invoices now commit a fixed PDF/XML set, render snapshot, paths, hashes, and preparation evidence before file writes. Retries use staged bytes, recover missing attachment references, and verify contents before posting. Issuance uses the accounting connection. Filament offers “Complete invoice” for interrupted issuance. | General orphan recovery, production concurrency/storage/restore evidence, independent offline verification/export of the complete artifact dataset, and a deployment migration. |
+| F1 / F3 / F7 / F9 / F11 | A committed intake manifest and verified private raw files precede parsing. PDF, standalone XML, and PDF/XML pairs are supported. Identity includes roles and contents. Attempts are audited; retry reuses preserved inputs. Business rollback retains intake evidence. Purchase registration uses the accounting connection. Source-total mismatches block conversion. Filament exposes open imports, safe downloads, and retry within purchase invoices. | Production concurrency and crash tests, complete conformance/accounting conversion checks, derived-file orphan recovery, complete converted-line evidence, and independent offline export/verification. |
 | F1 / F3 | Purchase draft disposal retains the document, lines, PDF/XML, and actor/reason evidence. It requires a dedicated permission, current company scope, and a locked persisted draft. UI offers “Discard draft”; physical deletion is disabled. Invalid accepted imports are now retained independently of drafts. | Complete operational review/correction of blocked intakes and production retention evidence. |
 | F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. | Bulk/SQL write prevention, concurrent mutation evidence, and controlled correction workflows. |
 | F2 / F8 / F10 | Each ledger posting includes a versioned full journal snapshot and SHA-256 digest in its audit event. Verification compares both directions and detects changed/missing journal data. Account/period values are frozen at posting. CSV exports use checked historical records and refuse integrity failures; the journal UI uses historical account codes. | Bind document, attachment, settlement, and other business contents to evidence; protect storage and database privileges; complete the machine-readable audit export. This is journal tamper detection, not prevention of privileged SQL writes. |
@@ -222,9 +222,9 @@ even when every attachment row is also absent.
 
 Verification compares staged bytes, manifest, current render-source snapshot,
 attachment metadata/files, and the preparation event's payload, canonical payload,
-and hash. These are local checks. A coordinated privileged rewrite still requires
-the existing full-chain/independent-anchor checks; the generic verification/export
-commands do not yet reconcile every artifact set automatically.
+and hash. These are local checks. The scheduled verification command now checks
+these sets alongside the full audit chain and configured independent anchors.
+The portable audit export still contains only events and anchors.
 
 [IssueSalesInvoice](../src/Services/IssueSalesInvoice.php) freezes the artifact
 requirement when issuing. Changing the current generation setting cannot skip
@@ -247,8 +247,7 @@ preparation-event tampering, model deletion guards, denied access, outer-transac
 rejection, separate accounting-connection recovery, and Filament completion with
 exactly one invoice number and journal. Local tests use real commits and fake
 storage; production concurrency and crash/restore behavior remain release gates.
-The full local suite passed on Herd PHP 8.4.25 with **228 tests and 2,172
-assertions**. PHPStan reported no errors and the full Pint check passed.
+The subsequent verification slice and its regression results are recorded below.
 
 The base DEV migration adds `accounting_invoice_artifact_sets`. Include this table
 and its staged contents in retention, backup, restore, and future audit exports.
@@ -257,11 +256,52 @@ only disposable DEV databases; no production migration or evidence backfill is
 provided. First rendering can be retried if it failed before committing a set,
 because no artifact file has yet been written by this workflow.
 
+### Scheduled invoice evidence verification
+
+`filament-accounting:verify` now runs
+[InvoiceEvidenceVerifier](../src/Audit/InvoiceEvidenceVerifier.php) under the same
+entity lock as journal, chain, and anchor verification. It checks intake manifests
+against creation events, preservation markers against file events, stored sizes
+and hashes, completion links, and original attachment references. It also checks
+outgoing staged bytes, render snapshots, generated attachments, and preservation
+evidence, including interrupted sets. Reverse checks from audit events and invoice
+links detect missing or reassigned evidence records. Existing files at planned but
+not yet committed paths are checked as well; verification never repairs them.
+
+The command's JSON report is now **schema version 2**. Each entity has an
+`invoice_evidence` section with counts, `issues`, and `pending` lists. Integrity
+issues cause a non-zero exit code. An uncompleted intake (including preserved but
+unsupported XML) or interrupted unposted issuance is reported separately as
+pending, without asserting corruption. A posted invoice with required but missing
+or incomplete artifacts is an integrity failure. Pending work also appears as
+warnings in text output; operators must monitor it separately from exit codes.
+No Filament fields or additional user steps were added.
+
+[InvoiceEvidenceTest](../tests/Audit/InvoiceEvidenceTest.php) and the invoice tests
+cover deleted/changed files, rewritten manifests, reset preservation state,
+deleted/reassigned intakes, changed render inputs/staged PDF data, missing sets,
+completed import links, rejected XML, and interrupted issuance. Verification works
+without a web actor and on the separate accounting connection. The graph tools
+again returned `Transport closed`; the affected implementation was checked through
+direct source inspection. These tests do not prove production locking, storage
+immutability, or resistance to coordinated rewriting without independent anchors.
+
+The full local suite passed on Herd PHP 8.4.25 with **241 tests and 2,265
+assertions**. PHPStan, Pint, and strict Composer validation passed.
+
+This extends invoice-original and outgoing-render evidence checks, not a complete
+snapshot of every business relation. Intake verification does not yet bind every
+converted invoice line to the incoming structured data. General attachment-orphan
+inventory and independent offline verification of the complete retained dataset
+remain open. The command reads retained files; schedule and measure it against
+the deployment's actual dataset and storage performance.
+
 ### Next slices
 
-1. Integrate intake and outgoing artifact sets into scheduled verification,
-   independent evidence checks, and the complete machine-readable export.
-2. Extend intake verification and operator monitoring, and prove concurrent
+1. Extend the machine-readable export with retained records, intake/artifact sets,
+   original bytes, and explicit relationships; independently verify the exported
+   contents against their evidence. The existing audit JSON is not that export.
+2. Establish operator monitoring for integrity errors and pending work, and prove concurrent
    duplicate requests, process termination, and recovery on the selected
    production database/storage setup (F2 / F7 / F9 / F11).
 3. Complete public-service authorization and connection consistency, finalized

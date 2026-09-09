@@ -2,6 +2,8 @@
 
 namespace FilamentAccounting\Tests\Documents;
 
+use FilamentAccounting\Audit\AuditChainVerifier;
+use FilamentAccounting\Audit\InvoiceEvidenceVerifier;
 use FilamentAccounting\Contracts\InvoiceRenderer;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\PostingStatus;
@@ -25,15 +27,59 @@ use horstoeko\zugferd\ZugferdDocumentReader;
 use horstoeko\zugferd\ZugferdDocumentValidator;
 use horstoeko\zugferd\ZugferdXsdValidator;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 
 class InvoiceArtifactTest extends TestCase
 {
+    /** @return array<string, array{string}> */
+    public static function evidenceMutations(): array
+    {
+        return array_combine($names = ['missing_file', 'changed_snapshot', 'changed_staged_pdf', 'reset_preservation', 'deleted_set'], array_map(fn (string $name): array => [$name], $names));
+    }
+
+    #[Test]
+    #[DataProvider('evidenceMutations')]
+    public function scheduled_verification_detects_outgoing_evidence_tampering(string $mutation): void
+    {
+        $document = $this->issuedWithoutArtifacts();
+        app(GenerateInvoiceArtifacts::class)->handle($document);
+        auth()->forgetGuards();
+        $this->assertSame(0, Artisan::call('filament-accounting:verify', ['--json' => true]));
+        $set = InvoiceArtifactSet::query()->sole();
+        $row = DB::table('accounting_invoice_artifact_sets')->where('id', $set->getKey());
+        switch ($mutation) {
+            case 'missing_file':
+                Storage::disk($set->disk)->delete($set->manifest['pdf']['path']);
+                break;
+            case 'changed_snapshot':
+                DB::table('accounting_document_lines')->where('document_id', $document->getKey())->update(['description' => 'Changed']);
+                break;
+            case 'changed_staged_pdf':
+                $row->update(['pdf_base64' => base64_encode('changed')]);
+                break;
+            case 'reset_preservation':
+                $row->update(['preserved_roles' => '[]', 'completed_at' => null]);
+                break;
+            case 'deleted_set':
+                DB::table('accounting_attachments')->delete();
+                $row->delete();
+                break;
+        }
+        $this->assertTrue(app(AuditChainVerifier::class)->verify($document->legal_entity_id)->isValid());
+        $this->assertSame(1, Artisan::call('filament-accounting:verify', ['--json' => true]));
+        $report = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertNotEmpty($report['legal_entities'][0]['invoice_evidence']['issues']);
+        $this->assertSame(1, Artisan::call('filament-accounting:verify'));
+        $this->assertStringContainsString('Invoice evidence [', Artisan::output());
+    }
+
     protected function refreshTestDatabase(): void
     {
         RefreshDatabaseState::$migrated = false;
@@ -72,6 +118,9 @@ class InvoiceArtifactTest extends TestCase
         $this->assertSame(1, InvoiceArtifactSet::query()->count());
         $this->assertSame(1, Attachment::query()->count());
         $this->assertSame(0, DB::connection('artifact_accounting')->table('accounting_journal_entries')->count());
+        $inspection = app(InvoiceEvidenceVerifier::class)->verify($document->legal_entity_id);
+        $this->assertSame([], $inspection['issues']);
+        $this->assertCount(1, $inspection['pending']);
         $this->assertDatabaseCount('accounting_documents', 0);
         $this->assertDatabaseCount('accounting_invoice_artifact_sets', 0);
         $fail = false;
@@ -80,6 +129,7 @@ class InvoiceArtifactTest extends TestCase
         $this->assertSame(1, DB::connection('artifact_accounting')->table('accounting_journal_entries')->count());
         $this->assertSame(1, AuditEvent::query()->where('operation', 'document.issued')->count());
         $this->assertDatabaseCount('accounting_journal_entries', 0);
+        $this->assertSame([], app(InvoiceEvidenceVerifier::class)->verify($document->legal_entity_id)['issues']);
     }
 
     #[Test]
@@ -103,6 +153,9 @@ class InvoiceArtifactTest extends TestCase
         $this->assertSame(['xml' => true], $set->preserved_roles);
         $this->assertNull($set->completed_at);
         $this->assertFalse($disk->exists($set->manifest['pdf']['path']));
+        $inspection = app(InvoiceEvidenceVerifier::class)->verify($document->legal_entity_id);
+        $this->assertSame([], $inspection['issues']);
+        $this->assertCount(1, $inspection['pending']);
         $renderer = \Mockery::mock(InvoiceRenderer::class);
         $renderer->shouldNotReceive('render');
         $this->app->instance(InvoiceRenderer::class, $renderer);

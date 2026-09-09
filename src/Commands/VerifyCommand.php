@@ -4,6 +4,7 @@ namespace FilamentAccounting\Commands;
 
 use FilamentAccounting\Audit\AuditAnchorVerifier;
 use FilamentAccounting\Audit\AuditChainVerifier;
+use FilamentAccounting\Audit\InvoiceEvidenceVerifier;
 use FilamentAccounting\Audit\JournalIntegrityVerifier;
 use FilamentAccounting\Models\LegalEntity;
 use Illuminate\Console\Command;
@@ -13,28 +14,31 @@ class VerifyCommand extends Command
     protected $signature = 'filament-accounting:verify
         {--json : Emit a machine-readable JSON report}';
 
-    protected $description = 'Verify ledger and audit-chain integrity for all legal entities';
+    protected $description = 'Verify ledger, invoice evidence and audit-chain integrity for all legal entities';
 
     public function handle(
         AuditChainVerifier $auditVerifier,
         AuditAnchorVerifier $anchorVerifier,
         JournalIntegrityVerifier $journalVerifier,
+        InvoiceEvidenceVerifier $invoiceVerifier,
     ): int {
         $failed = 0;
         $reports = [];
 
-        LegalEntity::query()->orderBy('id')->each(function (LegalEntity $entity) use ($auditVerifier, $anchorVerifier, $journalVerifier, &$failed, &$reports): void {
-            $report = $entity->getConnection()->transaction(function () use ($entity, $auditVerifier, $anchorVerifier, $journalVerifier): array {
+        LegalEntity::query()->orderBy('id')->each(function (LegalEntity $entity) use ($auditVerifier, $anchorVerifier, $journalVerifier, $invoiceVerifier, &$failed, &$reports): void {
+            $report = $entity->getConnection()->transaction(function () use ($entity, $auditVerifier, $anchorVerifier, $journalVerifier, $invoiceVerifier): array {
                 LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
                 $ledger = $journalVerifier->verify((int) $entity->getKey());
                 $auditResult = $auditVerifier->verify((int) $entity->getKey());
                 $anchorResult = $anchorVerifier->verify($entity, $auditResult);
+                $invoices = $invoiceVerifier->verify((int) $entity->getKey());
 
                 return [
                     'legal_entity_id' => (int) $entity->getKey(),
                     'legal_entity_uuid' => (string) $entity->uuid,
                     'legal_name' => (string) $entity->legal_name,
-                    'valid' => $ledger['issues'] === [] && $auditResult->isValid() && $anchorResult->isValid(),
+                    'valid' => $ledger['issues'] === [] && $invoices['issues'] === [] && $auditResult->isValid() && $anchorResult->isValid(),
+                    'invoice_evidence' => $invoices,
                     'ledger' => [
                         'posted_entry_count' => $ledger['posted_entry_count'],
                         'issues' => $ledger['issues'],
@@ -55,13 +59,13 @@ class VerifyCommand extends Command
                     ],
                 ];
             });
-            $failed += count($report['ledger']['issues']) + count($report['audit_chain']['issues']) + count($report['external_anchors']['issues']);
+            $failed += count($report['ledger']['issues']) + count($report['audit_chain']['issues']) + count($report['external_anchors']['issues']) + count($report['invoice_evidence']['issues']);
             $reports[] = $report;
         });
 
         if ((bool) $this->option('json')) {
             $this->line(json_encode([
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'valid' => $failed === 0,
                 'issue_count' => $failed,
                 'legal_entities' => $reports,
@@ -71,6 +75,12 @@ class VerifyCommand extends Command
         }
 
         foreach ($reports as $report) {
+            foreach ($report['invoice_evidence']['issues'] as $issue) {
+                $this->error("Invoice evidence [{$issue['code']}] for {$report['legal_name']} ({$issue['target_type']}:{$issue['target_id']}): {$issue['message']}");
+            }
+            foreach ($report['invoice_evidence']['pending'] as $item) {
+                $this->warn("Pending [{$item['code']}] for {$report['legal_name']} ({$item['target_type']}:{$item['target_id']}): {$item['message']}");
+            }
             foreach ($report['ledger']['issues'] as $issue) {
                 $this->error("Ledger [{$issue['code']}] for {$report['legal_name']}: {$issue['message']}");
             }

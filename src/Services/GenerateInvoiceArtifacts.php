@@ -132,6 +132,45 @@ final class GenerateInvoiceArtifacts
         }
     }
 
+    /** Read-only inspection of an interrupted or completed set; never renders or repairs. */
+    public function verifyPreservedSet(Document $document, InvoiceArtifactSet $set): void
+    {
+        $document = Document::query()->with('lines')->findOrFail($document->getKey());
+        $this->assertEvidence($document, $set);
+        if (array_diff_key($set->preserved_roles, ['pdf' => true, 'xml' => true]) !== []) {
+            throw new DocumentException(__('filament-accounting::errors.attachment_integrity_failed'));
+        }
+        $events = AuditEvent::query()->where('legal_entity_id', $set->legal_entity_id)
+            ->where('target_type', $document->getMorphClass())->where('target_id', (string) $document->getKey())
+            ->where('operation', 'invoice_artifacts.file_preserved')->get();
+        foreach (['pdf', 'xml'] as $role) {
+            $file = $set->manifest[$role];
+            $preserved = $set->preserved_roles[$role] ?? false;
+            $recorded = $events->filter(fn (AuditEvent $event): bool => ($event->payload['role'] ?? null) === $role);
+            if ($preserved !== $recorded->isNotEmpty()
+                || $recorded->contains(fn (AuditEvent $event): bool => ($event->payload['sha256'] ?? null) !== $file['sha256'])) {
+                throw new DocumentException(__('filament-accounting::errors.attachment_integrity_failed'));
+            }
+            $disk = Storage::disk($set->disk);
+            if ($preserved || $disk->exists($file['path'])) {
+                $bytes = $disk->get($file['path']);
+                if (! is_string($bytes) || strlen($bytes) !== $file['size'] || hash('sha256', $bytes) !== $file['sha256']) {
+                    throw new DocumentException(__('filament-accounting::errors.attachment_integrity_failed'));
+                }
+            }
+            $attachments = $document->attachments()->where('source_type', 'generated_'.$role)->get();
+            if ($preserved || $attachments->isNotEmpty()) {
+                if ($attachments->count() !== 1) {
+                    throw new DocumentException(__('filament-accounting::errors.invoice_originals_incomplete'));
+                }
+                $this->assertAttachment($attachments->first(), $set, $role);
+            }
+        }
+        if (($set->completed_at !== null) !== (($set->preserved_roles['pdf'] ?? false) && ($set->preserved_roles['xml'] ?? false))) {
+            throw new DocumentException(__('filament-accounting::errors.attachment_integrity_failed'));
+        }
+    }
+
     private function assertAttachment(?Model $attachment, InvoiceArtifactSet $set, string $role): void
     {
         $file = $set->manifest[$role];
