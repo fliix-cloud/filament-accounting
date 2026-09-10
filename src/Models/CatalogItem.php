@@ -12,6 +12,8 @@ use FilamentAccounting\Support\RichText;
  * @property string $uuid
  * @property int $legal_entity_id
  * @property string|null $sku
+ * @property string|null $ean
+ * @property int|null $purchase_price_minor
  * @property CatalogItemType $type
  * @property string $name
  * @property string|null $description
@@ -33,6 +35,8 @@ class CatalogItem extends AccountingModel
     protected $fillable = [
         'legal_entity_id',
         'sku',
+        'ean',
+        'purchase_price_minor',
         'type',
         'name',
         'description',
@@ -50,6 +54,7 @@ class CatalogItem extends AccountingModel
         return [
             'type' => CatalogItemType::class,
             'default_unit_price_minor' => 'integer',
+            'purchase_price_minor' => 'integer',
             'is_active' => 'boolean',
         ];
     }

@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'warning_label' => 'Positions-Warnung: Steuerbehandlung prüfen',
+    'confirm_review' => 'Steuerbehandlung dieser Position geprüft',
+    'conflicting_selection' => 'Die gewählte Steuerbehandlung :selected weicht von der für Kunde und Artikel ermittelten Behandlung :expected ab. Bitte prüfen.',
     'domestic' => 'Der Kunde sitzt in Deutschland; die Steuerklasse des Artikels bestimmt den deutschen Satz.',
     'eu_b2b_service' => 'EU-Geschäftskunde mit USt-IdNr.: Für diese Leistung wird Reverse Charge empfohlen.',
     'eu_b2b_goods' => 'EU-Geschäftskunde mit USt-IdNr.: Eine innergemeinschaftliche Lieferung mit 0 % wird empfohlen.',

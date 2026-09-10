@@ -23,6 +23,9 @@ class CreateCatalogItem extends CreateRecord
             (string) $data['currency'],
         )->minorAmount;
         unset($data['default_unit_price']);
+        $data['purchase_price_minor'] = filled($data['purchase_price'] ?? null)
+            ? ExactMoney::ofString((string) $data['purchase_price'], (string) $data['currency'])->minorAmount : null;
+        unset($data['purchase_price']);
 
         return $data;
     }

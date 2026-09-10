@@ -4,7 +4,6 @@ namespace FilamentAccounting\Filament\Resources;
 
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
@@ -42,6 +41,7 @@ use FilamentAccounting\Support\ExactMoney;
 use FilamentAccounting\Support\MoneyFormatter;
 use FilamentAccounting\Support\ReferenceData;
 use FilamentAccounting\Support\RichText;
+use FilamentAccounting\Tax\Data\SalesTaxSuggestion;
 use FilamentAccounting\Tax\SalesTaxSuggestionService;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -95,6 +95,8 @@ class SalesInvoiceResource extends Resource
         return $schema->components([
             Select::make('party_id')
                 ->label(__('filament-accounting::fields.customer'))
+                ->live()
+                ->afterStateUpdated(fn (Get $get, Set $set) => self::resetTaxConfirmations($get, $set))
                 ->options(fn (): array => Party::query()
                     ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
                     ->where('is_customer', true)
@@ -105,8 +107,12 @@ class SalesInvoiceResource extends Resource
                 ->required()
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
             DatePicker::make('issue_date')->label(__('filament-accounting::fields.issue_date'))->required()
+                ->live()
+                ->afterStateUpdated(fn (Get $get, Set $set) => self::resetTaxConfirmations($get, $set))
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
             DatePicker::make('supply_date')->label(__('filament-accounting::fields.supply_date'))
+                ->live()
+                ->afterStateUpdated(fn (Get $get, Set $set) => self::resetTaxConfirmations($get, $set))
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
             DatePicker::make('due_date')->label(__('filament-accounting::fields.due_date'))
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false),
@@ -130,10 +136,15 @@ class SalesInvoiceResource extends Resource
                             ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
                             ->where('is_active', true)
                             ->orderBy('name')
-                            ->pluck('name', 'id')
+                            ->get(['id', 'sku', 'name'])
+                            ->mapWithKeys(fn (CatalogItem $item): array => [
+                                $item->getKey() => filled($item->sku) ? $item->sku.' - '.$item->name : $item->name,
+                            ])
                             ->all())
+                        ->searchable()
                         ->live()
-                        ->afterStateUpdated(function (Get $get, Set $set, mixed $state): void {
+                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                            $set('tax_confirmed', false);
                             $item = CatalogItem::query()
                                 ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
                                 ->whereKey($state)
@@ -143,40 +154,14 @@ class SalesInvoiceResource extends Resource
                                 return;
                             }
 
-                            $set('description', RichText::catalogLine($item->name, $item->description));
+                            $set('description', RichText::sanitize($item->description));
                             $set('quantity', $item->default_quantity);
                             $set('unit', $item->unit);
                             $set('unit_price', ExactMoney::ofMinor((int) $item->default_unit_price_minor, (string) $item->currency)->decimalString());
 
-                            $party = Party::query()
-                                ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
-                                ->whereKey($get('../../party_id') ?? 0)
-                                ->first();
-                            if (! $party instanceof Party) {
-                                $set('tax_code', $item->default_tax_code);
-
-                                return;
-                            }
-
-                            $date = (string) ($get('../../supply_date') ?: $get('../../issue_date') ?: now()->toDateString());
-                            $suggestion = app(SalesTaxSuggestionService::class)->suggest(
-                                app(LegalEntityScope::class)->require(),
-                                $party,
-                                $item->type,
-                                $date,
-                                $item->default_tax_code,
-                            );
-                            $set('tax_code', $suggestion->taxCode);
-                            $set('tax_suggestion_explanation', $suggestion->explanation);
-                            $set('tax_requires_confirmation', $suggestion->requiresConfirmation);
-                            $set('tax_confirmed', ! $suggestion->requiresConfirmation);
+                            $set('tax_code', $item->default_tax_code);
                         })
                         ->columnSpan(3),
-                    RichEditor::make('description')
-                        ->label(__('filament-accounting::fields.description'))
-                        ->toolbarButtons([['bold', 'italic'], ['bulletList', 'orderedList']])
-                        ->required()
-                        ->columnSpan(9),
                     TextInput::make('quantity')->label(__('filament-accounting::fields.quantity'))->required()->columnSpan(2),
                     Select::make('unit')
                         ->label(__('filament-accounting::fields.unit'))
@@ -186,6 +171,8 @@ class SalesInvoiceResource extends Resource
                     TextInput::make('unit_price')->label(__('filament-accounting::fields.unit_price'))->numeric()->required()->columnSpan(2),
                     Select::make('tax_code')
                         ->label(__('filament-accounting::fields.tax_treatment'))
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set) => $set('tax_confirmed', false))
                         ->options(fn (): array => TaxCode::query()
                             ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
                             ->where('is_active', true)
@@ -194,23 +181,74 @@ class SalesInvoiceResource extends Resource
                             ->all())
                         ->required()
                         ->columnSpan(3),
-                    Hidden::make('tax_suggestion_explanation'),
-                    Hidden::make('tax_requires_confirmation'),
+                    RichEditor::make('description')
+                        ->label(__('filament-accounting::fields.description'))
+                        ->toolbarButtons([['bold', 'italic'], ['bulletList', 'orderedList']])
+                        ->required()
+                        ->columnSpanFull(),
                     Group::make([
-                        Placeholder::make('tax_suggestion')
-                            ->label(__('filament-accounting::fields.tax_suggestion'))
-                            ->content(fn (Get $get): string => (string) ($get('tax_suggestion_explanation') ?: __('filament-accounting::fields.tax_suggestion_help'))),
+                        Placeholder::make('tax_warning')
+                            ->label(__('filament-accounting::tax_suggestions.warning_label'))
+                            ->content(fn (Get $get): ?string => self::lineTaxWarning($get))
+                            ->visible(fn (Get $get): bool => self::lineTaxWarning($get) !== null),
                         Toggle::make('tax_confirmed')
-                            ->label(__('filament-accounting::fields.confirm_tax_suggestion'))
-                            ->visible(fn (Get $get): bool => (bool) $get('tax_requires_confirmation'))
-                            ->accepted(fn (Get $get): bool => (bool) $get('tax_requires_confirmation')),
-                    ])->columnSpan(3),
+                            ->label(__('filament-accounting::tax_suggestions.confirm_review'))
+                            ->visible(fn (Get $get): bool => self::lineTaxSuggestion($get)->requiresConfirmation ?? false)
+                            ->accepted(fn (Get $get): bool => self::lineTaxSuggestion($get)->requiresConfirmation ?? false),
+                    ])->columnSpanFull(),
                 ])
                 ->columns(12)
                 ->defaultItems(1)
                 ->disabled(fn (?Document $record): bool => $record?->isIssuedOrReceived() ?? false)
                 ->columnSpanFull(),
         ]);
+    }
+
+    private static function resetTaxConfirmations(Get $get, Set $set): void
+    {
+        foreach (array_keys($get('lines') ?? []) as $key) {
+            $set("lines.{$key}.tax_confirmed", false);
+        }
+    }
+
+    private static function lineTaxSuggestion(Get $get): ?SalesTaxSuggestion
+    {
+        $entity = app(LegalEntityScope::class)->require();
+        $item = CatalogItem::query()->where('legal_entity_id', $entity->getKey())
+            ->whereKey($get('catalog_item_id') ?? 0)->first();
+        $party = Party::query()->where('legal_entity_id', $entity->getKey())
+            ->whereKey($get('../../party_id') ?? 0)->first();
+
+        if (! $item instanceof CatalogItem || ! $party instanceof Party) {
+            return null;
+        }
+
+        return app(SalesTaxSuggestionService::class)->suggest(
+            $entity,
+            $party,
+            $item->type,
+            (string) ($get('../../supply_date') ?: $get('../../issue_date') ?: now()->toDateString()),
+            $item->default_tax_code,
+        );
+    }
+
+    private static function lineTaxWarning(Get $get): ?string
+    {
+        $suggestion = self::lineTaxSuggestion($get);
+        $selected = $get('tax_code');
+
+        if ($suggestion === null || blank($selected)) {
+            return null;
+        }
+
+        if ($selected !== $suggestion->taxCode) {
+            return __('filament-accounting::tax_suggestions.conflicting_selection', [
+                'selected' => $selected,
+                'expected' => $suggestion->taxCode,
+            ]).' '.$suggestion->explanation;
+        }
+
+        return $suggestion->requiresConfirmation ? $suggestion->explanation : null;
     }
 
     public static function infolist(Schema $schema): Schema

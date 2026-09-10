@@ -11,6 +11,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use FilamentAccounting\Catalog\ImportExport\CatalogTransferSchema;
 use FilamentAccounting\Enums\CatalogItemType;
 use FilamentAccounting\Enums\CatalogUnit;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
@@ -70,6 +71,7 @@ class CatalogItemResource extends Resource
     {
         return $schema->components([
             TextInput::make('sku')->label(__('filament-accounting::fields.sku')),
+            TextInput::make('ean')->label(__('filament-accounting::catalog_transfer.ean'))->maxLength(255),
             TextInput::make('name')->label(__('filament-accounting::fields.name'))->required(),
             Select::make('type')->label(__('filament-accounting::fields.type'))->options([
                 CatalogItemType::Service->value => __('filament-accounting::fields.catalog_types.service'),
@@ -87,9 +89,15 @@ class CatalogItemResource extends Resource
                 ->required(),
             TextInput::make('default_quantity')->label(__('filament-accounting::fields.quantity'))->default('1'),
             TextInput::make('default_unit_price')->label(__('filament-accounting::fields.unit_price'))->numeric()->step('0.01')->required(),
+            TextInput::make('purchase_price')->label(__('filament-accounting::catalog_transfer.purchase_price'))->numeric()->step('0.01'),
             Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable()->required(),
             Select::make('default_tax_code')
                 ->label(__('filament-accounting::fields.tax_code'))
+                ->default(fn (): ?string => TaxCode::query()
+                    ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
+                    ->where('is_active', true)
+                    ->where('code', CatalogTransferSchema::DEFAULT_TAX_CODE)
+                    ->value('code'))
                 ->options(fn (): array => TaxCode::query()
                     ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
                     ->where('is_active', true)
@@ -104,7 +112,7 @@ class CatalogItemResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('sku')->label(__('filament-accounting::fields.sku')),
+            TextColumn::make('sku')->label(__('filament-accounting::fields.sku'))->searchable(),
             TextColumn::make('name')->label(__('filament-accounting::fields.name'))->searchable(),
             TextColumn::make('type')->label(__('filament-accounting::fields.type')),
         ]);
