@@ -15,10 +15,10 @@ final class AuditEventChainValidator
     ) {}
 
     /**
-     * @param  list<array<string, mixed>>  $events
+     * @param  iterable<array<string, mixed>>  $events
      * @param  array<string, mixed>|null  $head
      */
-    public function verify(int $legalEntityId, array $events, ?array $head): AuditChainVerificationResult
+    public function verify(int $legalEntityId, iterable $events, ?array $head, bool $failFast = false): AuditChainVerificationResult
     {
         $issues = [];
         $expectedSequence = 1;
@@ -90,12 +90,15 @@ final class AuditEventChainValidator
 
             $previousHash = (string) ($event['event_hash'] ?? '');
             $expectedSequence++;
+            if ($failFast && $issues !== []) {
+                break;
+            }
         }
 
-        $this->verifyHead(count($events), $lastSequence, $previousHash, $head, $issues);
+        $this->verifyHead($expectedSequence - 1, $lastSequence, $previousHash, $head, $issues);
 
         return new AuditChainVerificationResult(
-            count($events),
+            $expectedSequence - 1,
             $lastSequence,
             $previousHash,
             $issues,

@@ -16,9 +16,10 @@ This is a repository-wide, risk-based technical review of the ledger, documents,
 tax, banking, reconciliation, authorization, storage, audit, exports, migrations,
 UI integration, tests, and CI. It is not an exhaustive security audit, legal
 opinion, or certification. Production infrastructure and business procedures
-were not inspected. Findings below are source-level observations; their
-regression scenarios have not been executed locally because PHP and Composer
-are unavailable in the review environment.
+were not inspected. The baseline findings describe source-level observations
+from 5 September: PHP and Composer were unavailable in that review environment.
+Subsequent implementation checks were executed locally; their results and the
+latest project-state check are recorded below.
 
 ## Legal basis and claim boundary
 
@@ -47,9 +48,22 @@ conformance, DATEV compatibility, or statutory financial statements.
 
 ## Implementation progress
 
-Updated: 9 September 2026. The table below tracks changes after the reviewed
+Updated: 10 September 2026. The table below tracks changes after the reviewed
 baseline; the detailed findings retain that baseline as their reference.
 **No finding is fully closed and the compliance verdict is unchanged.**
+
+Project-state check after the reported interruption, 10 September 2026: the working
+tree was clean at `d4ce364`; the durable intake, outgoing artifact recovery, and
+scheduled verification changes are committed. The current verification code and
+operations documentation agree on report schema 2 and separate integrity/pending
+results. Default audit export remains schema 1 with events and anchors only. The full local
+quality gate was rerun on Herd PHP 8.4.25: **241 tests, 2,265 assertions**, PHPStan,
+Pint, and strict Composer validation passed. Local links in this document and
+operations documentation resolve. Graph access is restored, but coverage metadata
+reported changed file metadata, so material checks used current source as well.
+This was a reconciliation of the latest implementation and documentation, not a
+new legal review or a production database/storage recovery test. Only documentation
+clarifications were needed; the next implementation step remains the linked export.
 
 | Findings | Implemented in this change | Still required |
 | --- | --- | --- |
@@ -194,11 +208,13 @@ General `StoreAttachment` writes still need broader orphan recovery. The outgoin
 invoice continuation below now provides a fixed artifact set and recovery of
 partial file writes and missing attachment references.
 
-Intake manifest and preservation events join the existing audit chain, but the
-verification command does not yet reconcile every intake/document relation against
-independently anchored evidence. Model guards and row locks do not prevent raw SQL
-or privileged storage changes. Production concurrency, create-only/immutable
-storage controls, restoration, monitoring, and operator response still need evidence.
+Intake manifest and preservation events join the existing audit chain. The
+scheduled verification slice below now checks manifests, originals, and completion
+links alongside chain and configured anchor verification. Complete converted-line
+evidence and independent offline export verification remain open. Model guards and
+row locks do not prevent raw SQL or privileged storage changes. Production
+concurrency, create-only/immutable storage controls, restoration, monitoring, and
+operator response still need evidence.
 
 ### Implemented: recoverable outgoing invoice sets (F2 / F3 / F9 / F11)
 
@@ -224,7 +240,8 @@ Verification compares staged bytes, manifest, current render-source snapshot,
 attachment metadata/files, and the preparation event's payload, canonical payload,
 and hash. These are local checks. The scheduled verification command now checks
 these sets alongside the full audit chain and configured independent anchors.
-The portable audit export still contains only events and anchors.
+The default audit export contains events and anchors; the dataset option described
+below additionally transfers linked accounting records and retained files.
 
 [IssueSalesInvoice](../src/Services/IssueSalesInvoice.php) freezes the artifact
 requirement when issuing. Changing the current generation setting cannot skip
@@ -291,16 +308,108 @@ assertions**. PHPStan, Pint, and strict Composer validation passed.
 
 This extends invoice-original and outgoing-render evidence checks, not a complete
 snapshot of every business relation. Intake verification does not yet bind every
-converted invoice line to the incoming structured data. General attachment-orphan
-inventory and independent offline verification of the complete retained dataset
-remain open. The command reads retained files; schedule and measure it against
+converted invoice line to the incoming structured data. The linked export below
+adds offline package verification within its explicit scope. General attachment-
+orphan inventory and independent import/restore evidence remain open. The command reads retained files; schedule and measure it against
 the deployment's actual dataset and storage performance.
+
+### Linked accounting dataset export (F10)
+
+The `--dataset` option on `filament-accounting:audit-export` now transfers a
+company-scoped package with 36 explicitly selected tables, retained file contents,
+column and relationship descriptions, audit events, and anchors. See
+[AccountingDatasetSchema](../src/Export/AccountingDatasetSchema.php),
+[AccountingDatasetExporter](../src/Export/AccountingDatasetExporter.php), and
+[operations](operations.md) for the exact scope and command examples. Child tables
+are scoped through their parent. Originals shared by intake and attachment
+references occur once per storage path; unpreserved missing inputs are explicitly
+marked absent. Preserved missing or changed files block export. Outgoing staged
+PDF/XML data and pending processing records are retained in the transfer.
+
+The existing integrity checks run before a dataset digest is recorded in the
+`accounting_export.prepared` audit event. File delivery happens after that event's
+commit; `prepared` is not proof of delivery. Optional `--anchor` anchors committed
+evidence before delivery. Without it, an included earlier anchor need not cover
+the new export event, which the report exposes as `export_event_anchored: false`.
+Independently trusted hashes/anchors are still needed to detect replacement of
+the complete package and its local evidence.
+
+[AccountingDatasetVerifier](../src/Export/AccountingDatasetVerifier.php) checks the
+package without database or source-storage access. It checks the fixed schema,
+company ownership, record inventory/IDs, declared references, file inventory and
+bytes, dataset commitment, audit chain, and included anchors. Changing data and
+recalculating only the package hash does not satisfy the recorded commitment.
+The default audit-only schema and its tests remain supported. This initial JSON
+package is identified by `format: filament-accounting-dataset`, schema version 1;
+it remains available with `--dataset --legacy-json`. Streaming version 2 below
+is now the default for `--dataset`.
+
+[AccountingDatasetTest](../tests/Audit/AccountingDatasetTest.php) exercises the
+invoice → journal/open item → settlement/reconciliation → bank path, outgoing and
+incoming originals, pending intakes, tenant separation, omitted connection secrets,
+offline verification without queries, altered/removed content, fully rehashed local
+forgery against an anchor, separate accounting connections, invalid destinations,
+and overwrite refusal. Filament receives no additional fields or mandatory steps.
+The full local suite passed on Herd PHP 8.4.25 with **249 tests and 2,325
+assertions**; PHPStan, Pint, and strict Composer validation passed.
+Graph access failed again during this slice; changed/unavailable coverage was
+supplemented with direct source and migration inspection.
+
+This transfers the current supported dataset and binds it at export time. It does
+not retroactively provide missing finalized settlement or purchase-line history.
+Host records, TAN sessions, connection credentials/state, institute-directory data,
+unreferenced storage objects, and logo/template assets are outside this package.
+Unsupported attachment-owner types fail explicitly. There is no web export action
+yet: the builder is a trusted operator service, and a future UI must add explicit
+authorization and company scope. Production snapshot consistency under concurrent
+writes, independent third-party import, and full restore evidence remain open.
+F10 and the release gates are not closed.
+
+### Streaming transfer and isolated inspection (F10)
+
+[StreamDatasetExporter](../src/Export/StreamDatasetExporter.php) now makes
+`--dataset` a version 2 streaming transfer with lazy record/event reads and 64 KiB
+file chunks. Journal preflight checks entries incrementally; pending invoice work
+is emitted without accumulating the complete pending list. A dataset digest binds
+the exact body bytes to the committed export event. Delivery is verified by
+reading back the package and comparing its full transport digest. No Filament
+fields or additional mandatory user steps were introduced.
+
+[StreamDatasetVerifier](../src/Export/StreamDatasetVerifier.php) checks the framed
+stream using a disposable SQLite index rather than loading the complete package.
+It validates schema, ownership, references, file bytes, audit chain, anchors, and
+footer counts, and rejects truncation or trailing input. A requested covering
+anchor cannot simply be removed. Legacy JSON and audit-only packages remain
+supported. See [operations](operations.md) for format, commands, temporary storage,
+and the required `pdo_sqlite` extension.
+
+[StreamDatasetTest](../tests/Audit/StreamDatasetTest.php) exercises an isolated
+inspection database after removal of source originals and audit events. It
+reconstructs original file bytes, independently queries equal debit/credit totals,
+and joins invoice, open item, settlement, reconciliation, and bank transaction
+without host database queries. Further cases cover interrupted issuance and
+blocked intakes, corrupt journals, damaged packages, anchor removal, and command
+delivery/readback. The load fixture exports more than 48 MiB of originals into a
+package exceeding 64 MiB with less than 24 MiB additional PHP memory.
+
+This is an inspection import using the package's own verifier, not independent
+third-party interoperability or a full production restore. Frames are bounded at
+64 MiB, but the largest single row/invoice and anchor list still affect memory.
+Temporary disk requirements and production-scale performance need deployment
+measurements. Preparation and evidence capture use separate entity-locked
+transactions; concurrent production snapshot behavior remains unproven.
+
+The full local suite passed on Herd PHP 8.4.25 with **255 tests and 2,363
+assertions**; PHPStan, Pint, strict Composer validation, and documentation link
+checks passed. Graph transport was unavailable during this slice,
+so relevant implementation and test evidence was checked directly in source.
 
 ### Next slices
 
-1. Extend the machine-readable export with retained records, intake/artifact sets,
-   original bytes, and explicit relationships; independently verify the exported
-   contents against their evidence. The existing audit JSON is not that export.
+1. Prove consistent dataset snapshots under concurrent writes on the selected
+   production database, measure deployment-scale memory/temp storage/lock duration,
+   and exercise independent import and full restore. Add an authorized, simple
+   export action in Filament once those boundaries are established.
 2. Establish operator monitoring for integrity errors and pending work, and prove concurrent
    duplicate requests, process termination, and recovery on the selected
    production database/storage setup (F2 / F7 / F9 / F11).

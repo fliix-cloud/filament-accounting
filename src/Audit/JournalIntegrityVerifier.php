@@ -3,6 +3,7 @@
 namespace FilamentAccounting\Audit;
 
 use FilamentAccounting\Enums\JournalStatus;
+use FilamentAccounting\Exceptions\AuditEvidenceException;
 use FilamentAccounting\Models\AuditEvent;
 use FilamentAccounting\Models\JournalEntry;
 use FilamentAccounting\Models\JournalLine;
@@ -13,6 +14,25 @@ use JsonException;
 final class JournalIntegrityVerifier
 {
     public function __construct(private readonly JournalSnapshot $snapshots) {}
+
+    /** Validate one journal at a time without retaining the company's complete ledger. */
+    public function assertValid(int $legalEntityId): void
+    {
+        foreach (JournalEntry::query()->where('legal_entity_id', $legalEntityId)->with('lines')->lazyById(1) as $entry) {
+            $events = AuditEvent::query()->where('legal_entity_id', $legalEntityId)->where('operation', 'journal.posted')
+                ->where('target_type', $entry->getMorphClass())->where('target_id', (string) $entry->getKey())->limit(2)->get();
+            $result = $this->check(new Collection([$entry->getKey() => $entry]), $events);
+            if ($result['issues'] !== []) {
+                throw new AuditEvidenceException('Journal integrity failed: '.$result['issues'][0]['code']);
+            }
+        }
+        foreach (AuditEvent::query()->where('legal_entity_id', $legalEntityId)->where('operation', 'journal.posted')->lazyById(100) as $event) {
+            if ($event->target_type !== (new JournalEntry)->getMorphClass()
+                || ! JournalEntry::query()->where('legal_entity_id', $legalEntityId)->whereKey($event->target_id)->exists()) {
+                throw new AuditEvidenceException('Journal evidence target missing.');
+            }
+        }
+    }
 
     /**
      * The caller holds the entity lock while verifying the ledger, chain and anchors.
@@ -26,6 +46,17 @@ final class JournalIntegrityVerifier
             ->with('lines')->orderBy('id')->get()->keyBy('id');
         $events = AuditEvent::query()->where('legal_entity_id', $legalEntityId)
             ->where('operation', 'journal.posted')->orderBy('sequence')->get();
+
+        return $this->check($entries, $events);
+    }
+
+    /**
+     * @param  Collection<int, JournalEntry>  $entries
+     * @param  Collection<int, AuditEvent>  $events
+     * @return array{entries: Collection<int, JournalEntry>, posted_entry_count: int, issues: list<array<string, mixed>>}
+     */
+    private function check(Collection $entries, Collection $events): array
+    {
         $targetType = (new JournalEntry)->getMorphClass();
         $byTarget = $events->where('target_type', $targetType)->groupBy('target_id');
         $issues = [];

@@ -16,7 +16,7 @@ final class AuditChainVerifier
             ->where('legal_entity_id', $legalEntityId)
             ->orderBy('sequence')
             ->orderBy('id')
-            ->get();
+            ->lazy(1);
 
         $head = (new AuditEvent)->getConnection()
             ->table('accounting_audit_chain_heads')
@@ -25,7 +25,7 @@ final class AuditChainVerifier
 
         return $this->validator->verify(
             $legalEntityId,
-            $events->map(fn (AuditEvent $event): array => $event->getAttributes())->all(),
+            $events->map(fn (AuditEvent $event): array => $event->getAttributes()),
             $head === null ? null : (array) $head,
         );
     }

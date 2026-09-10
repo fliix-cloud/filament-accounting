@@ -84,9 +84,102 @@ php artisan filament-accounting:audit-verify-file exports/audit-evidence.json --
 The export is tamper-evident, not digitally signed. An auditor still needs an
 independently obtained anchor or hash to rule out replacement of both database
 history and exported evidence.
-These export/file-verification commands retain their existing schema version 1
-and cover audit events and anchors only. They do not yet export and independently
-verify the retained invoice files, intake sets, or complete accounting relations.
+Without `--dataset`, these commands retain their existing schema version 1 and
+cover audit events and anchors only.
+
+To export the linked accounting dataset and its retained files:
+
+```bash
+php artisan filament-accounting:audit-export ENTITY_UUID exports/accounting.dataset --dataset --json
+php artisan filament-accounting:audit-verify-file exports/accounting.dataset --json
+```
+
+The default dataset package uses streaming schema version 2, beginning with
+`FILAMENT-ACCOUNTING-DATASET-2` and a newline. The file verifier detects it
+automatically and does not query accounting tables. Both export and verification
+require PHP's `pdo_sqlite` extension and sufficient protected temporary disk space
+for the package and disposable inspection databases, including file chunks.
+It includes the 36 explicitly listed tables from
+[AccountingDatasetSchema](../src/Export/AccountingDatasetSchema.php), their columns
+and relationships, and referenced attachments/intake/artifact files in base64
+chunks of at most 64 KiB decoded bytes.
+Values retain database strings or null; JSON columns retain their JSON text, so
+money and decimal values do not pass through floating-point conversion. IDs join
+records inside the package. Host actor identities and custom journal source IDs
+remain external references; corresponding host records are not included.
+
+All selected records belong to the requested company, including child records
+scoped through their parent. The transfer includes drafts, discarded documents,
+bank source versions, settlements, reversals, and open intakes. An input that was
+never preserved can have `present: false`; a missing preserved original blocks
+export. The `pending` frames distinguish outstanding work from integrity errors.
+Do not render or automatically extract stored paths or original filenames from
+an untrusted package. File contents remain inert data during verification.
+
+The exporter verifies the existing ledger, invoice evidence, chain, and configured
+anchors, then records `accounting_export.prepared` with the dataset SHA-256 digest
+under the accounting entity lock. This event means a dataset was prepared; a later
+filesystem failure can still prevent delivery. It survives that failure, and
+originals are retained. Use a fresh output path for another attempt. Existing output
+files are refused; use distinct paths for simultaneous operator exports.
+
+With attested anchor storage configured, add `--anchor` to anchor the committed
+export event before writing the package. The report field `export_event_anchored`
+states whether an included anchor covers that event. A streaming package requested
+with `--anchor` fails verification if its covering anchor is removed. Otherwise retain the reported
+dataset hash independently. Even with included anchors, obtain an anchor/hash
+through a separate trusted channel to rule out replacement of the entire package.
+The dataset commitment protects the transferred snapshot; it does not retroactively
+create missing historical evidence for settlements or converted purchase lines.
+
+The command is an operator/console capability, like the existing audit export.
+The dataset builder does not supply web authorization: an eventual HTTP/Filament
+action must authorize and scope the company before calling it. There is no new UI
+or form configuration in this slice. Public-disk exports, absolute/traversal paths,
+and enclosing accounting transactions are rejected. Laravel's private visibility
+request still depends on the host's real storage configuration.
+
+The allowlist omits bank-connection credentials and protocol state, TAN sessions,
+the public institute directory, host tables, unreferenced storage objects, and
+logo/template assets. Accounting source payloads and originals remain included.
+Attachments targeting unsupported host models cause export failure rather than a
+silently incomplete package. Production snapshot consistency under concurrent
+writes, deployment-scale resource measurements, independent third-party import,
+and full restore exercises remain acceptance work. This is an inspection transfer, not a
+database backup, DATEV format, or a complete host-application restore image.
+
+Streaming frames are newline-terminated JSON objects after the magic line:
+`header`, `pending`, `table`/`record`, `file`/`chunk`/`file_end`, `dataset_end`,
+`event`, and `footer`. The dataset digest covers the exact magic and body bytes
+before `dataset_end`; the recorded export event binds that digest. Verification
+checks the fixed schema, ownership, references, file hashes and sizes, audit chain,
+anchors, footer counts, and complete input consumption. Delivery is read back and
+its entire `package_sha256` compared with the prepared stream.
+
+[StreamDatasetExporter](../src/Export/StreamDatasetExporter.php) reads records and
+events lazily and originals through streams. Ledger preflight checks entries
+incrementally. [StreamDatasetVerifier](../src/Export/StreamDatasetVerifier.php)
+uses [DatasetInspection](../src/Export/DatasetInspection.php) to index records,
+references, audit events, and file chunks in a disposable SQLite database. Its
+optional inspection callback runs only after successful verification. The tests
+reconstruct originals and query journal totals and invoice/payment/bank links
+after removing source files and audit entries, without querying the host database.
+This establishes isolated inspection using this implementation, not a production
+restore or independent validation by another implementation.
+
+Frames are limited to 64 MiB each. Working memory still depends on the largest
+individual row/invoice and the included anchor list; streaming does not guarantee
+a fixed memory ceiling for every dataset. The regression fixture transfers more
+than 48 MiB of originals in a package over 64 MiB with less than 24 MiB additional
+PHP memory. Measure temporary storage, runtime, and entity-lock duration on the
+deployment. Export preparation and evidence capture use separate entity-locked
+transactions; consistency with concurrent production writers remains to be proven.
+
+For compatibility, `--dataset --legacy-json` produces the earlier in-memory
+`format: filament-accounting-dataset`, schema version 1 package. The verifier
+continues to accept it. Audit-only exports remain unchanged. The `--json` option
+controls the command report (version 1), whose nested dataset report identifies
+version 2 for streaming; it does not select the package format.
 
 Every ledger posting stores a versioned journal snapshot and digest inside its
 audit event. `filament-accounting:verify` compares the stored journal against

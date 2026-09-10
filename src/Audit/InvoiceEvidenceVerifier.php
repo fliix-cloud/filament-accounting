@@ -30,39 +30,47 @@ final class InvoiceEvidenceVerifier
      *
      * @return array{intake_count: int, artifact_set_count: int, issues: list<array<string, mixed>>, pending: list<array<string, mixed>>}
      */
-    public function verify(int $legalEntityId): array
+    public function verify(int $legalEntityId, ?\Closure $onPending = null): array
     {
-        $intakes = PurchaseInvoiceIntake::query()->where('legal_entity_id', $legalEntityId)->orderBy('id')->get()->keyBy('id');
-        $sets = InvoiceArtifactSet::query()->where('legal_entity_id', $legalEntityId)->select(['id', 'document_id'])->orderBy('id')->get()->keyBy('document_id');
+        $intakes = PurchaseInvoiceIntake::query()->where('legal_entity_id', $legalEntityId);
+        $sets = InvoiceArtifactSet::query()->where('legal_entity_id', $legalEntityId);
+        $hasSet = fn ($id): bool => (clone $sets)->where('document_id', $id)->exists();
         $events = AuditEvent::query()->where('legal_entity_id', $legalEntityId)
             ->whereIn('operation', ['purchase_intake.created', 'purchase_intake.file_preserved', 'purchase_intake.completed', 'invoice_artifacts.prepared'])
-            ->orderBy('sequence')->get();
+            ->orderBy('sequence')->lazy(100);
         $issues = [];
         $pending = [];
+        $emit = function (array $item) use (&$pending, $onPending): void {
+            if ($onPending !== null) {
+                $onPending($item);
+            } else {
+                $pending[] = $item;
+            }
+        };
 
         foreach ($events as $event) {
             $isIntake = str_starts_with($event->operation, 'purchase_intake.');
-            $target = $isIntake ? $intakes->get($event->target_id) : $sets->get($event->target_id);
+            $targetExists = $isIntake ? (clone $intakes)->whereKey($event->target_id)->exists() : $hasSet($event->target_id);
             $type = $isIntake ? (new PurchaseInvoiceIntake)->getMorphClass() : (new Document)->getMorphClass();
-            if ($event->target_type !== $type || $target === null) {
+            if ($event->target_type !== $type || ! $targetExists) {
                 $issues[] = ['code' => 'invoice_evidence_target_missing', 'message' => 'Invoice evidence no longer resolves within this entity.',
                     'sequence' => $event->sequence, 'target_type' => $event->target_type, 'target_id' => $event->target_id];
             }
         }
 
-        foreach ($intakes as $intake) {
+        foreach ((clone $intakes)->lazyById(1) as $intake) {
             try {
                 $this->verifyIntake($intake);
             } catch (Throwable) {
                 $issues[] = $this->item('purchase_intake_integrity_failed', 'Purchase intake evidence or original files failed verification.', 'intake', (int) $intake->getKey());
             }
             if ($intake->status !== 'complete') {
-                $pending[] = $this->item('purchase_intake_open', 'Purchase import requires review or completion.', 'intake', (int) $intake->getKey()) + ['status' => $intake->status];
+                $emit($this->item('purchase_intake_open', 'Purchase import requires review or completion.', 'intake', (int) $intake->getKey()) + ['status' => $intake->status]);
             }
         }
 
         // Staged PDFs can be large; do not load all sets into memory at once.
-        foreach (InvoiceArtifactSet::query()->where('legal_entity_id', $legalEntityId)->lazyById(10) as $set) {
+        foreach ((clone $sets)->lazyById(1) as $set) {
             try {
                 $document = Document::query()->where('legal_entity_id', $legalEntityId)->findOrFail($set->document_id);
                 $this->artifacts->verifyPreservedSet($document, $set);
@@ -73,22 +81,22 @@ final class InvoiceEvidenceVerifier
                 $issues[] = $this->item('invoice_artifact_integrity_failed', 'Outgoing invoice evidence or generated files failed verification.', 'document', $set->document_id);
             }
             if ($set->completed_at === null) {
-                $pending[] = $this->item('invoice_artifacts_pending', 'Outgoing invoice files require completion.', 'document', $set->document_id);
+                $emit($this->item('invoice_artifacts_pending', 'Outgoing invoice files require completion.', 'document', $set->document_id));
             }
         }
 
         // Reverse document links prevent a removed intake or artifact set from
         // disappearing simply because it is absent from the two primary queries.
-        foreach (Document::query()->where('legal_entity_id', $legalEntityId)->cursor() as $document) {
+        foreach (Document::query()->where('legal_entity_id', $legalEntityId)->lazyById(100) as $document) {
             $intakeId = data_get($document->e_invoice_meta, 'intake_id');
-            if ($intakeId !== null && $intakes->get($intakeId)?->document_id !== $document->getKey()) {
+            if ($intakeId !== null && ! (clone $intakes)->whereKey($intakeId)->where('document_id', $document->getKey())->exists()) {
                 $issues[] = $this->item('invoice_intake_link_invalid', 'Imported invoice has no matching intake in this entity.', 'document', (int) $document->getKey());
             }
             if ($document->type === DocumentType::SalesInvoice && $document->document_status === DocumentStatus::Issued
-                && data_get($document->e_invoice_meta, 'artifacts_required', false) && ! $sets->has($document->getKey())) {
+                && data_get($document->e_invoice_meta, 'artifacts_required', false) && ! $hasSet($document->getKey())) {
                 $item = $this->item('invoice_artifacts_missing', 'Issued invoice requires an artifact set.', 'document', (int) $document->getKey());
                 if ($document->posting_status === PostingStatus::Unposted) {
-                    $pending[] = $item;
+                    $emit($item);
                 } else {
                     $issues[] = $item;
                 }
@@ -96,8 +104,8 @@ final class InvoiceEvidenceVerifier
         }
 
         foreach (Attachment::query()->where('legal_entity_id', $legalEntityId)
-            ->whereIn('source_type', ['generated_pdf', 'generated_xml'])->cursor() as $attachment) {
-            if ($attachment->attachable_type !== (new Document)->getMorphClass() || ! $sets->has($attachment->attachable_id)) {
+            ->whereIn('source_type', ['generated_pdf', 'generated_xml'])->lazyById(100) as $attachment) {
+            if ($attachment->attachable_type !== (new Document)->getMorphClass() || ! $hasSet($attachment->attachable_id)) {
                 $issues[] = $this->item('invoice_artifact_set_missing', 'Generated attachment has no authoritative artifact set.', 'attachment', (int) $attachment->getKey());
             }
         }
