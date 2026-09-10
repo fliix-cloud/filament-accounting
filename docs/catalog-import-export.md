@@ -34,7 +34,7 @@ sku;name;description;type;unit;quantity;sales_price;purchase_price;currency;tax_
 | `sales_price` | Required decimal major units, e.g. `119.00`. Exact conversion to internal minor units. |
 | `purchase_price` | Optional decimal major units, stored separately as exact minor units. |
 | `currency` | Required uppercase ISO 4217 code from package reference data, e.g. `EUR`. |
-| `tax_code` | Optional existing **active** tax code of the current Legal Entity. No inference or tax-code creation. |
+| `tax_code` | Existing **active** tax code of the current Legal Entity. Empty, null or omitted values default to `DE-19` (Germany, 19%). No tax-code creation. |
 | `ean` | Optional text, at most 255 characters; leading zeroes preserved. |
 | `active` | Required: `1`/`0` in CSV/Excel; native `true`/`false` in JSON. |
 
@@ -45,7 +45,10 @@ Descriptions may contain up to 32,767 characters / 65,535 UTF-8 bytes. Other tex
 fields follow the model's storage limits. SKU and EAN must be **text cells** in
 Excel, not numbers with display masks. Formulas and error cells are rejected.
 
-Every spreadsheet has exactly one sheet, one header row and 12 columns. CSV uses
+Every spreadsheet has exactly one visible catalog sheet, one header row and 12 columns.
+Generated Excel files also contain a hidden `_catalog_tax_codes` lookup sheet for
+the tax-code dropdown. This sheet is display metadata, not imported catalog data;
+additional arbitrary worksheets are rejected. CSV uses
 semicolons, double-quote enclosures, doubled embedded quotes, and CRLF record
 endings on export. Quoted LF/CRLF multiline descriptions are supported. Error
 messages identify the physical starting row, including preceding multiline cells.
@@ -85,6 +88,15 @@ as codes; no database migration is needed for this presentation change.
 | Kilowattstunde | Kilowatt hour | KWH |
 | Pauschale | Lump sum | LS |
 
+## Tax code default and selection
+
+Templates preselect `DE-19`. In Excel, `tax_code` has a dropdown containing the
+current Legal Entity's active tax codes. Blank values use `DE-19` during import
+in every format; an explicitly supplied valid code is preserved. If `DE-19` is
+missing or inactive, a blank tax value causes an actionable error instead of an
+untaxed import. Existing database items are not changed automatically; re-importing
+an item with a blank tax value and updates enabled applies the default.
+
 ## JSON
 
 JSON requires this versioned object. Item key order is immaterial; unknown keys
@@ -105,7 +117,7 @@ may be omitted or null. Text, quantity and money values are JSON strings.
     "sales_price": "119.00",
     "purchase_price": "80.00",
     "currency": "EUR",
-    "tax_code": null,
+    "tax_code": "DE-19",
     "ean": "04012345678901",
     "active": true
   }]

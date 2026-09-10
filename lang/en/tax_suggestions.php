@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'warning_label' => 'Line warning: check tax treatment',
+    'confirm_review' => 'Tax treatment of this line reviewed',
+    'conflicting_selection' => 'The selected tax treatment :selected differs from :expected determined for this customer and item. Please review.',
     'domestic' => 'The customer is in Germany; the item tax class determines the German rate.',
     'eu_b2b_service' => 'EU business customer with a VAT ID: recommend reverse charge for this service.',
     'eu_b2b_goods' => 'EU business customer with a VAT ID: recommend an intra-Community supply at 0%.',

@@ -11,6 +11,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use FilamentAccounting\Catalog\ImportExport\CatalogTransferSchema;
 use FilamentAccounting\Enums\CatalogItemType;
 use FilamentAccounting\Enums\CatalogUnit;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
@@ -92,6 +93,11 @@ class CatalogItemResource extends Resource
             Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable()->required(),
             Select::make('default_tax_code')
                 ->label(__('filament-accounting::fields.tax_code'))
+                ->default(fn (): ?string => TaxCode::query()
+                    ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
+                    ->where('is_active', true)
+                    ->where('code', CatalogTransferSchema::DEFAULT_TAX_CODE)
+                    ->value('code'))
                 ->options(fn (): array => TaxCode::query()
                     ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
                     ->where('is_active', true)

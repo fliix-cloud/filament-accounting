@@ -4,6 +4,7 @@ namespace FilamentAccounting\Catalog\ImportExport;
 
 use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Models\CatalogItem;
+use FilamentAccounting\Models\TaxCode;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Support\ExactMoney;
 
@@ -28,6 +29,8 @@ final class CatalogExporter
         foreach ($rows as $index => $row) {
             CatalogTransferSchema::normalize($row, true, $index + 1, $entity->getKey());
         }
-        $this->serializer->write($path, $format, $rows);
+        $taxCodes = TaxCode::query()->where('legal_entity_id', $entity->getKey())->where('is_active', true)
+            ->orderBy('code')->pluck('name', 'code')->all();
+        $this->serializer->write($path, $format, $rows, $taxCodes);
     }
 }

@@ -14,6 +14,8 @@ final class CatalogTransferSchema
 
     public const VERSION = 1;
 
+    public const DEFAULT_TAX_CODE = 'DE-19';
+
     public const FIELDS = ['sku', 'name', 'description', 'type', 'unit', 'quantity', 'sales_price', 'purchase_price', 'currency', 'tax_code', 'ean', 'active'];
 
     public const OPTIONAL = ['sku', 'description', 'purchase_price', 'tax_code', 'ean'];
@@ -120,8 +122,13 @@ final class CatalogTransferSchema
         if ($json ? ! is_bool($row['active']) : ! in_array($row['active'], ['0', '1'], true)) {
             $fail('active');
         }
-        if ($row['tax_code'] !== null && ! TaxCode::query()->where('legal_entity_id', $entityId)
+        $defaultTax = $row['tax_code'] === null;
+        $row['tax_code'] ??= self::DEFAULT_TAX_CODE;
+        if (! TaxCode::query()->where('legal_entity_id', $entityId)
             ->where('code', $row['tax_code'])->where('is_active', true)->exists()) {
+            if ($defaultTax) {
+                throw CatalogImportException::because('default_tax_missing', ['position' => $position, 'code' => self::DEFAULT_TAX_CODE]);
+            }
             $fail('tax_code');
         }
 
@@ -139,7 +146,7 @@ final class CatalogTransferSchema
     {
         return array_combine(self::FIELDS, [
             '000123', 'Müller & Söhne – Größe 20 × 30 cm, 19,00 €', "Erste Zeile\nZweite Zeile: ä ö ü Ä Ö Ü ß é è á ñ € „ “ – — ×",
-            CatalogItemType::Product->value, CatalogTransferUnits::label(CatalogUnit::Piece->value), '1', '119.00', '80.00', 'EUR', null, '04012345678901', true,
+            CatalogItemType::Product->value, CatalogTransferUnits::label(CatalogUnit::Piece->value), '1', '119.00', '80.00', 'EUR', self::DEFAULT_TAX_CODE, '04012345678901', true,
         ]);
     }
 }

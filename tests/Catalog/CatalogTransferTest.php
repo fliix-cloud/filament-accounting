@@ -44,6 +44,93 @@ class CatalogTransferTest extends TestCase
 
     #[Test]
     #[DataProvider('formats')]
+    public function templates_select_standard_tax_and_blank_import_values_default_without_overriding_explicit_codes(string $format): void
+    {
+        app(CatalogExporter::class)->export($this->path, $format, true);
+        $this->assertSame('DE-19', array_values(app(CatalogSerializer::class)->read($this->path, $format))[0]['tax_code']);
+        $rows = [
+            array_replace(CatalogTransferSchema::example(), ['sku' => 'EMPTY', 'tax_code' => '']),
+            array_replace(CatalogTransferSchema::example(), ['sku' => 'NULL', 'tax_code' => null]),
+            array_replace(CatalogTransferSchema::example(), ['sku' => 'EXPLICIT', 'tax_code' => 'DE-7']),
+        ];
+        app(CatalogSerializer::class)->write($this->path, $format, $rows);
+        app(CatalogImporter::class)->import($this->path, $format);
+        $this->assertSame('DE-19', CatalogItem::query()->where('sku', 'EMPTY')->firstOrFail()->default_tax_code);
+        $this->assertSame('DE-19', CatalogItem::query()->where('sku', 'NULL')->firstOrFail()->default_tax_code);
+        $this->assertSame('DE-7', CatalogItem::query()->where('sku', 'EXPLICIT')->firstOrFail()->default_tax_code);
+    }
+
+    public static function unavailableDefaultTax(): array
+    {
+        return [['inactive'], ['missing']];
+    }
+
+    #[Test]
+    #[DataProvider('unavailableDefaultTax')]
+    public function missing_or_inactive_default_tax_fails_without_writes_or_creating_tax_codes(string $state): void
+    {
+        $entity = $this->makeEntity();
+        TaxCode::query()->where('legal_entity_id', $entity->id)->where('code', 'DE-19')
+            ->update($state === 'inactive' ? ['is_active' => false] : ['code' => 'RENAMED']);
+        $taxCount = TaxCode::query()->count();
+        $row = CatalogTransferSchema::example();
+        unset($row['tax_code']);
+        app(CatalogSerializer::class)->write($this->path, 'json', [$row]);
+        try {
+            app(CatalogImporter::class)->import($this->path, 'json');
+            $this->fail('Inactive default accepted');
+        } catch (CatalogImportException $e) {
+            $this->assertStringContainsString('DE-19', $e->getMessage());
+            $this->assertStringContainsString('tax_code', $e->getMessage());
+            $this->assertSame(0, CatalogItem::query()->count());
+            $this->assertSame($taxCount, TaxCode::query()->count());
+        }
+    }
+
+    public static function spreadsheetFormats(): array
+    {
+        return [['xlsx'], ['xls']];
+    }
+
+    #[Test]
+    #[DataProvider('spreadsheetFormats')]
+    public function tax_dropdown_contains_all_and_only_active_entity_codes_even_for_long_lists(string $format): void
+    {
+        $foreign = $this->makeEntity();
+        TaxCode::query()->create(['legal_entity_id' => $foreign->id, 'code' => 'FOREIGN', 'name' => 'Foreign', 'is_active' => true]);
+        $entity = $this->makeEntity();
+        TaxCode::query()->create(['legal_entity_id' => $entity->id, 'code' => 'INACTIVE', 'name' => 'Inactive', 'is_active' => false]);
+        for ($i = 1; $i <= 30; $i++) {
+            TaxCode::query()->create(['legal_entity_id' => $entity->id, 'code' => 'CUSTOM-CODE-'.$i, 'name' => 'Custom '.$i, 'is_active' => true]);
+        }
+        $expected = TaxCode::query()->where('legal_entity_id', $entity->id)->where('is_active', true)->orderBy('code')->pluck('code')->all();
+        $this->assertGreaterThan(255, strlen(implode(',', $expected)));
+        app(CatalogExporter::class)->export($this->path, $format, true);
+        $book = IOFactory::createReader(ucfirst($format))->load($this->path);
+        $this->assertSame(2, $book->getSheetCount());
+        $lookup = $book->getSheetByName('_catalog_tax_codes');
+        $this->assertNotNull($lookup);
+        $this->assertNotSame('visible', $lookup->getSheetState());
+        $actual = [];
+        for ($r = 2; $r <= $lookup->getHighestDataRow(); $r++) {
+            $actual[] = $lookup->getCell('A'.$r)->getValue();
+        }
+        $this->assertSame($expected, $actual);
+        $taxValidation = array_values(array_filter($book->getSheet(0)->getDataValidationCollection(), fn ($validation) => str_contains($validation->getFormula1(), '_CatalogTaxCodes')));
+        $this->assertCount(1, $taxValidation);
+        $this->assertTrue($taxValidation[0]->getShowDropDown());
+        $this->assertSame('DE-19', $book->getSheet(0)->getCell('J2')->getValue());
+        // The helper is display metadata, never authority for creating/accepting a tax code.
+        $lookup->setCellValueExplicit('A2', 'FOREIGN', DataType::TYPE_STRING);
+        $book->getSheet(0)->setCellValueExplicit('J2', 'FOREIGN', DataType::TYPE_STRING);
+        IOFactory::createWriter($book, ucfirst($format))->save($this->path);
+        $book->disconnectWorksheets();
+        $this->expectException(CatalogImportException::class);
+        app(CatalogImporter::class)->import($this->path, $format);
+    }
+
+    #[Test]
+    #[DataProvider('formats')]
     public function overlong_names_report_the_actual_character_count_and_limit(string $format): void
     {
         app()->setLocale('de');
@@ -110,6 +197,7 @@ class CatalogTransferTest extends TestCase
         $this->assertNull($item->ean);
         $this->assertNull($item->description);
         $this->assertNull($item->purchase_price_minor);
+        $this->assertSame('DE-19', $item->default_tax_code);
     }
 
     #[Test]

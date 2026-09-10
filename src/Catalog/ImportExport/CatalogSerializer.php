@@ -6,11 +6,15 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\NamedRange;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /** Format decoding only; domain validation is shared by all serializers. */
 final class CatalogSerializer
 {
+    private const TAX_SHEET = '_catalog_tax_codes';
+
     /** @return array<int, array<string, mixed>> Physical row numbers, or one-based JSON item indexes. */
     public function read(string $path, string $format): array
     {
@@ -155,13 +159,19 @@ final class CatalogSerializer
             throw CatalogImportException::because('unreadable');
         }
         $info = $reader->listWorksheetInfo($path);
-        if (count($info) !== 1 || $info[0]['totalRows'] > CatalogTransferSchema::MAX_ROWS + 1
+        if (count($info) < 1 || count($info) > 2
+            || (count($info) === 2 && ($info[1]['worksheetName'] !== self::TAX_SHEET || $info[1]['totalColumns'] !== 2 || $info[1]['totalRows'] > CatalogTransferSchema::MAX_ROWS + 1))
+            || $info[0]['totalRows'] > CatalogTransferSchema::MAX_ROWS + 1
             || $info[0]['totalColumns'] !== count(CatalogTransferSchema::FIELDS)) {
             throw CatalogImportException::because('worksheet');
         }
         $book = $reader->load($path);
         try {
             $sheet = $book->getSheet(0);
+            if ($sheet->getSheetState() !== Worksheet::SHEETSTATE_VISIBLE
+                || ($book->getSheetCount() === 2 && $book->getSheet(1)->getSheetState() === Worksheet::SHEETSTATE_VISIBLE)) {
+                throw CatalogImportException::because('worksheet');
+            }
             $rows = [];
             for ($r = 1; $r <= $sheet->getHighestDataRow(); $r++) {
                 $values = [];
@@ -189,8 +199,11 @@ final class CatalogSerializer
         }
     }
 
-    /** @param list<array<string, mixed>> $rows */
-    public function write(string $path, string $format, array $rows): void
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @param  array<string, string>  $taxCodes
+     */
+    public function write(string $path, string $format, array $rows, array $taxCodes = []): void
     {
         CatalogTransferSchema::format($format);
         if (count($rows) > CatalogTransferSchema::MAX_ROWS) {
@@ -233,6 +246,9 @@ final class CatalogSerializer
                 $sheet->setDataValidation($unitColumn.'2:'.$unitColumn.(CatalogTransferSchema::MAX_ROWS + 1), $validation);
                 $sheet->getColumnDimension($unitColumn)->setWidth(20);
                 $sheet->getComment($unitColumn.'1')->getText()->createText(__('filament-accounting::catalog_transfer.unit_help'));
+                if ($taxCodes !== []) {
+                    $this->addTaxCodeDropdown($book, $taxCodes);
+                }
                 $sheet->freezePane('A2');
                 $sheet->getStyle('A1:'.Coordinate::stringFromColumnIndex(count(CatalogTransferSchema::FIELDS)).'1')->getFont()->setBold(true);
                 IOFactory::createWriter($book, $format === 'xlsx' ? 'Xlsx' : 'Xls')->save($path);
@@ -243,5 +259,39 @@ final class CatalogSerializer
         if (filesize($path) > CatalogTransferSchema::MAX_BYTES) {
             throw CatalogImportException::because('limit');
         }
+    }
+
+    /** @param array<string, string> $taxCodes */
+    private function addTaxCodeDropdown(Spreadsheet $book, array $taxCodes): void
+    {
+        if (count($taxCodes) > CatalogTransferSchema::MAX_ROWS) {
+            throw CatalogImportException::because('limit');
+        }
+        // A range avoids Excel's 255-character limit for inline dropdown lists.
+        $lookup = $book->createSheet()->setTitle(self::TAX_SHEET);
+        $lookup->setCellValueExplicit('A1', 'tax_code', DataType::TYPE_STRING);
+        $lookup->setCellValueExplicit('B1', 'name', DataType::TYPE_STRING);
+        $row = 2;
+        foreach ($taxCodes as $code => $name) {
+            $lookup->setCellValueExplicit('A'.$row, (string) $code, DataType::TYPE_STRING);
+            $lookup->setCellValueExplicit('B'.$row, $name, DataType::TYPE_STRING);
+            $row++;
+        }
+        $lookup->setSheetState(Worksheet::SHEETSTATE_VERYHIDDEN);
+        $book->addNamedRange(new NamedRange('_CatalogTaxCodes', $lookup, '$A$2:$A$'.($row - 1)));
+        $sheet = $book->getSheet(0);
+        $column = Coordinate::stringFromColumnIndex(array_search('tax_code', CatalogTransferSchema::FIELDS, true) + 1);
+        $validation = (new DataValidation)->setType(DataValidation::TYPE_LIST)->setAllowBlank(true)
+            ->setShowDropDown(true)->setShowInputMessage(true)->setShowErrorMessage(true)
+            ->setErrorStyle(DataValidation::STYLE_STOP)
+            ->setPromptTitle(__('filament-accounting::fields.tax_code'))
+            ->setPrompt(__('filament-accounting::catalog_transfer.tax_help'))
+            ->setError(__('filament-accounting::catalog_transfer.tax_help'))
+            // INDIRECT also survives the XLS writer, which cannot encode direct named-range formulas.
+            ->setFormula1('INDIRECT("_CatalogTaxCodes")');
+        $sheet->setDataValidation($column.'2:'.$column.(CatalogTransferSchema::MAX_ROWS + 1), $validation);
+        $sheet->getColumnDimension($column)->setWidth(22);
+        $sheet->getComment($column.'1')->getText()->createText(__('filament-accounting::catalog_transfer.tax_help'));
+        $book->setActiveSheetIndex(0);
     }
 }
