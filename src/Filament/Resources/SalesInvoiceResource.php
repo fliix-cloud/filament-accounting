@@ -14,6 +14,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -320,6 +321,7 @@ class SalesInvoiceResource extends Resource
             Section::make(__('filament-accounting::fields.invoice_details'))
                 ->schema([
                     TextEntry::make('number')->label(__('filament-accounting::fields.number')),
+                    TextEntry::make('invoice_version')->label(__('filament-accounting::fields.invoice_version')),
                     TextEntry::make('document_status')->label(__('filament-accounting::fields.document_status'))
                         ->state(fn (Document $record): string => self::displayStatus($record)->getLabel()),
                     TextEntry::make('party.legal_name')->label(__('filament-accounting::fields.customer')),
@@ -343,7 +345,31 @@ class SalesInvoiceResource extends Resource
                 ->columnSpanFull(),
             InvoiceInfolist::totals(),
             InvoiceInfolist::lines(),
+            Section::make(__('filament-accounting::fields.invoice_versions'))
+                ->schema([
+                    RepeatableEntry::make('versions')
+                        ->hiddenLabel()
+                        ->state(fn (Document $record): array => self::versionHistory($record))
+                        ->schema([
+                            TextEntry::make('invoice_version')->label(__('filament-accounting::fields.invoice_version'))
+                                ->formatStateUsing(fn (int $state): string => 'v'.$state)
+                                ->url(fn (Document $record): string => self::getUrl('view', ['record' => $record])),
+                            TextEntry::make('document_status')->label(__('filament-accounting::fields.document_status'))
+                                ->state(fn (Document $record): string => $record->correction?->posting_status === PostingStatus::Posted
+                                    ? __('filament-accounting::fields.archived_version') : $record->document_status->getLabel()),
+                            TextEntry::make('issued_at')->label(__('filament-accounting::fields.version_issued_at'))->dateTime(),
+                            TextEntry::make('e_invoice_meta.correction_reason')->label(__('filament-accounting::fields.correction_reason')),
+                        ])->columns(4),
+                ])->columnSpanFull()->visible(fn (Document $record): bool => filled($record->number)),
         ]);
+    }
+
+    /** @return list<Document> */
+    private static function versionHistory(Document $record): array
+    {
+        return Document::query()->where('legal_entity_id', $record->legal_entity_id)
+            ->where('type', $record->type)->where('number', $record->number)
+            ->with('correction')->orderByDesc('invoice_version')->get()->all();
     }
 
     private static function totalsSection(): Section
@@ -374,6 +400,7 @@ class SalesInvoiceResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('number')->label(__('filament-accounting::fields.number'))->searchable(),
+                TextColumn::make('invoice_version')->label(__('filament-accounting::fields.invoice_version')),
                 TextColumn::make('party.legal_name')->label(__('filament-accounting::fields.customer')),
                 TextColumn::make('issue_date')->date()->label(__('filament-accounting::fields.issue_date')),
                 TextColumn::make('document_status')->badge()->label(__('filament-accounting::fields.document_status'))

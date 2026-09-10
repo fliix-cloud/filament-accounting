@@ -199,6 +199,7 @@ final class GenerateInvoiceArtifacts
         $event = $events->first();
         if ($document->legal_entity_id !== $set->legal_entity_id || $document->getKey() !== $set->document_id
             || $document->type !== DocumentType::SalesInvoice || $document->document_status !== DocumentStatus::Issued
+            || ($document->corrected_document_id === null && $document->invoice_version !== 1)
             || $evidence !== $set->evidence_sha256 || $events->count() !== 1
             || ! $event instanceof AuditEvent
             || data_get($event->payload, 'evidence_sha256') !== $evidence
@@ -312,6 +313,8 @@ final class GenerateInvoiceArtifacts
                 'tax_reason' => $line->tax_reason,
             ])->all(),
             ...($document->corrected_document_id === null ? [] : [
+                'invoice_version' => $document->invoice_version,
+                'previous_invoice_version' => $document->correctedDocument?->invoice_version,
                 'preceding_invoice_number' => $document->correctedDocument?->number,
                 'preceding_invoice_date' => $document->correctedDocument?->issue_date?->toDateString(),
                 'correction_reason' => data_get($document->e_invoice_meta, 'correction_reason'),

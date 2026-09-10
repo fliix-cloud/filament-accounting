@@ -183,6 +183,7 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
                 issueDate: new \DateTimeImmutable((string) $snapshot['preceding_invoice_date']),
             );
             $builder->addDocumentNote((string) ($snapshot['correction_reason'] ?? ''));
+            $builder->addDocumentNote(__('filament-accounting::fields.invoice_version').': '.($snapshot['invoice_version'] ?? ''));
         }
         $builder->setDocumentSeller((string) ($seller['legal_name'] ?? $snapshot['seller_name'] ?? 'Seller'));
         $builder->setDocumentSellerAddress(

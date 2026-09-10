@@ -102,10 +102,17 @@ class SalesInvoiceEditingTest extends TestCase
         ]])->call('save')->assertHasNoFormErrors();
 
         $correction = Document::query()->where('corrected_document_id', $issued->getKey())->sole();
+        $this->assertSame($issued->number, $correction->number);
+        $this->assertSame(2, $correction->invoice_version);
         $page->assertRedirect(SalesInvoiceResource::getUrl('view', ['record' => $correction]));
         $this->assertSame(3299, $issued->fresh()->net_minor);
         $this->assertSame(6598, $correction->net_minor);
         $this->assertSame('Wrong quantity', AuditEvent::query()->where('operation', 'document.correction_created')->sole()->reason);
+
+        Livewire::test(ViewSalesInvoice::class, ['record' => $correction->getRouteKey()])
+            ->assertSee(__('filament-accounting::fields.invoice_versions'))
+            ->assertSee('v1')->assertSee('v2')->assertSee('Wrong quantity')
+            ->assertSee(SalesInvoiceResource::getUrl('view', ['record' => $issued]), escape: false);
 
         $issuer->deleteDraft($correction);
         $this->assertNull($correction->fresh());

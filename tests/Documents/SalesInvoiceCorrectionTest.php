@@ -8,8 +8,10 @@ use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Exceptions\AuthorizationException;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Exceptions\InvalidMoneyException;
+use FilamentAccounting\Filament\Support\DocumentAttachmentActions;
 use FilamentAccounting\Models\AuditEvent;
 use FilamentAccounting\Models\Document;
+use FilamentAccounting\Models\DocumentSequence;
 use FilamentAccounting\Models\InvoiceArtifactSet;
 use FilamentAccounting\Models\JournalEntry;
 use FilamentAccounting\Models\Settlement;
@@ -43,7 +45,9 @@ class SalesInvoiceCorrectionTest extends TestCase
         $correction = $issuer->issue($draft);
         $issuer->issue($correction);
 
-        $this->assertNotSame($original->number, $correction->number);
+        $this->assertSame($original->number, $correction->number);
+        $this->assertSame(1, $original->invoice_version);
+        $this->assertSame(2, $correction->invoice_version);
         $this->assertSame($originalAttributes, $original->fresh()->getAttributes());
         $this->assertSame('1', $original->fresh()->lines->sole()->quantity);
         $this->assertTrue($original->fresh()->openItem->is_reversed);
@@ -83,6 +87,41 @@ class SalesInvoiceCorrectionTest extends TestCase
         $this->expectException(DocumentException::class);
         $this->expectExceptionMessage(__('filament-accounting::errors.invoice_correction_exists'));
         $issuer->correct($original, $this->payload($original), 'Second correction');
+    }
+
+    #[Test]
+    public function successive_versions_keep_the_number_and_do_not_advance_the_invoice_sequence(): void
+    {
+        $first = $this->invoice();
+        $issuer = app(IssueSalesInvoice::class);
+        $nextNumber = DocumentSequence::query()->sole()->next_number;
+        $second = $issuer->issue($issuer->correct($first, $this->payload($first, '2'), 'Second version'));
+        $third = $issuer->issue($issuer->correct($second, $this->payload($second, '3'), 'Third version'));
+
+        $this->assertSame($first->number, $second->number);
+        $this->assertSame($first->number, $third->number);
+        $this->assertSame([1, 2, 3], Document::query()->orderBy('invoice_version')->pluck('invoice_version')->all());
+        $this->assertSame($nextNumber, DocumentSequence::query()->sole()->next_number);
+        $this->assertSame(5, JournalEntry::query()->count());
+        $this->assertSame($first->number.'-v3.pdf', DocumentAttachmentActions::downloadFilename(
+            $third, $third->attachments()->where('source_type', 'generated_pdf')->sole(),
+        ));
+        $this->assertSame('Third version', $third->e_invoice_meta['correction_reason']);
+        $this->assertSame([], app(InvoiceEvidenceVerifier::class)->verify($first->legal_entity_id)['issues']);
+        $this->assertTrue(app(AuditChainVerifier::class)->verify($first->legal_entity_id)->isValid());
+    }
+
+    #[Test]
+    public function issuance_rejects_a_version_with_a_different_number(): void
+    {
+        $original = $this->invoice();
+        $issuer = app(IssueSalesInvoice::class);
+        $draft = $issuer->correct($original, $this->payload($original), 'Correction');
+        $draft->number = 'ANOTHER-NUMBER';
+        $draft->save();
+        $this->expectException(DocumentException::class);
+        $this->expectExceptionMessage(__('filament-accounting::errors.invoice_version_invalid'));
+        $issuer->issue($draft);
     }
 
     #[Test]

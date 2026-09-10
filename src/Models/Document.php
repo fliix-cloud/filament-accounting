@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property DocumentType $type
  * @property DocumentDirection $direction
  * @property string|null $number
+ * @property int $invoice_version
  * @property string|null $supplier_invoice_number
  * @property DocumentStatus $document_status
  * @property PostingStatus $posting_status
@@ -73,6 +74,7 @@ class Document extends AccountingModel
         'type',
         'direction',
         'number',
+        'invoice_version',
         'supplier_invoice_number',
         'party_id',
         'party_snapshot',
@@ -92,6 +94,7 @@ class Document extends AccountingModel
     ];
 
     protected $fillable = [
+        'invoice_version',
         'legal_entity_id',
         'type',
         'direction',
@@ -126,6 +129,7 @@ class Document extends AccountingModel
     protected function casts(): array
     {
         return [
+            'invoice_version' => 'integer',
             'type' => DocumentType::class,
             'direction' => DocumentDirection::class,
             'document_status' => DocumentStatus::class,

@@ -63,6 +63,7 @@ final class PostDocument
                 $original = Document::query()->where('legal_entity_id', $entity->getKey())
                     ->lockForUpdate()->findOrFail($document->corrected_document_id);
                 if ($original->type !== DocumentType::SalesInvoice || $original->document_status !== DocumentStatus::Issued
+                    || $document->number !== $original->number || $document->invoice_version !== $original->invoice_version + 1
                     || blank(data_get($document->e_invoice_meta, 'correction_reason'))) {
                     throw new DocumentException(__('filament-accounting::errors.document_not_ready_to_post'));
                 }
@@ -85,6 +86,8 @@ final class PostDocument
                 $this->audit->log($entity, 'document.corrected', $original, [
                     'replacement_document_id' => $document->getKey(),
                     'replacement_number' => $document->number,
+                    'previous_version' => $original->invoice_version,
+                    'invoice_version' => $document->invoice_version,
                 ], (string) data_get($document->e_invoice_meta, 'correction_reason'));
             }
 

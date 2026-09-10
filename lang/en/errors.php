@@ -3,7 +3,8 @@
 return [
     'invalid_decimal' => 'Enter a decimal number with a comma or point and without thousands separators.',
     'invoice_correction_has_settlements' => 'Reverse the original invoice payment allocations before correcting it.',
-    'invoice_correction_exists' => 'A correction already exists for this invoice. Open the linked correction invoice.',
+    'invoice_correction_exists' => 'A subsequent version already exists for this invoice. Open the linked version.',
+    'invoice_version_invalid' => 'Invoice number and version do not match the preceding version.',
     'invoice_completion_failed' => 'The invoice could not be completed. Preserved files remain available. Please review the operation before completing it again.',
     'artifacts_require_independent_commit' => 'Invoice generation must run outside an existing accounting transaction.',
     'intake_requires_independent_commit' => 'Invoice intake must start outside an existing database transaction.',

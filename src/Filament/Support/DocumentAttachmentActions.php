@@ -87,6 +87,9 @@ final class DocumentAttachmentActions
             ?: $document->uuid;
         $identifier = preg_replace('/\.(pdf|xml)$/i', '', (string) $identifier) ?: $document->uuid;
         $identifier = trim((string) preg_replace('/[^A-Za-z0-9._-]+/', '-', $identifier), '-_.');
+        if ($document->invoice_version > 1) {
+            $identifier .= '-v'.$document->invoice_version;
+        }
 
         return ($identifier !== '' ? $identifier : $document->uuid).'.'.$extension;
     }

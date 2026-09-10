@@ -175,11 +175,15 @@ final class IssueSalesInvoice
                 'party_id', 'issue_date', 'supply_date', 'due_date', 'currency', 'lines',
             ])));
             $draft->corrected_document_id = $original->getKey();
+            $draft->invoice_version = $original->invoice_version + 1;
+            $draft->number = $original->number;
             $draft->e_invoice_meta = ['correction_reason' => $reason];
             $draft->save();
             $this->audit->log($entity, 'document.correction_created', $draft, [
                 'original_document_id' => $original->getKey(),
                 'original_number' => $original->number,
+                'previous_version' => $original->invoice_version,
+                'invoice_version' => $draft->invoice_version,
                 'before' => $original->load('lines')->toArray(),
                 'after' => $draft->load('lines')->toArray(),
             ], $reason);
@@ -251,7 +255,13 @@ final class IssueSalesInvoice
 
             $document->party_snapshot = $party->snapshot();
             $document->legal_entity_snapshot = $entity->invoiceSnapshot();
-            $document->number = $this->numbers->next($entity, $document->type, $issueDate);
+            if ($document->corrected_document_id !== null) {
+                if ($document->number !== $original->number || $document->invoice_version !== $original->invoice_version + 1) {
+                    throw new DocumentException(__('filament-accounting::errors.invoice_version_invalid'));
+                }
+            } else {
+                $document->number = $this->numbers->next($entity, $document->type, $issueDate);
+            }
             $document->document_status = DocumentStatus::Issued;
             $document->issued_by_type = $actor?->getMorphClass();
             $document->issued_by_id = $actor ? (string) $actor->getKey() : null;
@@ -262,6 +272,7 @@ final class IssueSalesInvoice
             $this->audit->log($entity, 'document.issued', $document, [
                 'number' => $document->number,
                 'type' => $document->type->value,
+                'invoice_version' => $document->invoice_version,
             ]);
 
             return $document->fresh(['lines', 'openItem']) ?? $document;
