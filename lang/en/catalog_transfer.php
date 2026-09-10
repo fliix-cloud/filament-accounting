@@ -16,6 +16,8 @@ return [
     'persistence' => 'Saving a catalog item was refused. The entire import was rolled back. Check the application’s catalog validation.',
     'failed' => 'Catalog transfer not possible',
     'ean' => 'EAN',
+    'row_length' => 'Physical row :position, field :field: :length characters; maximum :max allowed. Shorten the value. Put detailed item text in description.',
+    'item_length' => 'Item :position, field :field: :length characters; maximum :max allowed. Shorten the value. Put detailed item text in description.',
     'unit_help' => 'Choose a unit from the list, e.g. Piece or Hour. Import accepts German and English labels as well as existing codes (C62, HUR …).',
     'purchase_price' => 'Purchase price',
     'unsupported' => 'Unsupported format. Please use XLSX, XLS, CSV or JSON.',

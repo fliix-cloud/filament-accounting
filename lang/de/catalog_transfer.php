@@ -16,6 +16,8 @@ return [
     'persistence' => 'Das Speichern eines Katalogartikels wurde abgelehnt. Der gesamte Import wurde zurückgerollt. Prüfen Sie die Katalogvalidierung der Anwendung.',
     'failed' => 'Katalogübertragung nicht möglich',
     'ean' => 'EAN',
+    'row_length' => 'Physische Zeile :position, Feld :field: :length Zeichen; maximal :max erlaubt. Kürzen Sie den Wert. Ausführliche Artikeltexte gehören in description.',
+    'item_length' => 'Element :position, Feld :field: :length Zeichen; maximal :max erlaubt. Kürzen Sie den Wert. Ausführliche Artikeltexte gehören in description.',
     'unit_help' => 'Einheit aus der Liste wählen, z. B. Stück oder Stunde. Deutsche und englische Bezeichnungen sowie bisherige Codes (C62, HUR …) werden beim Import akzeptiert.',
     'purchase_price' => 'Einkaufspreis',
     'unsupported' => 'Nicht unterstütztes Format. Bitte verwenden Sie XLSX, XLS, CSV oder JSON.',

@@ -44,6 +44,24 @@ class CatalogTransferTest extends TestCase
 
     #[Test]
     #[DataProvider('formats')]
+    public function overlong_names_report_the_actual_character_count_and_limit(string $format): void
+    {
+        app()->setLocale('de');
+        app(CatalogSerializer::class)->write($this->path, $format, [array_replace(CatalogTransferSchema::example(), ['name' => str_repeat('ü', 320)])]);
+        try {
+            app(CatalogImporter::class)->import($this->path, $format);
+            $this->fail('Overlong name accepted');
+        } catch (CatalogImportException $e) {
+            $this->assertStringContainsString('name', $e->getMessage());
+            $this->assertStringContainsString('320 Zeichen', $e->getMessage());
+            $this->assertStringContainsString('255', $e->getMessage());
+            $this->assertStringContainsString('description', $e->getMessage());
+            $this->assertSame(0, CatalogItem::query()->count());
+        }
+    }
+
+    #[Test]
+    #[DataProvider('formats')]
     public function readable_units_round_trip_across_interface_languages_and_legacy_codes(string $format): void
     {
         app()->setLocale('de');

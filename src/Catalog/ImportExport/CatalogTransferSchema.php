@@ -76,7 +76,12 @@ final class CatalogTransferSchema
                 'currency' => 3,
                 default => 255,
             };
-            if (mb_strlen($value) > $limit || ($field === 'description' && strlen($value) > 65535)) {
+            if (mb_strlen($value) > $limit) {
+                throw CatalogImportException::because($json ? 'item_length' : 'row_length', [
+                    'position' => $position, 'field' => $field, 'length' => mb_strlen($value), 'max' => $limit,
+                ]);
+            }
+            if ($field === 'description' && strlen($value) > 65535) {
                 $fail($field);
             }
             if (trim($value) === '') {
