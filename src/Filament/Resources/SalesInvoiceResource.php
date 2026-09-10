@@ -162,11 +162,6 @@ class SalesInvoiceResource extends Resource
                             $set('tax_code', $item->default_tax_code);
                         })
                         ->columnSpan(3),
-                    RichEditor::make('description')
-                        ->label(__('filament-accounting::fields.description'))
-                        ->toolbarButtons([['bold', 'italic'], ['bulletList', 'orderedList']])
-                        ->required()
-                        ->columnSpan(9),
                     TextInput::make('quantity')->label(__('filament-accounting::fields.quantity'))->required()->columnSpan(2),
                     Select::make('unit')
                         ->label(__('filament-accounting::fields.unit'))
@@ -186,6 +181,11 @@ class SalesInvoiceResource extends Resource
                             ->all())
                         ->required()
                         ->columnSpan(3),
+                    RichEditor::make('description')
+                        ->label(__('filament-accounting::fields.description'))
+                        ->toolbarButtons([['bold', 'italic'], ['bulletList', 'orderedList']])
+                        ->required()
+                        ->columnSpanFull(),
                     Group::make([
                         Placeholder::make('tax_warning')
                             ->label(__('filament-accounting::tax_suggestions.warning_label'))
@@ -193,8 +193,8 @@ class SalesInvoiceResource extends Resource
                             ->visible(fn (Get $get): bool => self::lineTaxWarning($get) !== null),
                         Toggle::make('tax_confirmed')
                             ->label(__('filament-accounting::tax_suggestions.confirm_review'))
-                            ->visible(fn (Get $get): bool => self::lineTaxSuggestion($get)?->requiresConfirmation ?? false)
-                            ->accepted(fn (Get $get): bool => self::lineTaxSuggestion($get)?->requiresConfirmation ?? false),
+                            ->visible(fn (Get $get): bool => self::lineTaxSuggestion($get)->requiresConfirmation ?? false)
+                            ->accepted(fn (Get $get): bool => self::lineTaxSuggestion($get)->requiresConfirmation ?? false),
                     ])->columnSpanFull(),
                 ])
                 ->columns(12)
