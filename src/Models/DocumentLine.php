@@ -7,6 +7,7 @@ use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Exceptions\PostedRecordImmutableException;
 use FilamentAccounting\Support\RichText;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -34,6 +35,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $classification_confirmed
  * @property bool $tax_confirmed
  * @property string|null $imported_tax_code
+ * @property Carbon|null $service_from
+ * @property Carbon|null $service_to
  * @property-read Document $document
  */
 class DocumentLine extends AccountingModel

@@ -1,6 +1,15 @@
 <?php
 
 return [
+    'choose_catalog_item' => 'Choose item',
+    'choose_tax' => 'Choose tax',
+    'choose_unit' => 'Choose unit',
+    'line_total' => 'Total (net)',
+    'invoice_preview' => 'DRAFT / PREVIEW',
+    'correction_reason' => 'Reason for change',
+    'correction_help' => 'Saving creates a linked correction draft and preserves the original. Issuing assigns a new invoice number and reverses the original posting.',
+    'corrected_invoice' => 'Correction of invoice',
+    'replacement_invoice' => 'Correction invoice',
     'legal_name' => 'Legal name',
     'trading_name' => 'Trading name',
     'company_details' => 'Company and issuer details',

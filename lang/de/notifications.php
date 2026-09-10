@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'invoice_artifacts_ready' => 'Rechnungs-PDF und XML stehen bereit.',
     'invoice_issued' => 'Rechnung ausgestellt',
     'invoice_posted' => 'Rechnung gebucht',
     'purchase_registered' => 'Eingangsrechnung erfasst',

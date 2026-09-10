@@ -285,7 +285,7 @@ final class GenerateInvoiceArtifacts
     }
 
     /** @return array<string, mixed> */
-    private function snapshot(Document $document): array
+    public function snapshot(Document $document): array
     {
         return [
             'number' => $document->number,
@@ -311,6 +311,11 @@ final class GenerateInvoiceArtifacts
                 'tax_category' => $line->tax_category,
                 'tax_reason' => $line->tax_reason,
             ])->all(),
+            ...($document->corrected_document_id === null ? [] : [
+                'preceding_invoice_number' => $document->correctedDocument?->number,
+                'preceding_invoice_date' => $document->correctedDocument?->issue_date?->toDateString(),
+                'correction_reason' => data_get($document->e_invoice_meta, 'correction_reason'),
+            ]),
         ];
     }
 }

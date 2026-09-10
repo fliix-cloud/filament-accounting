@@ -82,7 +82,7 @@ class CustomerResource extends Resource
             TextInput::make('invoice_email')->label(__('filament-accounting::fields.invoice_email'))->email(),
             TextInput::make('phone')->label(__('filament-accounting::fields.phone')),
             Select::make('country_code')->label(__('filament-accounting::fields.country'))->options(ReferenceData::countries())->searchable(),
-            TextInput::make('payment_terms_days')->label(__('filament-accounting::fields.payment_terms_days'))->numeric()->minValue(0)->default(14),
+            TextInput::make('payment_terms_days')->label(__('filament-accounting::fields.payment_terms_days'))->integer()->minValue(0)->maxValue(65535)->required()->default(7),
             Select::make('default_currency')->label(__('filament-accounting::fields.default_currency'))->options(ReferenceData::currencies())->searchable()->default('EUR'),
             Toggle::make('is_active')->label(__('filament-accounting::fields.is_active'))->default(true),
             Section::make(__('filament-accounting::fields.addresses'))

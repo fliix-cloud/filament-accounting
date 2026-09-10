@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'preview_invoice_pdf' => 'PDF-Rechnungsvorschau',
+    'generate_invoice_artifacts' => 'PDF/XML erstellen',
     'complete_issuance' => 'Abschließen',
     'discard_draft' => 'Entwurf verwerfen',
     'discard_draft_description' => 'Der Entwurf und die Originaldateien bleiben einsehbar. Die Lieferantenrechnung wird dadurch nicht storniert.',

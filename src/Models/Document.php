@@ -55,6 +55,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Attachment> $attachments
  * @property-read OpenItem|null $openItem
  * @property-read Party|null $party
+ * @property-read Document|null $correction
+ * @property-read Document|null $correctedDocument
  * @property-read Collection<int, Settlement> $settlements
  */
 class Document extends AccountingModel
@@ -221,6 +223,11 @@ class Document extends AccountingModel
     public function correctedDocument(): BelongsTo
     {
         return $this->belongsTo(self::class, 'corrected_document_id');
+    }
+
+    public function correction(): HasOne
+    {
+        return $this->hasOne(self::class, 'corrected_document_id');
     }
 
     public function attachments(): MorphMany

@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'preview_invoice_pdf' => 'PDF invoice preview',
+    'generate_invoice_artifacts' => 'Generate PDF/XML',
     'complete_issuance' => 'Complete invoice',
     'discard_draft' => 'Discard draft',
     'discard_draft_description' => 'The draft and original files remain available for inspection. This does not cancel the supplier invoice.',

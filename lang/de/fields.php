@@ -1,6 +1,15 @@
 <?php
 
 return [
+    'choose_catalog_item' => 'Artikel wählen',
+    'choose_tax' => 'Steuer wählen',
+    'choose_unit' => 'Einheit wählen',
+    'line_total' => 'Total (netto)',
+    'invoice_preview' => 'ENTWURF / VORSCHAU',
+    'correction_reason' => 'Änderungsgrund',
+    'correction_help' => 'Beim Speichern entsteht ein verknüpfter Korrekturentwurf. Das Original bleibt erhalten. Beim Ausstellen wird eine neue Rechnungsnummer vergeben und die ursprüngliche Buchung storniert.',
+    'corrected_invoice' => 'Korrektur zu Rechnung',
+    'replacement_invoice' => 'Korrekturrechnung',
     'legal_name' => 'Rechtsname',
     'trading_name' => 'Handelsname',
     'company_details' => 'Unternehmens- und Ausstellerdaten',

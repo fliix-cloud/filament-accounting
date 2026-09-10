@@ -176,7 +176,14 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
 
         $seller = (array) ($snapshot['seller'] ?? []);
         $buyer = (array) ($snapshot['buyer'] ?? []);
-        $builder->setDocumentInformation($number, '380', \DateTime::createFromImmutable($issueDate), $currency);
+        $builder->setDocumentInformation($number, filled($snapshot['preceding_invoice_number'] ?? null) ? '384' : '380', \DateTime::createFromImmutable($issueDate), $currency);
+        if (filled($snapshot['preceding_invoice_number'] ?? null)) {
+            $builder->setDocumentInvoiceReferencedDocument(
+                (string) $snapshot['preceding_invoice_number'],
+                issueDate: new \DateTimeImmutable((string) $snapshot['preceding_invoice_date']),
+            );
+            $builder->addDocumentNote((string) ($snapshot['correction_reason'] ?? ''));
+        }
         $builder->setDocumentSeller((string) ($seller['legal_name'] ?? $snapshot['seller_name'] ?? 'Seller'));
         $builder->setDocumentSellerAddress(
             $seller['address_line1'] ?? null,

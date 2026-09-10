@@ -52,6 +52,11 @@ final class FpdfInvoiceRenderer implements InvoiceRenderer
         }
 
         $pdf->Ln(10);
+        if (filled($snapshot['preceding_invoice_number'] ?? null)) {
+            $pdf->MultiCell(172, 5, $this->encode(__('filament-accounting::fields.corrected_invoice').': '.$snapshot['preceding_invoice_number']));
+            $pdf->MultiCell(172, 5, $this->encode(__('filament-accounting::fields.correction_reason').': '.($snapshot['correction_reason'] ?? '')));
+            $pdf->Ln(4);
+        }
         $pdf->SetFillColor(235, 238, 242);
         $pdf->SetFont('Helvetica', 'B', 9);
         foreach ([['Pos.', 12], ['Beschreibung', 88], ['Menge', 20], ['Netto', 25], ['Steuer', 27]] as [$label, $width]) {
