@@ -26,11 +26,15 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use FilamentAccounting\Banking\FinTs\Enums\DirectDebitMandateStatus;
+use FilamentAccounting\Banking\FinTs\Models\DirectDebitMandate;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
+use FilamentAccounting\Enums\InvoicePaymentMethod;
 use FilamentAccounting\Enums\PaymentStatus;
 use FilamentAccounting\Enums\PostingStatus;
+use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\CreateSalesInvoice;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages\EditSalesInvoice;
@@ -112,6 +116,7 @@ class SalesInvoiceResource extends Resource
                 ->afterStateUpdated(function (Get $get, Set $set): void {
                     self::resetTaxConfirmations($get, $set);
                     self::updateDueDate($get, $set);
+                    $set('direct_debit_mandate_id', null);
                 })
                 ->options(fn (): array => Party::query()
                     ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
@@ -145,6 +150,17 @@ class SalesInvoiceResource extends Resource
                     ->default(fn (): string => (string) app(LegalEntityScope::class)->require()->base_currency)
                     ->required(),
             ])->columnSpanFull(),
+            Select::make('payment_method')->label(__('filament-accounting::invoice.payment_method'))
+                ->options(InvoicePaymentMethod::class)->default(InvoicePaymentMethod::CreditTransfer->value)
+                ->live()->required()->afterStateUpdated(fn (Set $set) => $set('direct_debit_mandate_id', null)),
+            Select::make('direct_debit_mandate_id')->label(__('filament-accounting::invoice.mandate'))
+                ->placeholder(__('filament-accounting::invoice.choose_mandate'))
+                ->helperText(__('filament-accounting::invoice.mandate_help'))
+                ->options(fn (Get $get): array => DirectDebitMandate::query()
+                    ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
+                    ->where('party_id', $get('party_id') ?? 0)
+                    ->where('status', DirectDebitMandateStatus::Active)->pluck('reference', 'id')->all())
+                ->visible(fn (Get $get): bool => $get('payment_method') === InvoicePaymentMethod::DirectDebit->value),
             self::totalsSection(),
             Repeater::make('lines')
                 ->label(__('filament-accounting::fields.lines'))
@@ -329,6 +345,9 @@ class SalesInvoiceResource extends Resource
                     TextEntry::make('supply_date')->date()->label(__('filament-accounting::fields.supply_date')),
                     TextEntry::make('due_date')->date()->label(__('filament-accounting::fields.due_date')),
                     TextEntry::make('currency')->label(__('filament-accounting::fields.currency')),
+                    TextEntry::make('payment_method')->label(__('filament-accounting::invoice.payment_method'))
+                        ->formatStateUsing(fn (?InvoicePaymentMethod $state): string => ($state ?? InvoicePaymentMethod::CreditTransfer)->getLabel()),
+                    TextEntry::make('payment_snapshot.mandate_reference')->label(__('filament-accounting::invoice.mandate')),
                     TextEntry::make('correctedDocument.number')
                         ->label(__('filament-accounting::fields.corrected_invoice'))
                         ->url(fn (Document $record): ?string => $record->corrected_document_id
@@ -467,6 +486,8 @@ class SalesInvoiceResource extends Resource
                 try {
                     $issuer->issue($record);
                     Notification::make()->title(__('filament-accounting::notifications.invoice_issued'))->success()->send();
+                } catch (DocumentException $exception) {
+                    Notification::make()->danger()->title(__('filament-accounting::errors.invoice_completion_failed'))->body($exception->getMessage())->send();
                 } catch (\Throwable $exception) {
                     report($exception);
                     Notification::make()->danger()->title(__('filament-accounting::errors.invoice_completion_failed'))->send();

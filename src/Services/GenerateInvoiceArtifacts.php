@@ -300,7 +300,12 @@ final class GenerateInvoiceArtifacts
             'buyer' => $document->party_snapshot ?? [],
             'seller_name' => (string) (($document->legal_entity_snapshot ?? [])['legal_name'] ?? ''),
             'buyer_name' => (string) (($document->party_snapshot ?? [])['legal_name'] ?? ''),
+            ...($document->payment_method === null ? [] : [
+                'payment' => $document->payment_snapshot ?? [],
+                'supply_date' => $document->supply_date?->toDateString(),
+            ]),
             'lines' => $document->lines->map(fn (DocumentLine $line): array => [
+                ...($document->payment_method === null ? [] : ['sku' => $line->catalog_sku]),
                 'description' => $line->description,
                 'quantity' => $line->quantity,
                 'unit' => $line->unit,

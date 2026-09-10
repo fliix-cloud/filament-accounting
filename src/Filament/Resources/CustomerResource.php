@@ -78,6 +78,7 @@ class CustomerResource extends Resource
         return $schema->components([
             TextInput::make('legal_name')->label(__('filament-accounting::fields.legal_name'))->required(),
             TextInput::make('display_name')->label(__('filament-accounting::fields.display_name')),
+            TextInput::make('external_reference')->label(__('filament-accounting::invoice.customer_number')),
             TextInput::make('email')->label(__('filament-accounting::fields.email'))->email(),
             TextInput::make('invoice_email')->label(__('filament-accounting::fields.invoice_email'))->email(),
             TextInput::make('phone')->label(__('filament-accounting::fields.phone')),

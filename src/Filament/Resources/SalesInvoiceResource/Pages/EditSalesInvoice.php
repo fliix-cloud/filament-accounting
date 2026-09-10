@@ -4,6 +4,7 @@ namespace FilamentAccounting\Filament\Resources\SalesInvoiceResource\Pages;
 
 use Filament\Resources\Pages\EditRecord;
 use FilamentAccounting\Enums\DocumentStatus;
+use FilamentAccounting\Enums\InvoicePaymentMethod;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
 use FilamentAccounting\Filament\Support\SalesInvoicePreviewAction;
@@ -26,6 +27,7 @@ class EditSalesInvoice extends EditRecord
     {
         /** @var Document $record */
         $record = $this->getRecord();
+        $data['payment_method'] = ($record->payment_method ?? InvoicePaymentMethod::CreditTransfer)->value;
         $data['lines'] = $record->lines->map(fn ($line): array => [
             'catalog_item_id' => $line->catalog_item_id,
             'description' => $line->description,

@@ -31,6 +31,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $account_role
  * @property int|null $ledger_account_id
  * @property int|null $catalog_item_id
+ * @property string|null $catalog_sku
  * @property string|null $classification_code
  * @property bool $classification_confirmed
  * @property bool $tax_confirmed
@@ -44,6 +45,7 @@ class DocumentLine extends AccountingModel
     protected $table = 'accounting_document_lines';
 
     protected $fillable = [
+        'catalog_sku',
         'document_id',
         'position',
         'description',

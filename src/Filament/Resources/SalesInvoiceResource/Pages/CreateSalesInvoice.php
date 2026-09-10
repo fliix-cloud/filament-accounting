@@ -30,6 +30,8 @@ class CreateSalesInvoice extends CreateRecord
             'supply_date' => $data['supply_date'] ?? null,
             'due_date' => $data['due_date'] ?? null,
             'currency' => $data['currency'],
+            'payment_method' => $data['payment_method'],
+            'direct_debit_mandate_id' => $data['direct_debit_mandate_id'] ?? null,
             'lines' => $data['lines'] ?? [],
         ]);
     }

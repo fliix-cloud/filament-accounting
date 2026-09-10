@@ -69,6 +69,8 @@ class LegalEntityResource extends Resource
             Section::make(__('filament-accounting::fields.company_details'))->schema([
                 TextInput::make('legal_name')->label(__('filament-accounting::fields.legal_name'))->required(),
                 TextInput::make('trading_name')->label(__('filament-accounting::fields.trading_name')),
+                TextInput::make('invoice_subtitle')->label(__('filament-accounting::invoice.subtitle')),
+                TextInput::make('invoice_contact_name')->label(__('filament-accounting::invoice.contact_person')),
                 TextInput::make('address_line1')->label(__('filament-accounting::fields.address_line1'))->required(),
                 TextInput::make('address_line2')->label(__('filament-accounting::fields.address_line2')),
                 TextInput::make('postal_code')->label(__('filament-accounting::fields.postal_code'))->required(),

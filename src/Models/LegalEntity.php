@@ -4,6 +4,7 @@ namespace FilamentAccounting\Models;
 
 use FilamentAccounting\Enums\LegalEntityState;
 use FilamentAccounting\Support\HasUuid;
+use FilamentAccounting\Support\InvoiceLogo;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -13,6 +14,9 @@ use Illuminate\Support\Carbon;
  * @property string $uuid
  * @property string $legal_name
  * @property string|null $trading_name
+ * @property string|null $invoice_logo_path
+ * @property string|null $invoice_subtitle
+ * @property string|null $invoice_contact_name
  * @property string $country_code
  * @property string $base_currency
  * @property string $locale
@@ -41,6 +45,8 @@ class LegalEntity extends AccountingModel
     protected $table = 'accounting_legal_entities';
 
     protected $fillable = [
+        'invoice_subtitle',
+        'invoice_contact_name',
         'legal_name',
         'trading_name',
         'country_code',
@@ -84,6 +90,9 @@ class LegalEntity extends AccountingModel
     public function invoiceSnapshot(): array
     {
         return $this->only([
+            'invoice_subtitle',
+            'invoice_contact_name',
+            'locale',
             'uuid',
             'legal_name',
             'trading_name',
@@ -103,7 +112,7 @@ class LegalEntity extends AccountingModel
             'invoice_bic',
             'invoice_template_key',
             'invoice_template_version',
-        ]);
+        ]) + ['invoice_logo_data' => InvoiceLogo::data($this->getAttribute('invoice_logo_path'))];
     }
 
     public function parties(): HasMany

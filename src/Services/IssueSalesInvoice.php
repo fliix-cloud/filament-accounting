@@ -7,6 +7,7 @@ use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Contracts\InvoiceRenderer;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
+use FilamentAccounting\Enums\InvoicePaymentMethod;
 use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Exceptions\InvalidMoneyException;
@@ -89,6 +90,8 @@ final class IssueSalesInvoice
                 'supply_date' => $taxDate,
                 'due_date' => array_key_exists('due_date', $payload) ? $payload['due_date'] : Carbon::parse($issueDate)->addDays($paymentTerms)->toDateString(),
                 'payment_terms_days' => $paymentTerms,
+                'payment_method' => ResolveInvoicePayment::method($payload['payment_method'] ?? InvoicePaymentMethod::CreditTransfer),
+                'direct_debit_mandate_id' => $payload['direct_debit_mandate_id'] ?? null,
                 'currency' => $currency,
                 'exchange_rate' => $payload['exchange_rate'] ?? '1',
                 'idempotency_key' => $payload['idempotency_key'] ?? null,
@@ -136,6 +139,8 @@ final class IssueSalesInvoice
                 'supply_date' => $taxDate,
                 'due_date' => $payload['due_date'] ?? null,
                 'payment_terms_days' => $payload['payment_terms_days'] ?? $party->payment_terms_days,
+                'payment_method' => ResolveInvoicePayment::method($payload['payment_method'] ?? $document->payment_method ?? InvoicePaymentMethod::CreditTransfer),
+                'direct_debit_mandate_id' => array_key_exists('direct_debit_mandate_id', $payload) ? $payload['direct_debit_mandate_id'] : $document->direct_debit_mandate_id,
                 'currency' => $currency,
                 'exchange_rate' => $payload['exchange_rate'] ?? $document->exchange_rate,
             ]);
@@ -171,8 +176,9 @@ final class IssueSalesInvoice
             if (Document::query()->where('corrected_document_id', $original->getKey())->exists()) {
                 throw new DocumentException(__('filament-accounting::errors.invoice_correction_exists'));
             }
+            $payload += ['payment_method' => $original->payment_method ?? InvoicePaymentMethod::CreditTransfer, 'direct_debit_mandate_id' => $original->direct_debit_mandate_id];
             $draft = $this->createDraft($entity, array_intersect_key($payload, array_flip([
-                'party_id', 'issue_date', 'supply_date', 'due_date', 'currency', 'lines',
+                'party_id', 'issue_date', 'supply_date', 'due_date', 'currency', 'lines', 'payment_method', 'direct_debit_mandate_id',
             ])));
             $draft->corrected_document_id = $original->getKey();
             $draft->invoice_version = $original->invoice_version + 1;
@@ -227,7 +233,7 @@ final class IssueSalesInvoice
         }
 
         $document = $entity->getConnection()->transaction(function () use ($document, $entity, $needsArtifacts): Document {
-            LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
+            $entity = LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
             $document = Document::query()->lockForUpdate()->with(['lines', 'party'])->whereKey($document->getKey())->firstOrFail();
 
             if ($document->document_status === DocumentStatus::Issued) {
@@ -255,6 +261,11 @@ final class IssueSalesInvoice
 
             $document->party_snapshot = $party->snapshot();
             $document->legal_entity_snapshot = $entity->invoiceSnapshot();
+            $document->payment_method ??= InvoicePaymentMethod::CreditTransfer;
+            if ($document->payment_method === InvoicePaymentMethod::CreditTransfer) {
+                $document->direct_debit_mandate_id = null;
+            }
+            $document->payment_snapshot = app(ResolveInvoicePayment::class)->snapshot($document);
             if ($document->corrected_document_id !== null) {
                 if ($document->number !== $original->number || $document->invoice_version !== $original->invoice_version + 1) {
                     throw new DocumentException(__('filament-accounting::errors.invoice_version_invalid'));
@@ -294,6 +305,10 @@ final class IssueSalesInvoice
         $currency = strtoupper((string) ($payload['currency'] ?? $entity->base_currency));
         $this->assertBaseCurrency($entity, $currency);
         $document = new Document([
+            'legal_entity_id' => $entity->getKey(),
+            'party_id' => $party->getKey(),
+            'payment_method' => ResolveInvoicePayment::method($payload['payment_method'] ?? InvoicePaymentMethod::CreditTransfer),
+            'direct_debit_mandate_id' => $payload['direct_debit_mandate_id'] ?? null,
             'number' => __('filament-accounting::fields.invoice_preview'),
             'issue_date' => $payload['issue_date'] ?? now()->toDateString(),
             'supply_date' => $payload['supply_date'] ?? $payload['issue_date'] ?? now()->toDateString(),
@@ -303,6 +318,7 @@ final class IssueSalesInvoice
             'legal_entity_snapshot' => $entity->invoiceSnapshot(),
         ]);
         $document->setRelation('lines', new Collection);
+        $document->payment_snapshot = app(ResolveInvoicePayment::class)->snapshot($document, requireMandate: false);
         $document->fill($this->writeLines($entity, $party, $document, $payload['lines'] ?? [], $document->supply_date->toDateString(), $currency, persist: false));
 
         return app(InvoiceRenderer::class)->render($this->artifacts->snapshot($document));
@@ -421,6 +437,7 @@ final class IssueSalesInvoice
                 'account_role' => $input['account_role'] ?? $catalog?->default_account_role,
                 'ledger_account_id' => $input['ledger_account_id'] ?? null,
                 'catalog_item_id' => $catalog?->getKey(),
+                'catalog_sku' => $catalog?->sku,
                 'service_from' => $input['service_from'] ?? null,
                 'service_to' => $input['service_to'] ?? null,
             ]);

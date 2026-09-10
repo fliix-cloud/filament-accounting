@@ -56,6 +56,7 @@ class UnifiedInstallationTest extends TestCase
             '2026_09_04_000005_add_party_contact_columns.php',
             '2026_09_10_000001_add_catalog_purchase_price_and_ean.php',
             '2026_09_10_000002_add_invoice_versions.php',
+            '2026_09_10_000003_add_invoice_payment_and_layout_fields.php',
         ], array_map('basename', $paths));
 
         foreach ($paths as $path) {

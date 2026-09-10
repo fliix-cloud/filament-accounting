@@ -9,6 +9,9 @@ use FilamentAccounting\Ownership\NullAccountingTenancyContextActivator;
 use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 
 return [
+    'demo' => [
+        'profile_path' => env('ACCOUNTING_DEMO_PROFILE'),
+    ],
     'database' => [
         'connection' => env('ACCOUNTING_DB_CONNECTION'),
     ],

@@ -1,5 +1,33 @@
 # Sales invoice editing
 
+Invoice PDFs use `resources/views/documents/invoice.blade.php`, rendered by
+`BladeInvoiceRenderer` through Dompdf. The layout includes a company heading and
+logo, recipient and contact blocks, customer number, item/SKU table, tax totals,
+payment information and a bank/tax footer. Override the view in the host at
+`resources/views/vendor/filament-accounting/documents/invoice.blade.php` to customize
+it. Preview uses the same view; issued PDFs continue through the existing PDF/A-3
+and embedded ZUGFeRD XML generation. Existing archived files are retained.
+
+New invoices support bank transfer and SEPA direct debit. A direct-debit draft can
+be previewed without a mandate; issuance requires an active mandate belonging to
+the customer and company, signed by the invoice date. The creditor identifier,
+mandate reference and debtor IBAN are frozen in the invoice snapshot and exported
+as payment means code 59. Choosing this method does not submit a bank collection.
+Company subtitle/contact, customer number, article SKU and PNG/JPEG logo bytes are
+also captured for reproducible invoices. Run Composer install/update and the
+forward migrations when upgrading.
+
+For private demo data, set `ACCOUNTING_DEMO_PROFILE` to an absolute local JSON
+file path. `AccountingDemoSeeder` then runs the invoice profile seeder instead of
+the generic fixtures. The profile accepts `company` (company model fields),
+`customer` (including `external_reference`), `customer_address` (`line1`,
+`postal_code`, `city`, `country_code`), optional `logo_file` (local PNG), and
+optional `invoice` dates. It updates the current demo company and customer and
+maintains one lastschrift draft with a neutral sample position. It does not invent
+a mandate or customer bank account. The seeder requires a local/testing
+environment and an authenticated, authorized actor. Keep real profiles and logos
+outside version control; rerunning the seeder reapplies the profile to the demo.
+
 New invoices start with today's issue and supply dates. New customers default to
 seven payment days; existing customer terms remain unchanged. Selecting a customer
 or changing the issue date recalculates the due date. A manually entered due date
