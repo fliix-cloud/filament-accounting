@@ -112,6 +112,7 @@ class SalesInvoiceResource extends Resource
         return $schema->components([
             Select::make('party_id')
                 ->label(__('filament-accounting::fields.customer'))
+                ->searchable()
                 ->live()
                 ->afterStateUpdated(function (Get $get, Set $set): void {
                     self::resetTaxConfirmations($get, $set);
@@ -123,7 +124,10 @@ class SalesInvoiceResource extends Resource
                     ->where('is_customer', true)
                     ->where('is_active', true)
                     ->orderBy('legal_name')
-                    ->pluck('legal_name', 'id')
+                    ->get(['id', 'external_reference', 'legal_name'])
+                    ->mapWithKeys(fn (Party $party): array => [$party->getKey() => filled($party->external_reference)
+                        ? $party->external_reference.' · '.$party->legal_name
+                        : $party->legal_name])
                     ->all())
                 ->required(),
             DatePicker::make('issue_date')->label(__('filament-accounting::fields.issue_date'))->required()
