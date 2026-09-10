@@ -106,7 +106,7 @@ class CatalogItemResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('sku')->label(__('filament-accounting::fields.sku')),
+            TextColumn::make('sku')->label(__('filament-accounting::fields.sku'))->searchable(),
             TextColumn::make('name')->label(__('filament-accounting::fields.name'))->searchable(),
             TextColumn::make('type')->label(__('filament-accounting::fields.type')),
         ]);
