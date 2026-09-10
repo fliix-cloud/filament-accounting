@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'invalid_decimal' => 'Bitte eine Dezimalzahl mit Komma oder Punkt ohne Tausendertrennzeichen eingeben.',
+    'invoice_correction_has_settlements' => 'Bitte zuerst die Zahlungszuordnungen der ursprünglichen Rechnung lösen.',
+    'invoice_correction_exists' => 'Zu dieser Rechnung existiert bereits eine Folgeversion. Bitte die verknüpfte Version öffnen.',
+    'invoice_version_invalid' => 'Rechnungsnummer und Version passen nicht zur Vorversion.',
     'invoice_completion_failed' => 'Die Rechnung konnte nicht abgeschlossen werden. Bereits gespeicherte Dateien bleiben erhalten. Bitte prüfen Sie den Vorgang, bevor Sie ihn erneut abschließen.',
     'artifacts_require_independent_commit' => 'Die Rechnungserstellung muss außerhalb einer bestehenden Buchhaltungstransaktion fortgesetzt werden.',
     'intake_requires_independent_commit' => 'Der Rechnungseingang muss außerhalb einer bestehenden Datenbanktransaktion gestartet werden.',

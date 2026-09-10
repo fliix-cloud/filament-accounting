@@ -7,6 +7,7 @@ use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Exceptions\PostedRecordImmutableException;
 use FilamentAccounting\Support\RichText;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -30,10 +31,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $account_role
  * @property int|null $ledger_account_id
  * @property int|null $catalog_item_id
+ * @property string|null $catalog_sku
  * @property string|null $classification_code
  * @property bool $classification_confirmed
  * @property bool $tax_confirmed
  * @property string|null $imported_tax_code
+ * @property Carbon|null $service_from
+ * @property Carbon|null $service_to
  * @property-read Document $document
  */
 class DocumentLine extends AccountingModel
@@ -41,6 +45,7 @@ class DocumentLine extends AccountingModel
     protected $table = 'accounting_document_lines';
 
     protected $fillable = [
+        'catalog_sku',
         'document_id',
         'position',
         'description',

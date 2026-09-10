@@ -95,7 +95,10 @@ class InvoiceArtifactTest extends TestCase
         try {
             (require __DIR__.'/../../database/migrations/2026_08_30_000001_create_filament_accounting_tables.php')->up();
             (require __DIR__.'/../../database/migrations/2026_08_31_000002_create_accounting_party_bank_accounts.php')->up();
+            (require __DIR__.'/../../database/migrations/2026_09_01_000003_create_filament_accounting_banking_tables.php')->up();
             (require __DIR__.'/../../database/migrations/2026_09_04_000005_add_party_contact_columns.php')->up();
+            (require __DIR__.'/../../database/migrations/2026_09_10_000002_add_invoice_versions.php')->up();
+            (require __DIR__.'/../../database/migrations/2026_09_10_000003_add_invoice_payment_and_layout_fields.php')->up();
         } finally {
             Schema::swap($schema);
         }

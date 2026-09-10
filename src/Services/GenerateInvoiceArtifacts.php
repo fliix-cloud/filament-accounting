@@ -199,6 +199,7 @@ final class GenerateInvoiceArtifacts
         $event = $events->first();
         if ($document->legal_entity_id !== $set->legal_entity_id || $document->getKey() !== $set->document_id
             || $document->type !== DocumentType::SalesInvoice || $document->document_status !== DocumentStatus::Issued
+            || ($document->corrected_document_id === null && $document->invoice_version !== 1)
             || $evidence !== $set->evidence_sha256 || $events->count() !== 1
             || ! $event instanceof AuditEvent
             || data_get($event->payload, 'evidence_sha256') !== $evidence
@@ -285,7 +286,7 @@ final class GenerateInvoiceArtifacts
     }
 
     /** @return array<string, mixed> */
-    private function snapshot(Document $document): array
+    public function snapshot(Document $document): array
     {
         return [
             'number' => $document->number,
@@ -299,7 +300,12 @@ final class GenerateInvoiceArtifacts
             'buyer' => $document->party_snapshot ?? [],
             'seller_name' => (string) (($document->legal_entity_snapshot ?? [])['legal_name'] ?? ''),
             'buyer_name' => (string) (($document->party_snapshot ?? [])['legal_name'] ?? ''),
+            ...($document->payment_method === null ? [] : [
+                'payment' => $document->payment_snapshot ?? [],
+                'supply_date' => $document->supply_date?->toDateString(),
+            ]),
             'lines' => $document->lines->map(fn (DocumentLine $line): array => [
+                ...($document->payment_method === null ? [] : ['sku' => $line->catalog_sku]),
                 'description' => $line->description,
                 'quantity' => $line->quantity,
                 'unit' => $line->unit,
@@ -311,6 +317,13 @@ final class GenerateInvoiceArtifacts
                 'tax_category' => $line->tax_category,
                 'tax_reason' => $line->tax_reason,
             ])->all(),
+            ...($document->corrected_document_id === null ? [] : [
+                'invoice_version' => $document->invoice_version,
+                'previous_invoice_version' => $document->correctedDocument?->invoice_version,
+                'preceding_invoice_number' => $document->correctedDocument?->number,
+                'preceding_invoice_date' => $document->correctedDocument?->issue_date?->toDateString(),
+                'correction_reason' => data_get($document->e_invoice_meta, 'correction_reason'),
+            ]),
         ];
     }
 }

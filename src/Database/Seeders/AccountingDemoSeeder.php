@@ -29,6 +29,11 @@ class AccountingDemoSeeder extends Seeder
 
     private function seedDemo(): void
     {
+        if (filled(config('filament-accounting.demo.profile_path'))) {
+            app(InvoiceProfileDemoSeeder::class)->run();
+
+            return;
+        }
         $entity = LegalEntity::query()->firstOrCreate(
             ['legal_name' => 'Demo GmbH'],
             [

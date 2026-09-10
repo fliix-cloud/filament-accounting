@@ -5,6 +5,7 @@ namespace FilamentAccounting\Models;
 use FilamentAccounting\Enums\DocumentDirection;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
+use FilamentAccounting\Enums\InvoicePaymentMethod;
 use FilamentAccounting\Enums\PaymentStatus;
 use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Exceptions\PostedRecordImmutableException;
@@ -26,6 +27,10 @@ use Illuminate\Support\Carbon;
  * @property DocumentType $type
  * @property DocumentDirection $direction
  * @property string|null $number
+ * @property int $invoice_version
+ * @property InvoicePaymentMethod|null $payment_method
+ * @property int|null $direct_debit_mandate_id
+ * @property array<string, mixed>|null $payment_snapshot
  * @property string|null $supplier_invoice_number
  * @property DocumentStatus $document_status
  * @property PostingStatus $posting_status
@@ -55,6 +60,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Attachment> $attachments
  * @property-read OpenItem|null $openItem
  * @property-read Party|null $party
+ * @property-read Document|null $correction
+ * @property-read Document|null $correctedDocument
  * @property-read Collection<int, Settlement> $settlements
  */
 class Document extends AccountingModel
@@ -71,6 +78,10 @@ class Document extends AccountingModel
         'type',
         'direction',
         'number',
+        'invoice_version',
+        'payment_method',
+        'direct_debit_mandate_id',
+        'payment_snapshot',
         'supplier_invoice_number',
         'party_id',
         'party_snapshot',
@@ -90,6 +101,10 @@ class Document extends AccountingModel
     ];
 
     protected $fillable = [
+        'payment_method',
+        'direct_debit_mandate_id',
+        'payment_snapshot',
+        'invoice_version',
         'legal_entity_id',
         'type',
         'direction',
@@ -124,6 +139,9 @@ class Document extends AccountingModel
     protected function casts(): array
     {
         return [
+            'payment_method' => InvoicePaymentMethod::class,
+            'payment_snapshot' => 'array',
+            'invoice_version' => 'integer',
             'type' => DocumentType::class,
             'direction' => DocumentDirection::class,
             'document_status' => DocumentStatus::class,
@@ -221,6 +239,11 @@ class Document extends AccountingModel
     public function correctedDocument(): BelongsTo
     {
         return $this->belongsTo(self::class, 'corrected_document_id');
+    }
+
+    public function correction(): HasOne
+    {
+        return $this->hasOne(self::class, 'corrected_document_id');
     }
 
     public function attachments(): MorphMany

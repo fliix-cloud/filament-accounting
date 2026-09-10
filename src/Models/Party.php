@@ -38,6 +38,8 @@ class Party extends AccountingModel
 
     protected $table = 'accounting_parties';
 
+    protected $attributes = ['payment_terms_days' => 7];
+
     protected $fillable = [
         'legal_entity_id',
         'kind',
@@ -102,6 +104,7 @@ class Party extends AccountingModel
 
         return [
             'uuid' => $this->uuid,
+            'external_reference' => $this->external_reference,
             'legal_name' => $this->legal_name,
             'display_name' => $this->display_name,
             'country_code' => $this->country_code,

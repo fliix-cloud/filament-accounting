@@ -14,8 +14,10 @@ use FilamentAccounting\Exceptions\CurrencyMismatchException;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Ledger\JournalLineDraft;
 use FilamentAccounting\Ledger\PostJournalCommand;
+use FilamentAccounting\Ledger\ReverseJournalCommand;
 use FilamentAccounting\Models\AccountRoleAssignment;
 use FilamentAccounting\Models\Document;
+use FilamentAccounting\Models\JournalEntry;
 use FilamentAccounting\Models\LegalEntity;
 
 final class PostDocument
@@ -43,6 +45,9 @@ final class PostDocument
             if ($document->posting_status === PostingStatus::Posted) {
                 return $document;
             }
+            if ($document->correction()->where('posting_status', PostingStatus::Posted)->exists()) {
+                throw new DocumentException(__('filament-accounting::errors.invoice_correction_exists'));
+            }
             if ($document->posting_status !== PostingStatus::Unposted || ! $this->isPostable($document)) {
                 throw new DocumentException(__('filament-accounting::errors.document_not_ready_to_post'));
             }
@@ -53,6 +58,38 @@ final class PostDocument
 
             $actor = $this->actors->resolve();
             $lines = $this->journalLines($entity, $document);
+
+            if ($document->type === DocumentType::SalesInvoice && $document->corrected_document_id !== null) {
+                $original = Document::query()->where('legal_entity_id', $entity->getKey())
+                    ->lockForUpdate()->findOrFail($document->corrected_document_id);
+                if ($original->type !== DocumentType::SalesInvoice || $original->document_status !== DocumentStatus::Issued
+                    || $document->number !== $original->number || $document->invoice_version !== $original->invoice_version + 1
+                    || blank(data_get($document->e_invoice_meta, 'correction_reason'))) {
+                    throw new DocumentException(__('filament-accounting::errors.document_not_ready_to_post'));
+                }
+                if ($original->settlements()->exists()) {
+                    throw new DocumentException(__('filament-accounting::errors.invoice_correction_has_settlements'));
+                }
+                $entry = JournalEntry::query()->where('legal_entity_id', $entity->getKey())
+                    ->where('source_type', 'document')->where('source_id', (string) $original->getKey())->first();
+                if ($entry instanceof JournalEntry) {
+                    $this->ledger->reverse(new ReverseJournalCommand(
+                        journalEntryId: (int) $entry->getKey(),
+                        postedOn: ($document->issue_date ?? now())->toDateString(),
+                        reason: (string) data_get($document->e_invoice_meta, 'correction_reason'),
+                        idempotencyKey: 'invoice-correction:'.$document->getKey(),
+                        postedByType: $actor?->getMorphClass(),
+                        postedById: $actor ? (string) $actor->getKey() : null,
+                    ));
+                }
+                $original->openItem?->update(['is_reversed' => true]);
+                $this->audit->log($entity, 'document.corrected', $original, [
+                    'replacement_document_id' => $document->getKey(),
+                    'replacement_number' => $document->number,
+                    'previous_version' => $original->invoice_version,
+                    'invoice_version' => $document->invoice_version,
+                ], (string) data_get($document->e_invoice_meta, 'correction_reason'));
+            }
 
             $this->ledger->post(new PostJournalCommand(
                 legalEntityId: (int) $entity->getKey(),

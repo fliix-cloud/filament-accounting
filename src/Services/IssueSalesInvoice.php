@@ -4,8 +4,10 @@ namespace FilamentAccounting\Services;
 
 use FilamentAccounting\Contracts\AccountingActorResolver;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
+use FilamentAccounting\Contracts\InvoiceRenderer;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Enums\DocumentType;
+use FilamentAccounting\Enums\InvoicePaymentMethod;
 use FilamentAccounting\Enums\PostingStatus;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Exceptions\InvalidMoneyException;
@@ -15,9 +17,12 @@ use FilamentAccounting\Models\DocumentLine;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Party;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Support\DecimalInput;
 use FilamentAccounting\Support\ExactMoney;
 use FilamentAccounting\Support\LineMoneyCalculator;
 use FilamentAccounting\Tax\SalesTaxSuggestionService;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 
 final class IssueSalesInvoice
 {
@@ -69,6 +74,7 @@ final class IssueSalesInvoice
             $this->assertBaseCurrency($entity, $currency);
             $issueDate = (string) ($payload['issue_date'] ?? now()->toDateString());
             $taxDate = (string) ($payload['supply_date'] ?? $issueDate);
+            $paymentTerms = (int) ($payload['payment_terms_days'] ?? $party->payment_terms_days ?? 7);
             $actor = $this->actors->resolve();
 
             $document = new Document;
@@ -82,8 +88,10 @@ final class IssueSalesInvoice
                 'party_snapshot' => null,
                 'issue_date' => $issueDate,
                 'supply_date' => $taxDate,
-                'due_date' => $payload['due_date'] ?? null,
-                'payment_terms_days' => $payload['payment_terms_days'] ?? $party->payment_terms_days,
+                'due_date' => array_key_exists('due_date', $payload) ? $payload['due_date'] : Carbon::parse($issueDate)->addDays($paymentTerms)->toDateString(),
+                'payment_terms_days' => $paymentTerms,
+                'payment_method' => ResolveInvoicePayment::method($payload['payment_method'] ?? InvoicePaymentMethod::CreditTransfer),
+                'direct_debit_mandate_id' => $payload['direct_debit_mandate_id'] ?? null,
                 'currency' => $currency,
                 'exchange_rate' => $payload['exchange_rate'] ?? '1',
                 'idempotency_key' => $payload['idempotency_key'] ?? null,
@@ -107,6 +115,7 @@ final class IssueSalesInvoice
      */
     public function updateDraft(Document $document, array $payload): Document
     {
+        $this->entities->assertModel($document);
         $entity = LegalEntity::query()->findOrFail($document->legal_entity_id);
         $this->authorizer->authorize('create_draft_invoices', $document);
 
@@ -130,6 +139,8 @@ final class IssueSalesInvoice
                 'supply_date' => $taxDate,
                 'due_date' => $payload['due_date'] ?? null,
                 'payment_terms_days' => $payload['payment_terms_days'] ?? $party->payment_terms_days,
+                'payment_method' => ResolveInvoicePayment::method($payload['payment_method'] ?? $document->payment_method ?? InvoicePaymentMethod::CreditTransfer),
+                'direct_debit_mandate_id' => array_key_exists('direct_debit_mandate_id', $payload) ? $payload['direct_debit_mandate_id'] : $document->direct_debit_mandate_id,
                 'currency' => $currency,
                 'exchange_rate' => $payload['exchange_rate'] ?? $document->exchange_rate,
             ]);
@@ -139,6 +150,71 @@ final class IssueSalesInvoice
             $document->save();
 
             return $document->fresh(['lines']) ?? $document;
+        });
+    }
+
+    /** @param array<string, mixed> $payload */
+    public function correct(Document $original, array $payload, string $reason): Document
+    {
+        $this->entities->assertModel($original);
+        $this->authorizer->authorize('issue_invoices', $original);
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new DocumentException(__('filament-accounting::errors.reason_required'));
+        }
+
+        return $original->getConnection()->transaction(function () use ($original, $payload, $reason): Document {
+            $entity = LegalEntity::query()->lockForUpdate()->findOrFail($original->legal_entity_id);
+            $original = Document::query()->lockForUpdate()->findOrFail($original->getKey());
+            $this->entities->assertModel($original);
+            if ($original->type !== DocumentType::SalesInvoice || $original->document_status !== DocumentStatus::Issued) {
+                throw new DocumentException(__('filament-accounting::errors.only_issued_sales_invoice_exportable'));
+            }
+            if ($original->settlements()->exists()) {
+                throw new DocumentException(__('filament-accounting::errors.invoice_correction_has_settlements'));
+            }
+            if (Document::query()->where('corrected_document_id', $original->getKey())->exists()) {
+                throw new DocumentException(__('filament-accounting::errors.invoice_correction_exists'));
+            }
+            $payload += ['payment_method' => $original->payment_method ?? InvoicePaymentMethod::CreditTransfer, 'direct_debit_mandate_id' => $original->direct_debit_mandate_id];
+            $draft = $this->createDraft($entity, array_intersect_key($payload, array_flip([
+                'party_id', 'issue_date', 'supply_date', 'due_date', 'currency', 'lines', 'payment_method', 'direct_debit_mandate_id',
+            ])));
+            $draft->corrected_document_id = $original->getKey();
+            $draft->invoice_version = $original->invoice_version + 1;
+            $draft->number = $original->number;
+            $draft->e_invoice_meta = ['correction_reason' => $reason];
+            $draft->save();
+            $this->audit->log($entity, 'document.correction_created', $draft, [
+                'original_document_id' => $original->getKey(),
+                'original_number' => $original->number,
+                'previous_version' => $original->invoice_version,
+                'invoice_version' => $draft->invoice_version,
+                'before' => $original->load('lines')->toArray(),
+                'after' => $draft->load('lines')->toArray(),
+            ], $reason);
+
+            return $draft;
+        });
+    }
+
+    public function deleteDraft(Document $document): bool
+    {
+        $this->entities->assertModel($document);
+        $this->authorizer->authorize('create_draft_invoices', $document);
+
+        return $document->getConnection()->transaction(function () use ($document): bool {
+            $entity = LegalEntity::query()->lockForUpdate()->findOrFail($document->legal_entity_id);
+            $document = Document::query()->lockForUpdate()->findOrFail($document->getKey());
+            $this->entities->assertModel($document);
+            if ($document->type !== DocumentType::SalesInvoice || $document->document_status !== DocumentStatus::Draft
+                || $document->posting_status !== PostingStatus::Unposted) {
+                throw new DocumentException(__('filament-accounting::errors.only_draft_invoice_editable'));
+            }
+            $this->audit->log($entity, 'document.draft_deleted', $document, ['before' => $document->load('lines')->toArray()]);
+            $document->lines()->delete();
+
+            return (bool) $document->delete();
         });
     }
 
@@ -157,7 +233,7 @@ final class IssueSalesInvoice
         }
 
         $document = $entity->getConnection()->transaction(function () use ($document, $entity, $needsArtifacts): Document {
-            LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
+            $entity = LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
             $document = Document::query()->lockForUpdate()->with(['lines', 'party'])->whereKey($document->getKey())->firstOrFail();
 
             if ($document->document_status === DocumentStatus::Issued) {
@@ -174,12 +250,29 @@ final class IssueSalesInvoice
             }
 
             $party = $this->party($entity, $document->party_id);
+            if ($document->corrected_document_id !== null) {
+                $original = Document::query()->where('legal_entity_id', $entity->getKey())->findOrFail($document->corrected_document_id);
+                if ($original->settlements()->exists()) {
+                    throw new DocumentException(__('filament-accounting::errors.invoice_correction_has_settlements'));
+                }
+            }
             $actor = $this->actors->resolve();
             $issueDate = $document->issue_date?->toDateString() ?? now()->toDateString();
 
             $document->party_snapshot = $party->snapshot();
             $document->legal_entity_snapshot = $entity->invoiceSnapshot();
-            $document->number = $this->numbers->next($entity, $document->type, $issueDate);
+            $document->payment_method ??= InvoicePaymentMethod::CreditTransfer;
+            if ($document->payment_method === InvoicePaymentMethod::CreditTransfer) {
+                $document->direct_debit_mandate_id = null;
+            }
+            $document->payment_snapshot = app(ResolveInvoicePayment::class)->snapshot($document);
+            if ($document->corrected_document_id !== null) {
+                if ($document->number !== $original->number || $document->invoice_version !== $original->invoice_version + 1) {
+                    throw new DocumentException(__('filament-accounting::errors.invoice_version_invalid'));
+                }
+            } else {
+                $document->number = $this->numbers->next($entity, $document->type, $issueDate);
+            }
             $document->document_status = DocumentStatus::Issued;
             $document->issued_by_type = $actor?->getMorphClass();
             $document->issued_by_id = $actor ? (string) $actor->getKey() : null;
@@ -190,6 +283,7 @@ final class IssueSalesInvoice
             $this->audit->log($entity, 'document.issued', $document, [
                 'number' => $document->number,
                 'type' => $document->type->value,
+                'invoice_version' => $document->invoice_version,
             ]);
 
             return $document->fresh(['lines', 'openItem']) ?? $document;
@@ -200,6 +294,34 @@ final class IssueSalesInvoice
         }
 
         return $post ? $this->poster->handle($document) : $document;
+    }
+
+    /** @param array<string, mixed> $payload */
+    public function preview(array $payload): string
+    {
+        $entity = $this->entities->require();
+        $this->authorizer->authorize('create_draft_invoices', $entity);
+        $party = $this->party($entity, $payload['party_id'] ?? null);
+        $currency = strtoupper((string) ($payload['currency'] ?? $entity->base_currency));
+        $this->assertBaseCurrency($entity, $currency);
+        $document = new Document([
+            'legal_entity_id' => $entity->getKey(),
+            'party_id' => $party->getKey(),
+            'payment_method' => ResolveInvoicePayment::method($payload['payment_method'] ?? InvoicePaymentMethod::CreditTransfer),
+            'direct_debit_mandate_id' => $payload['direct_debit_mandate_id'] ?? null,
+            'number' => __('filament-accounting::fields.invoice_preview'),
+            'issue_date' => $payload['issue_date'] ?? now()->toDateString(),
+            'supply_date' => $payload['supply_date'] ?? $payload['issue_date'] ?? now()->toDateString(),
+            'due_date' => $payload['due_date'] ?? null,
+            'currency' => $currency,
+            'party_snapshot' => $party->snapshot(),
+            'legal_entity_snapshot' => $entity->invoiceSnapshot(),
+        ]);
+        $document->setRelation('lines', new Collection);
+        $document->payment_snapshot = app(ResolveInvoicePayment::class)->snapshot($document, requireMandate: false);
+        $document->fill($this->writeLines($entity, $party, $document, $payload['lines'] ?? [], $document->supply_date->toDateString(), $currency, persist: false));
+
+        return app(InvoiceRenderer::class)->render($this->artifacts->snapshot($document));
     }
 
     private function salesType(mixed $type): DocumentType
@@ -243,7 +365,7 @@ final class IssueSalesInvoice
      * @param  list<array<string, mixed>>  $lines
      * @return array{net_minor: int, tax_minor: int, gross_minor: int}
      */
-    private function writeLines(LegalEntity $entity, Party $party, Document $document, array $lines, string $date, string $currency): array
+    private function writeLines(LegalEntity $entity, Party $party, Document $document, array $lines, string $date, string $currency, bool $persist = true): array
     {
         if ($lines === []) {
             throw new DocumentException(__('filament-accounting::errors.document_needs_lines'));
@@ -262,11 +384,11 @@ final class IssueSalesInvoice
                     ->first();
             }
 
-            $quantity = (string) ($input['quantity'] ?? ($catalog instanceof CatalogItem ? $catalog->default_quantity : '1'));
+            $quantity = DecimalInput::normalize((string) ($input['quantity'] ?? ($catalog instanceof CatalogItem ? $catalog->default_quantity : '1')));
             $unitPrice = array_key_exists('unit_price_minor', $input)
                 ? (int) $input['unit_price_minor']
                 : (array_key_exists('unit_price', $input)
-                    ? ExactMoney::ofString((string) $input['unit_price'], $currency)->minorAmount
+                    ? ExactMoney::ofString(DecimalInput::normalize((string) $input['unit_price']), $currency)->minorAmount
                     : ($catalog instanceof CatalogItem ? $catalog->default_unit_price_minor : 0));
             $lineNet = LineMoneyCalculator::netMinor($quantity, $unitPrice);
             try {
@@ -315,10 +437,15 @@ final class IssueSalesInvoice
                 'account_role' => $input['account_role'] ?? $catalog?->default_account_role,
                 'ledger_account_id' => $input['ledger_account_id'] ?? null,
                 'catalog_item_id' => $catalog?->getKey(),
+                'catalog_sku' => $catalog?->sku,
                 'service_from' => $input['service_from'] ?? null,
                 'service_to' => $input['service_to'] ?? null,
             ]);
-            $line->save();
+            if ($persist) {
+                $line->save();
+            } else {
+                $document->lines->push($line);
+            }
 
             $net += $lineNet;
             $tax += $lineTax;

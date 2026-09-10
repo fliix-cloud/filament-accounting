@@ -4,6 +4,7 @@ namespace FilamentAccounting\Documents;
 
 use FilamentAccounting\Contracts\EInvoiceAdapter;
 use FilamentAccounting\Documents\Data\EInvoiceParseResult;
+use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Support\ExactMoney;
 use FilamentAccounting\Support\RichText;
 use horstoeko\zugferd\ZugferdDocumentBuilder;
@@ -176,7 +177,15 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
 
         $seller = (array) ($snapshot['seller'] ?? []);
         $buyer = (array) ($snapshot['buyer'] ?? []);
-        $builder->setDocumentInformation($number, '380', \DateTime::createFromImmutable($issueDate), $currency);
+        $builder->setDocumentInformation($number, filled($snapshot['preceding_invoice_number'] ?? null) ? '384' : '380', \DateTime::createFromImmutable($issueDate), $currency);
+        if (filled($snapshot['preceding_invoice_number'] ?? null)) {
+            $builder->setDocumentInvoiceReferencedDocument(
+                (string) $snapshot['preceding_invoice_number'],
+                issueDate: new \DateTimeImmutable((string) $snapshot['preceding_invoice_date']),
+            );
+            $builder->addDocumentNote((string) ($snapshot['correction_reason'] ?? ''));
+            $builder->addDocumentNote(__('filament-accounting::fields.invoice_version').': '.($snapshot['invoice_version'] ?? ''));
+        }
         $builder->setDocumentSeller((string) ($seller['legal_name'] ?? $snapshot['seller_name'] ?? 'Seller'));
         $builder->setDocumentSellerAddress(
             $seller['address_line1'] ?? null,
@@ -212,7 +221,13 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
             }
         }
 
-        if (filled($seller['invoice_iban'] ?? null)) {
+        $payment = (array) ($snapshot['payment'] ?? []);
+        if (($payment['method'] ?? null) === 'direct_debit') {
+            if (blank($payment['debtor_iban'] ?? null) || blank($payment['mandate_reference'] ?? null) || blank($payment['creditor_identifier'] ?? null)) {
+                throw new DocumentException(__('filament-accounting::invoice.mandate_required'));
+            }
+            $builder->addDocumentPaymentMeanToDirectDebit((string) $payment['debtor_iban'], (string) $payment['creditor_identifier']);
+        } elseif (filled($seller['invoice_iban'] ?? null)) {
             $builder->addDocumentPaymentMeanToCreditTransfer(
                 (string) $seller['invoice_iban'],
                 (string) ($seller['legal_name'] ?? ''),
@@ -221,8 +236,11 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
                 $number,
             );
         }
-        if (filled($snapshot['due_date'] ?? null)) {
-            $builder->addDocumentPaymentTerm(null, new \DateTimeImmutable((string) $snapshot['due_date']));
+        if (filled($snapshot['due_date'] ?? null) || filled($payment['mandate_reference'] ?? null)) {
+            $builder->addDocumentPaymentTerm(null,
+                filled($snapshot['due_date'] ?? null) ? new \DateTimeImmutable((string) $snapshot['due_date']) : null,
+                $payment['mandate_reference'] ?? null,
+            );
         }
 
         $position = 1;

@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'invoice_artifacts_ready' => 'Invoice PDF and XML are ready.',
     'invoice_issued' => 'Invoice issued',
     'invoice_posted' => 'Invoice posted',
     'purchase_registered' => 'Purchase invoice registered',

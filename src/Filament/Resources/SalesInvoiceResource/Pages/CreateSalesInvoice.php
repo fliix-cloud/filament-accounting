@@ -6,6 +6,7 @@ use Filament\Resources\Pages\CreateRecord;
 use FilamentAccounting\Enums\DocumentDirection;
 use FilamentAccounting\Enums\DocumentType;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
+use FilamentAccounting\Filament\Support\SalesInvoicePreviewAction;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Services\IssueSalesInvoice;
 use Illuminate\Database\Eloquent\Model;
@@ -13,6 +14,11 @@ use Illuminate\Database\Eloquent\Model;
 class CreateSalesInvoice extends CreateRecord
 {
     protected static string $resource = SalesInvoiceResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [SalesInvoicePreviewAction::make()];
+    }
 
     protected function handleRecordCreation(array $data): Model
     {
@@ -24,6 +30,8 @@ class CreateSalesInvoice extends CreateRecord
             'supply_date' => $data['supply_date'] ?? null,
             'due_date' => $data['due_date'] ?? null,
             'currency' => $data['currency'],
+            'payment_method' => $data['payment_method'],
+            'direct_debit_mandate_id' => $data['direct_debit_mandate_id'] ?? null,
             'lines' => $data['lines'] ?? [],
         ]);
     }

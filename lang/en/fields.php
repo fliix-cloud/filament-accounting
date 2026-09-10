@@ -1,6 +1,19 @@
 <?php
 
 return [
+    'choose_catalog_item' => 'Choose item',
+    'choose_tax' => 'Choose tax',
+    'choose_unit' => 'Choose unit',
+    'line_total' => 'Total (net)',
+    'invoice_preview' => 'DRAFT / PREVIEW',
+    'correction_reason' => 'Reason for change',
+    'correction_help' => 'Saving creates a draft of the next version with the same invoice number. Previous versions and files are preserved. Issuing reverses the previous posting and posts the new version.',
+    'corrected_invoice' => 'Previous version',
+    'replacement_invoice' => 'Next version',
+    'invoice_version' => 'Version',
+    'invoice_versions' => 'Version history',
+    'version_issued_at' => 'Issued at',
+    'archived_version' => 'Archived version',
     'legal_name' => 'Legal name',
     'trading_name' => 'Trading name',
     'company_details' => 'Company and issuer details',
