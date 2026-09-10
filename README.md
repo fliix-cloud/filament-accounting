@@ -8,6 +8,7 @@ This repository is an **installable Composer package**, not a Laravel applicatio
 
 - Legal-entity scoped double-entry journal (`LedgerEngine`)
 - Customers, suppliers, catalog, sales and purchase invoices, open items
+- [Strict catalog import/export](docs/catalog-import-export.md) with XLSX, XLS, CSV and JSON templates
 - One canonical bank account and bank transaction model, direct FinTS synchronization, SEPA transfers/direct debits, mandates, and SCA
 - Append-only bank source versions for pending, booked, changed, and reversed source states
 - Direct assignment, partial settlement, true multi-target splits, and explainable local learning rules

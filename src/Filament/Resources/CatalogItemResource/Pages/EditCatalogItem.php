@@ -20,6 +20,8 @@ class EditCatalogItem extends EditRecord
             (int) $data['default_unit_price_minor'],
             (string) $data['currency'],
         )->decimalString();
+        $data['purchase_price'] = isset($data['purchase_price_minor'])
+            ? ExactMoney::ofMinor((int) $data['purchase_price_minor'], (string) $data['currency'])->decimalString() : null;
 
         return $data;
     }
@@ -35,6 +37,9 @@ class EditCatalogItem extends EditRecord
             (string) $data['currency'],
         )->minorAmount;
         unset($data['default_unit_price']);
+        $data['purchase_price_minor'] = filled($data['purchase_price'] ?? null)
+            ? ExactMoney::ofString((string) $data['purchase_price'], (string) $data['currency'])->minorAmount : null;
+        unset($data['purchase_price']);
 
         return $data;
     }

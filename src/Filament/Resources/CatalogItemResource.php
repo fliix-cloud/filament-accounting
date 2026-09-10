@@ -70,6 +70,7 @@ class CatalogItemResource extends Resource
     {
         return $schema->components([
             TextInput::make('sku')->label(__('filament-accounting::fields.sku')),
+            TextInput::make('ean')->label(__('filament-accounting::catalog_transfer.ean'))->maxLength(255),
             TextInput::make('name')->label(__('filament-accounting::fields.name'))->required(),
             Select::make('type')->label(__('filament-accounting::fields.type'))->options([
                 CatalogItemType::Service->value => __('filament-accounting::fields.catalog_types.service'),
@@ -87,6 +88,7 @@ class CatalogItemResource extends Resource
                 ->required(),
             TextInput::make('default_quantity')->label(__('filament-accounting::fields.quantity'))->default('1'),
             TextInput::make('default_unit_price')->label(__('filament-accounting::fields.unit_price'))->numeric()->step('0.01')->required(),
+            TextInput::make('purchase_price')->label(__('filament-accounting::catalog_transfer.purchase_price'))->numeric()->step('0.01'),
             Select::make('currency')->label(__('filament-accounting::fields.currency'))->options(ReferenceData::currencies())->searchable()->required(),
             Select::make('default_tax_code')
                 ->label(__('filament-accounting::fields.tax_code'))
