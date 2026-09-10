@@ -52,6 +52,23 @@ php artisan filament-accounting:install --country=DE
 
 Der Installer veröffentlicht `config/filament-accounting.php`. Er legt **keine Firma und keine Benutzerrechte** an. Bei bereits vorhandener Firma wird das deutsche Konten-/Steuerprofil vorbereitet. Lokal kann alternativ `filament-accounting:install --migrate --country=DE` verwendet werden. `migrate` führt auch ausstehende Host-Migrationen aus.
 
+### Optionale Demodaten
+
+Für eine Demo-Installation enthält das Paket
+`FilamentAccounting\Database\Seeders\AccountingDemoSeeder`. Der Host legt seinen
+Demo-Benutzer an, meldet ihn für den Seeder-Aufruf an und ruft anschließend
+`$this->call(\FilamentAccounting\Database\Seeders\AccountingDemoSeeder::class)` auf.
+Die normalen Berechtigungen für Verkaufs- und Einkaufsentwürfe müssen erlaubt sein.
+In der mitgelieferten Demo-Anwendung genügt weiterhin `php artisan db:seed`.
+
+Der Paket-Seeder erstellt die Demo GmbH mit deutschem Kontenprofil, Kunde,
+Lieferant, Beispiel-Bankverbindung des Kunden, Lastschriftmandat und zwei
+Rechnungsentwürfen. Er erstellt keine Benutzer, verändert keine `.env` und ordnet
+keine bestehenden Bankverbindungen um. Rechnungen werden nicht automatisch
+ausgestellt oder gebucht; für eine Eingangsrechnung muss vor Abschluss ein
+Originalbeleg ergänzt werden. Wiederholte Aufrufe verwenden die bestehenden
+Demo-Datensätze. Der Seeder wird nicht automatisch bei Installation ausgeführt.
+
 ## 3. Panel und Darstellung anbinden
 
 In der vorhandenen `panel()`-Methode des Panel Providers ergänzen:
