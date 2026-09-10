@@ -4,7 +4,7 @@
         <meta charset="utf-8" />
         <title>{{ __('filament-accounting::invoice.title') }} {{ $snapshot['number'] ?? '' }}</title>
         <style>
-            @page { margin: 11mm 9mm 25mm 24mm; }
+            @page { margin: 11mm 16.5mm 25mm; }
             body { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: #111; }
             table { border-collapse: collapse; width: 100%; }
             td, th { vertical-align: top; }
@@ -28,6 +28,7 @@
             .items th { background: #d8d8d8; font-weight: normal; padding: 1.4mm 0.5mm; text-align: left; }
             .items td { padding: 2mm 0.5mm; border-bottom: 0.2mm solid #ddd; overflow-wrap: break-word; }
             .items .right, .totals .right { text-align: right; }
+            .items .center { text-align: center; }
             .items p { margin: 0 0 2mm; }
             .items ul, .items ol { margin: 0 0 2mm; padding-left: 4mm; }
             .totals { margin-top: 0; page-break-inside: avoid; }
@@ -85,7 +86,7 @@
         <table class="items">
             <thead><tr>
                 <th style="width: 4%">{{ __('filament-accounting::invoice.position') }}</th>
-                <th style="width: 7%">{{ __('filament-accounting::invoice.quantity') }}</th>
+                <th class="center" style="width: 7%">{{ __('filament-accounting::invoice.quantity') }}</th>
                 <th style="width: 6%">{{ __('filament-accounting::fields.unit') }}</th>
                 <th style="width: 12%">{{ __('filament-accounting::invoice.sku') }}</th>
                 <th style="width: 39%">{{ __('filament-accounting::invoice.description') }}</th>
@@ -94,7 +95,7 @@
             </tr></thead>
             <tbody>@foreach($lines as $line)<tr>
                 <td>{{ $loop->iteration }}</td>
-                <td class="right">{{ $line['display_quantity'] }}</td>
+                <td class="center">{{ $line['display_quantity'] }}</td>
                 <td>{{ $line['display_unit'] }}</td>
                 <td>{{ $line['sku'] ?? '' }}</td>
                 <td>{!! $line['description'] !!}</td>
