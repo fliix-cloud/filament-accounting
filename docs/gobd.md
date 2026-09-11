@@ -48,11 +48,11 @@ conformance, DATEV compatibility, or statutory financial statements.
 
 ## Implementation progress
 
-Updated: 10 September 2026. The table below tracks changes after the reviewed
+Updated: 11 September 2026, implementation at `6287428`. The table below tracks changes after the reviewed
 baseline; the detailed findings retain that baseline as their reference.
 **No finding is fully closed and the compliance verdict is unchanged.**
 
-Project-state check after the reported interruption, 10 September 2026: the working
+Historical project-state check after the reported interruption, 10 September 2026: the working
 tree was clean at `d4ce364`; the durable intake, outgoing artifact recovery, and
 scheduled verification changes are committed. The current verification code and
 operations documentation agree on report schema 2 and separate integrity/pending
@@ -63,15 +63,44 @@ operations documentation resolve. Graph access is restored, but coverage metadat
 reported changed file metadata, so material checks used current source as well.
 This was a reconciliation of the latest implementation and documentation, not a
 new legal review or a production database/storage recovery test. Only documentation
-clarifications were needed; the next implementation step remains the linked export.
+clarifications were needed; the next step at that time was the linked export,
+which is now implemented within the scope described below.
+
+### Current project-state check — 11 September 2026
+
+The working tree was clean at `6287428` when this check began. The comparison
+covers changes since the streaming export (`2c8ca43`): package demo seeding,
+catalog transfer (`e6050e2`), invoice editing/versioning/payment snapshots
+(`5188211`), and the invoice template refactor. This is a technical delta review,
+not a renewed legal assessment or a production deployment test. Historical test
+counts below describe their respective slices, not the current suite.
+
+The largest progress is a controlled sales-invoice correction workflow. The
+largest newly identified integration gap is that the fixed accounting export
+schema has not followed the new business fields. Existing export verification
+checks the declared schema; a green result does not establish that it includes
+every field added later. The priorities below therefore put schema/evidence
+integration before further UI work.
+
+Development scope confirmed on 11 September 2026: there are no deployed
+installations to support. The package and disposable demo databases are still in
+development. Catch-up migrations for earlier development schemas are not a current
+deliverable. Fresh installation must work; a supported upgrade policy becomes a
+release requirement when a persistent installation baseline is established.
+
+Validation on Herd PHP 8.4.25: **387 tests, 3,222 assertions** passed; PHPStan,
+Pint, and strict Composer validation passed. Graph generation was
+`2026-09-10T16:18:58Z`; coverage reported changed metadata. Material conclusions
+therefore use current source/diffs and test results, not graph completeness.
+No production database, live bank connection, or host installation was changed.
 
 | Findings | Implemented in this change | Still required |
 | --- | --- | --- |
-| F11 / F9 | New `StoreAttachment` writes retain files after failure and verify retries. Outgoing invoices now commit a fixed PDF/XML set, render snapshot, paths, hashes, and preparation evidence before file writes. Retries use staged bytes, recover missing attachment references, and verify contents before posting. Issuance uses the accounting connection. Filament offers “Complete invoice” for interrupted issuance. | General orphan recovery, production concurrency/storage/restore evidence, independent offline verification/export of the complete artifact dataset, and a deployment migration. |
-| F1 / F3 / F7 / F9 / F11 | A committed intake manifest and verified private raw files precede parsing. PDF, standalone XML, and PDF/XML pairs are supported. Identity includes roles and contents. Attempts are audited; retry reuses preserved inputs. Business rollback retains intake evidence. Purchase registration uses the accounting connection. Source-total mismatches block conversion. Filament exposes open imports, safe downloads, and retry within purchase invoices. | Production concurrency and crash tests, complete conformance/accounting conversion checks, derived-file orphan recovery, complete converted-line evidence, and independent offline export/verification. |
+| F11 / F9 | New `StoreAttachment` writes retain files after failure and verify retries. Outgoing invoices commit a fixed PDF/XML set, render snapshot, paths, hashes, and preparation evidence before file writes. Retries recover missing attachment references and verify contents before posting. Issuance uses the accounting connection; Filament offers “Complete invoice”. Streaming transfer and offline verification include retained artifact data. | General orphan recovery, production concurrency/storage/restore evidence, third-party import validation, and a supported installation/release baseline. |
+| F1 / F3 / F7 / F9 / F11 | A committed intake manifest and verified private raw files precede parsing. PDF, standalone XML, and PDF/XML pairs are supported. Identity includes roles and contents. Attempts are audited; retry reuses preserved inputs. Business rollback retains intake evidence. Purchase registration uses the accounting connection. Source-total mismatches block conversion. Filament exposes open imports, safe downloads, and retry within purchase invoices. | Production concurrency and crash tests, complete conformance/accounting conversion checks, derived-file orphan recovery, complete converted-line evidence, and third-party import/restore validation. |
 | F1 / F3 | Purchase draft disposal retains the document, lines, PDF/XML, and actor/reason evidence. It requires a dedicated permission, current company scope, and a locked persisted draft. UI offers “Discard draft”; physical deletion is disabled. Invalid accepted imports are now retained independently of drafts. | Complete operational review/correction of blocked intakes and production retention evidence. |
-| F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. | Bulk/SQL write prevention, concurrent mutation evidence, and controlled correction workflows. |
-| F2 / F8 / F10 | Each ledger posting includes a versioned full journal snapshot and SHA-256 digest in its audit event. Verification compares both directions and detects changed/missing journal data. Account/period values are frozen at posting. CSV exports use checked historical records and refuse integrity failures; the journal UI uses historical account codes. | Bind document, attachment, settlement, and other business contents to evidence; protect storage and database privileges; complete the machine-readable audit export. This is journal tamper detection, not prevention of privileged SQL writes. |
+| F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. Sales corrections now retain prior versions and files and reverse/replace postings. | Bulk/SQL write prevention, concurrent mutation evidence, correction after reversed payments, and remaining correction workflows. |
+| F2 / F8 / F10 | Each ledger posting includes a versioned full journal snapshot and SHA-256 digest. Verification detects changed/missing journal data; CSV/UI use historical account values. Linked streaming export includes records, retained originals, relationships, audit events, and anchors, with isolated inspection tests. Invoice artifacts bind render snapshots and payment/correction details. | Complete finalized settlement and other business evidence; protect storage/database privileges; update export columns for the current model and prove third-party import/restore. This is tamper detection, not prevention of privileged SQL writes. |
 | F3 | Undefined Gates now deny access; the provider no longer creates permissive fallback Gates. Tests explicitly configure fixture permissions; hosts must configure their own Gates. | Complete the authorization audit of all public mutation paths and integrations. |
 | F5 | Closing cannot weaken a hard lock. Reopening requires a separate permission and non-blank reason. Both record before/after state, use the accounting connection, and lock entity before period. Repeated close is idempotent. | Production database concurrency tests and protection against direct period-model/SQL changes. |
 | F6 / F9 | Posting reloads persisted state and accepts issued/received invoices and credit notes. Foreign currency is rejected until conversion exists. Line discounts apply before tax. Non-recoverable purchase tax stays on the expense account. Sequence uses the posted-on year. Ledger posting/reversal and changed document/period services use the accounting connection. | Remaining tax edge cases; connection consistency in the remaining services and cross-connection rollback tests. |
@@ -404,19 +433,86 @@ assertions**; PHPStan, Pint, strict Composer validation, and documentation link
 checks passed. Graph transport was unavailable during this slice,
 so relevant implementation and test evidence was checked directly in source.
 
+### Invoice versions, payments, catalog, and demo updates (F2–F4 / F8–F11)
+
+[IssueSalesInvoice](../src/Services/IssueSalesInvoice.php) now creates a separate
+correction draft with the same number, the next version, a predecessor reference,
+and a nonempty reason. The correction event records before/after data. Issuance
+retains the preceding document and files; [PostDocument](../src/Services/PostDocument.php)
+reverses the old journal, marks the old open item reversed, and posts the new
+version within the accounting transaction. [Correction tests](../tests/Documents/SalesInvoiceCorrectionTest.php)
+cover preserved originals, successive versions, unchanged numbering sequence,
+repeat issuance, reason/permission checks, and a payment added before issuance.
+The test named for parallel replacements exercises sequential duplicate requests;
+it is not a production concurrency test.
+
+The [version migration](../database/migrations/2026_09_10_000002_add_invoice_versions.php)
+backfills version 1 and changes invoice-number uniqueness. Its
+[migration tests](../tests/database/InvoiceVersionsMigrationTest.php) exercise
+existing records and refusal to roll back once later versions exist. Intake and
+artifact-set creation lives in the base migration. Given the confirmed absence
+of deployed installations, no catch-up migration for older development databases
+is required. Resetting disposable development fixtures is distinct from the
+future requirement to preserve accounting records in persistent installations.
+
+[ResolveInvoicePayment](../src/Services/ResolveInvoicePayment.php) validates a
+direct-debit mandate against company, customer, active status, and signing date.
+Payment details are frozen at issuance and included in the artifact snapshot.
+The [payment/layout tests](../tests/Documents/InvoicePaymentLayoutTest.php)
+exercise mandate rejection, XML payment information, escaped rendering, and logo
+preservation after source removal. Selecting direct debit does not itself submit
+a bank collection. Blade/Dompdf rendering, draft previews, defaults, and version
+history improve everyday Filament use; they do not independently close a GoBD
+finding. See [invoice workflow](sales-invoice-editing.md).
+
+[CatalogImporter](../src/Catalog/ImportExport/CatalogImporter.php) and
+[CatalogExporter](../src/Catalog/ImportExport/CatalogExporter.php) provide scoped,
+authorized catalog transfer. This is a master-data convenience, not the accounting
+inspection export. The importer still uses default `DB::transaction` while
+entity/catalog models can use the configured accounting connection. Its transfer
+method does not record before/after catalog audit events. Connection consistency
+and the historical meaning of changed master data therefore remain F8/F9 work.
+The package demo seeders reduce host/package drift; demo fixtures are not
+evidence of a production upgrade or recovery procedure.
+
+Concrete gaps to address next:
+
+- **Export schema drift (F10):** [AccountingDatasetSchema](../src/Export/AccountingDatasetSchema.php)
+  omits `invoice_version`, `payment_method`, `direct_debit_mandate_id`,
+  `payment_snapshot`, line `catalog_sku`, catalog `ean`/`purchase_price_minor`,
+  and company `invoice_subtitle`/`invoice_contact_name`. The direct document-to-
+  mandate reference is also absent. Some values survive inside retained snapshots
+  or files, but that is not equivalent to complete structured table transfer.
+  Update the schema with explicit format compatibility and round-trip coverage.
+- **Correction after reversed payments (F4/F8):** creation, issuance, and posting
+  currently reject any `settlements()->exists()`, including retained reversed
+  settlements. The workflow documentation's instruction to reverse allocations
+  does not establish that correction then succeeds. Define the supported path and
+  test allocation, reversal, correction, and replacement posting end to end.
+- **Operational proof (F9/F11):** demonstrate correction/export under concurrent
+  writes, process interruption, and backup/restore on the database and storage
+  selected for the first supported deployment.
+
 ### Next slices
 
-1. Prove consistent dataset snapshots under concurrent writes on the selected
-   production database, measure deployment-scale memory/temp storage/lock duration,
-   and exercise independent import and full restore. Add an authorized, simple
-   export action in Filament once those boundaries are established.
-2. Establish operator monitoring for integrity errors and pending work, and prove concurrent
-   duplicate requests, process termination, and recovery on the selected
-   production database/storage setup (F2 / F7 / F9 / F11).
-3. Complete public-service authorization and connection consistency, finalized
-   business evidence, and controlled corrections (F2–F4 / F8–F9).
-4. Complete supported tax cases and bank catch-up completeness, then read-only
-   inspection, linked export, and the release/operating evidence (F6 / F10 / F12).
+1. **Bring evidence transfer up to the current model (F10).** Include the fields
+   and mandate reference listed above; preserve readability of earlier packages.
+   Export/import an original invoice and two corrections with payment snapshots,
+   SKU and catalog data; independently compare versions, references, sums, and
+   original bytes. Add a schema-drift regression to catch future omissions.
+2. **Finish the correction/payment boundary (F4/F8/F9).** Specify handling of
+   reversed settlements, test correction after payment reversal, and inject failure
+   between reversal and replacement. Prove concurrent correction/payment requests
+   on the selected production database; align catalog transactions with the
+   accounting connection. Keep the existing reason-and-version UI.
+3. **Prove operation and recovery (F2/F7/F9–F11).** Test consistent export snapshots,
+   duplicate requests, termination/retry, independent import and full restore;
+   measure temporary storage and lock duration. Establish integrity/pending alerts.
+   Only then add a company-authorized, simple export action in Filament.
+4. Complete remaining service authorization, finalized business evidence, supported
+   tax cases and bank catch-up completeness (F2/F3/F6/F8/F12), then the documented
+   release and operating gates. Keep technical controls automatic where possible;
+   do not add bookkeeping forms solely to expose internal verification details.
 
 The other open P0 findings and all release gates still apply. This continuation
 does not authorize a GoBD-readiness claim.
@@ -511,7 +607,7 @@ auditor-style export/restore exercise. Existing [CI](../.github/workflows/tests.
 uses SQLite in memory and [fake storage](../tests/Attachments/AttachmentStorageTest.php);
 it cannot establish production locking or immutable-storage behavior.
 
-Keep the public documentation to [installation](install.md), [architecture](architecture.md),
+Keep the core compliance and operating guidance in [installation](install.md), [architecture](architecture.md),
 [operations](operations.md), and this assessment. Deployment-specific procedures
 and evidence belong to the operator; do not recreate an internal roadmap archive
 in `docs/`. Only the partial runtime corrections listed above are implemented;
