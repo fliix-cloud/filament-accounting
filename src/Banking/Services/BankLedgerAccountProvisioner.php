@@ -7,7 +7,6 @@ use FilamentAccounting\Enums\NormalBalance;
 use FilamentAccounting\Models\LedgerAccount;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Services\AuditLogger;
-use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 final class BankLedgerAccountProvisioner
@@ -22,7 +21,7 @@ final class BankLedgerAccountProvisioner
         string $displayName,
         string $currency,
     ): LedgerAccount {
-        return DB::transaction(function () use ($entity, $stableIdentity, $displayName, $currency): LedgerAccount {
+        return $entity->getConnection()->transaction(function () use ($entity, $stableIdentity, $displayName, $currency): LedgerAccount {
             $identity = substr(hash('sha256', $stableIdentity), 0, 12);
             $name = 'Bank · '.$displayName.' · '.$identity;
 

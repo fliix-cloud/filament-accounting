@@ -87,6 +87,7 @@ return [
             'close_periods' => 'accounting.periods.close',
             'reopen_periods' => 'accounting.periods.reopen',
             'view_audit' => 'accounting.audit.view',
+            'export_audit' => 'accounting.audit.export',
             'manage_settings' => 'accounting.settings.manage',
         ],
     ],

@@ -19,7 +19,6 @@ use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 use FilamentAccounting\Services\SeedGermanProfile;
 use FilamentAccounting\Support\ReferenceData;
 use FilamentAccounting\Support\Sepa;
-use Illuminate\Support\Facades\DB;
 
 class CreateLegalEntity extends CreateRecord
 {
@@ -168,7 +167,7 @@ class CreateLegalEntity extends CreateRecord
 
     protected function handleRecordCreation(array $data): LegalEntity
     {
-        return DB::transaction(function () use ($data): LegalEntity {
+        return (new LegalEntity)->getConnection()->transaction(function () use ($data): LegalEntity {
             abort_if(
                 LegalEntity::query()->lockForUpdate()->exists(),
                 409,

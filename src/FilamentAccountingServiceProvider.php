@@ -68,6 +68,7 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
         ], 'filament-accounting-config');
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../routes/fints.php');
+        $this->loadRoutesFrom(__DIR__.'/../routes/accounting.php');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'filament-accounting');
 
         $this->app->singleton(config('filament-accounting.ownership.entity_resolver'));

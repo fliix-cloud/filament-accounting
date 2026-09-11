@@ -6,13 +6,16 @@ use FilamentAccounting\Audit\AuditAnchorVerifier;
 use FilamentAccounting\Audit\AuditChainVerifier;
 use FilamentAccounting\Audit\InvoiceEvidenceVerifier;
 use FilamentAccounting\Audit\JournalIntegrityVerifier;
+use FilamentAccounting\Events\VerificationCompleted;
 use FilamentAccounting\Models\LegalEntity;
+use FilamentAccounting\Services\AuditLogger;
 use Illuminate\Console\Command;
 
 class VerifyCommand extends Command
 {
     protected $signature = 'filament-accounting:verify
-        {--json : Emit a machine-readable JSON report}';
+        {--json : Emit a machine-readable JSON report}
+        {--record : Record each verification outcome as an audit event and dispatch an alert event}';
 
     protected $description = 'Verify ledger, invoice evidence and audit-chain integrity for all legal entities';
 
@@ -21,11 +24,12 @@ class VerifyCommand extends Command
         AuditAnchorVerifier $anchorVerifier,
         JournalIntegrityVerifier $journalVerifier,
         InvoiceEvidenceVerifier $invoiceVerifier,
+        AuditLogger $audit,
     ): int {
         $failed = 0;
         $reports = [];
 
-        LegalEntity::query()->orderBy('id')->each(function (LegalEntity $entity) use ($auditVerifier, $anchorVerifier, $journalVerifier, $invoiceVerifier, &$failed, &$reports): void {
+        LegalEntity::query()->orderBy('id')->each(function (LegalEntity $entity) use ($auditVerifier, $anchorVerifier, $journalVerifier, $invoiceVerifier, $audit, &$failed, &$reports): void {
             $report = $entity->getConnection()->transaction(function () use ($entity, $auditVerifier, $anchorVerifier, $journalVerifier, $invoiceVerifier): array {
                 LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
                 $ledger = $journalVerifier->verify((int) $entity->getKey());
@@ -38,6 +42,8 @@ class VerifyCommand extends Command
                     'legal_entity_uuid' => (string) $entity->uuid,
                     'legal_name' => (string) $entity->legal_name,
                     'valid' => $ledger['issues'] === [] && $invoices['issues'] === [] && $auditResult->isValid() && $anchorResult->isValid(),
+                    'issue_count' => count($ledger['issues']) + count($invoices['issues']) + count($auditResult->issues) + count($anchorResult->issues),
+                    'pending_count' => count($invoices['pending']),
                     'invoice_evidence' => $invoices,
                     'ledger' => [
                         'posted_entry_count' => $ledger['posted_entry_count'],
@@ -59,8 +65,20 @@ class VerifyCommand extends Command
                     ],
                 ];
             });
-            $failed += count($report['ledger']['issues']) + count($report['audit_chain']['issues']) + count($report['external_anchors']['issues']) + count($report['invoice_evidence']['issues']);
+            $failed += $report['issue_count'];
             $reports[] = $report;
+
+            if ($this->option('record')) {
+                // The audit event itself is subject to the same failure discipline as
+                // the chain it appends to; a recording failure must not silently pass.
+                $audit->log($entity, 'audit.verification.completed', $entity, [
+                    'valid' => $report['valid'],
+                    'issue_count' => $report['issue_count'],
+                    'pending_count' => $report['pending_count'],
+                ]);
+            }
+
+            VerificationCompleted::dispatch($entity, $report, $report['valid'], $report['issue_count'], $report['pending_count']);
         });
 
         if ((bool) $this->option('json')) {

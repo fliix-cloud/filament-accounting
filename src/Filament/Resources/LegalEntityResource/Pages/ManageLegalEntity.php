@@ -2,8 +2,10 @@
 
 namespace FilamentAccounting\Filament\Resources\LegalEntityResource\Pages;
 
+use Filament\Actions\Action;
 use Filament\Resources\Pages\EditRecord;
 use FilamentAccounting\Filament\Resources\LegalEntityResource;
+use FilamentAccounting\Filament\Support\AuditExportAction;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Ownership\SingleLegalEntityResolver;
 
@@ -23,5 +25,13 @@ class ManageLegalEntity extends EditRecord
         }
 
         parent::mount($entity->getRouteKey());
+    }
+
+    /** @return Action[] */
+    protected function getHeaderActions(): array
+    {
+        return [
+            AuditExportAction::make(),
+        ];
     }
 }

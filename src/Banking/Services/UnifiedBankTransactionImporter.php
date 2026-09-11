@@ -16,7 +16,6 @@ use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Services\AuditLogger;
 use FilamentAccounting\Support\Sepa;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 final class UnifiedBankTransactionImporter
 {
@@ -34,7 +33,7 @@ final class UnifiedBankTransactionImporter
             throw new AccountingException(__('filament-accounting::errors.bank_account_inactive'));
         }
 
-        return DB::transaction(function () use ($account, $lines, $cursor): BankFeedImportResult {
+        return $account->getConnection()->transaction(function () use ($account, $lines, $cursor): BankFeedImportResult {
             $run = BankImportRun::query()->create([
                 'legal_entity_id' => $account->legal_entity_id,
                 'bank_account_id' => $account->getKey(),

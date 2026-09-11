@@ -5,7 +5,6 @@ namespace FilamentAccounting\Catalog\ImportExport;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Models\CatalogItem;
 use FilamentAccounting\Ownership\LegalEntityScope;
-use Illuminate\Support\Facades\DB;
 
 final class CatalogImporter
 {
@@ -27,7 +26,7 @@ final class CatalogImporter
         $entity = $this->scope->require();
         $rows = $this->serializer->read($path, $format);
 
-        return DB::transaction(function () use ($entity, $rows, $format, $updateExisting, $preview): CatalogImportResult {
+        return $entity->getConnection()->transaction(function () use ($entity, $rows, $format, $updateExisting, $preview): CatalogImportResult {
             // Serialize catalog imports for this entity, including imports of previously absent SKUs.
             $entity->newQuery()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
             $normalized = [];

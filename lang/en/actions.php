@@ -39,4 +39,5 @@ return [
     'add_bank_account' => 'Add bank account',
     'add_tax_rate_period' => 'Add future rate period',
     'create_direct_debit_mandate' => 'Create SEPA mandate',
+    'export_audit' => 'Export audit dataset',
 ];
