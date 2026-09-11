@@ -2,18 +2,47 @@
 
 namespace FilamentAccounting\Export;
 
-/** Explicit v1 column allowlist; schema changes require a reviewed export update. */
+use FilamentAccounting\Exceptions\AuditEvidenceException;
+
+/** Explicit column allowlist; schema changes require a reviewed export update. */
 final class AccountingDatasetSchema
 {
+    public const REVISION = 2;
+
+    private const ADDED_COLUMNS = [
+        'accounting_legal_entities' => 'invoice_subtitle invoice_contact_name',
+        'accounting_catalog_items' => 'ean purchase_price_minor',
+        'accounting_documents' => 'invoice_version payment_method direct_debit_mandate_id payment_snapshot',
+        'accounting_document_lines' => 'catalog_sku',
+    ];
+
+    /** @return array<string, string> */
+    public static function columns(int $revision = self::REVISION): array
+    {
+        if (! in_array($revision, [1, self::REVISION], true)) {
+            throw new AuditEvidenceException('Unsupported dataset schema revision.');
+        }
+        $columns = self::COLUMNS;
+        if ($revision === 1) {
+            foreach (self::ADDED_COLUMNS as $table => $added) {
+                $columns[$table] = implode(' ', array_diff(explode(' ', $columns[$table]), explode(' ', $added)));
+            }
+        }
+
+        return $columns;
+    }
+
     public const POLYMORPHIC = [
         'accounting_journal_entries' => ['source_type', 'source_id', ['document' => 'accounting_documents', 'reconciliation' => 'accounting_reconciliations', 'reversal' => 'accounting_journal_entries']],
         'accounting_reconciliation_learning_rules' => ['target_type', 'target_id', ['party' => 'accounting_parties', 'posting_rule' => 'accounting_posting_rules', 'ledger_account' => 'accounting_ledger_accounts']],
     ];
 
     /** @return array<string, string> */
-    public static function references(): array
+    public static function references(int $revision = self::REVISION): array
     {
-        return self::REFERENCES + [
+        self::columns($revision);
+
+        return ($revision === 1 ? [] : ['accounting_documents.direct_debit_mandate_id' => 'fints_direct_debit_mandates']) + self::REFERENCES + [
             'accounting_document_lines.tax_rule_version_id' => 'accounting_tax_rule_versions',
             'accounting_document_lines.ledger_account_id' => 'accounting_ledger_accounts',
             'accounting_document_lines.catalog_item_id' => 'accounting_catalog_items',
@@ -40,11 +69,11 @@ final class AccountingDatasetSchema
     ];
 
     public const COLUMNS = [
-        'accounting_legal_entities' => 'id uuid legal_name trading_name address_line1 address_line2 postal_code city region country_code tax_number vat_id email phone website base_currency locale timezone fiscal_year_start_month accounting_basis vat_method compliance_profile_key invoice_bank_name invoice_iban invoice_bic default_payment_terms_days invoice_logo_path invoice_template_key invoice_template_version state created_at updated_at',
+        'accounting_legal_entities' => 'id uuid legal_name trading_name address_line1 address_line2 postal_code city region country_code tax_number vat_id email phone website base_currency locale timezone fiscal_year_start_month accounting_basis vat_method compliance_profile_key invoice_bank_name invoice_iban invoice_bic default_payment_terms_days invoice_logo_path invoice_template_key invoice_template_version state created_at updated_at invoice_subtitle invoice_contact_name',
         'accounting_parties' => 'id uuid legal_entity_id kind is_customer is_supplier legal_name display_name country_code email phone payment_terms_days default_currency external_reference is_active created_at updated_at invoice_email',
         'accounting_party_addresses' => 'id party_id line1 line2 postal_code city region country_code is_primary created_at updated_at address_role',
         'accounting_party_tax_ids' => 'id party_id type number country_code created_at updated_at',
-        'accounting_catalog_items' => 'id uuid legal_entity_id sku type name description unit default_quantity default_unit_price_minor currency default_account_role default_tax_code is_active created_at updated_at',
+        'accounting_catalog_items' => 'id uuid legal_entity_id sku type name description unit default_quantity default_unit_price_minor currency default_account_role default_tax_code is_active created_at updated_at ean purchase_price_minor',
         'accounting_ledger_accounts' => 'id uuid legal_entity_id code name type normal_balance currency parent_id is_active valid_from valid_to created_at updated_at',
         'accounting_account_role_assignments' => 'id legal_entity_id role ledger_account_id created_at updated_at',
         'accounting_tax_codes' => 'id uuid legal_entity_id code name direction is_active created_at updated_at',
@@ -53,8 +82,8 @@ final class AccountingDatasetSchema
         'accounting_posting_rule_versions' => 'id uuid posting_rule_id version valid_from valid_to direction requires_receipt tax_code account_mappings line_templates created_at updated_at',
         'accounting_periods' => 'id uuid legal_entity_id fiscal_year period_number starts_on ends_on state closed_at closed_by_type closed_by_id reopened_at reopened_by_type reopened_by_id reopen_reason created_at updated_at',
         'accounting_document_sequences' => 'id legal_entity_id document_type fiscal_year next_number prefix created_at updated_at',
-        'accounting_documents' => 'id uuid legal_entity_id type direction number supplier_invoice_number document_status posting_status party_id party_snapshot legal_entity_snapshot issue_date receipt_date supply_date due_date payment_terms_days currency exchange_rate net_minor tax_minor gross_minor e_invoice_meta corrected_document_id idempotency_key created_by_type created_by_id issued_by_type issued_by_id issued_at posted_at created_at updated_at',
-        'accounting_document_lines' => 'id document_id position description quantity unit unit_price_minor discount net_minor tax_code tax_rule_version_id tax_rate_bp tax_category tax_reason tax_recoverable tax_export_mapping tax_minor gross_minor account_role ledger_account_id catalog_item_id classification_code classification_confirmed tax_confirmed imported_tax_code service_from service_to created_at updated_at',
+        'accounting_documents' => 'id uuid legal_entity_id type direction number supplier_invoice_number document_status posting_status party_id party_snapshot legal_entity_snapshot issue_date receipt_date supply_date due_date payment_terms_days currency exchange_rate net_minor tax_minor gross_minor e_invoice_meta corrected_document_id idempotency_key created_by_type created_by_id issued_by_type issued_by_id issued_at posted_at created_at updated_at invoice_version payment_method direct_debit_mandate_id payment_snapshot',
+        'accounting_document_lines' => 'id document_id position description quantity unit unit_price_minor discount net_minor tax_code tax_rule_version_id tax_rate_bp tax_category tax_reason tax_recoverable tax_export_mapping tax_minor gross_minor account_role ledger_account_id catalog_item_id classification_code classification_confirmed tax_confirmed imported_tax_code service_from service_to created_at updated_at catalog_sku',
         'accounting_journal_entries' => 'id uuid legal_entity_id sequence period_id period_snapshot posted_on status source_type source_id description currency base_currency exchange_rate posting_rule_version_id reverses_id idempotency_key posted_by_type posted_by_id posted_at created_at updated_at',
         'accounting_journal_lines' => 'id journal_entry_id ledger_account_id account_snapshot position debit_minor credit_minor currency base_debit_minor base_credit_minor description tax_code tax_rule_version_id created_at updated_at',
         'accounting_open_items' => 'id uuid legal_entity_id document_id party_id kind currency original_minor due_on is_reversed created_at updated_at',

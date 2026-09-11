@@ -11,7 +11,7 @@ final class AccountingDatasetVerifier
 {
     public function __construct(private readonly CanonicalJson $canonical, private readonly AuditEvidenceVerifier $audit) {}
 
-    /** @return array{schema_version: int, valid: bool, issues: list<string>, dataset_sha256: string, export_event_anchored: bool, table_count: int, file_count: int} */
+    /** @return array{schema_version: int, schema_revision: int, valid: bool, issues: list<string>, dataset_sha256: string, export_event_anchored: bool, table_count: int, file_count: int} */
     public function verify(string $contents): array
     {
         $package = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
@@ -26,8 +26,8 @@ final class AccountingDatasetVerifier
             $issues[] = 'dataset_hash_mismatch';
         }
         if (($dataset['schema_version'] ?? null) !== 1 || ($dataset['scope'] ?? null) !== 'accounting-dataset-v1'
-            || $this->canonical->encode($dataset['schema']['columns'] ?? null) !== $this->canonical->encode(AccountingDatasetSchema::COLUMNS)
-            || $this->canonical->encode($dataset['schema']['references'] ?? null) !== $this->canonical->encode(AccountingDatasetSchema::references())
+            || $this->canonical->encode($dataset['schema']['columns'] ?? null) !== $this->canonical->encode(AccountingDatasetSchema::columns($dataset['schema_revision'] ?? 1))
+            || $this->canonical->encode($dataset['schema']['references'] ?? null) !== $this->canonical->encode(AccountingDatasetSchema::references($dataset['schema_revision'] ?? 1))
             || $this->canonical->encode($dataset['schema']['polymorphic_references'] ?? null) !== $this->canonical->encode(AccountingDatasetSchema::POLYMORPHIC)) {
             throw new AuditEvidenceException('Unsupported dataset schema or relationship description.');
         }
@@ -51,7 +51,7 @@ final class AccountingDatasetVerifier
         if (count($records['accounting_legal_entities']) !== 1 || ($entity['uuid'] ?? null) !== $dataset['legal_entity_uuid']) {
             $issues[] = 'dataset_entity_mismatch';
         }
-        foreach (AccountingDatasetSchema::references() as $reference => $target) {
+        foreach (AccountingDatasetSchema::references($dataset['schema_revision'] ?? 1) as $reference => $target) {
             [$table, $column] = explode('.', $reference);
             foreach ($records[$table] as $row) {
                 if ($row[$column] !== null && ! isset($records[$target][$row[$column]])) {
@@ -83,7 +83,7 @@ final class AccountingDatasetVerifier
         }
         $this->files($dataset, $records, $issues);
 
-        return ['schema_version' => 1, 'valid' => $issues === [], 'issues' => $issues, 'dataset_sha256' => $hash,
+        return ['schema_version' => 1, 'schema_revision' => $dataset['schema_revision'] ?? 1, 'valid' => $issues === [], 'issues' => $issues, 'dataset_sha256' => $hash,
             'export_event_anchored' => $audit->isValid() && ($audit->anchors->lastAnchoredSequence ?? 0) >= ($package['export_event_sequence'] ?? PHP_INT_MAX),
             'table_count' => count($records), 'file_count' => count($dataset['files'])];
     }
@@ -94,11 +94,11 @@ final class AccountingDatasetVerifier
     private function records(array $dataset): array
     {
         $input = $dataset['records'] ?? null;
-        if (! is_array($input) || count($input) !== count(AccountingDatasetSchema::COLUMNS)) {
+        if (! is_array($input) || count($input) !== count(AccountingDatasetSchema::columns($dataset['schema_revision'] ?? 1))) {
             throw new AuditEvidenceException('Dataset table inventory is incomplete.');
         }
         $records = [];
-        foreach (AccountingDatasetSchema::COLUMNS as $table => $columns) {
+        foreach (AccountingDatasetSchema::columns($dataset['schema_revision'] ?? 1) as $table => $columns) {
             if (! isset($input[$table]) || ! is_array($input[$table]) || ! array_is_list($input[$table])) {
                 throw new AuditEvidenceException('Missing or malformed dataset table: '.$table);
             }

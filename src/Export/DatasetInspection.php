@@ -33,12 +33,12 @@ final class DatasetInspection
     }
 
     /** @param array<string, mixed> $row */
-    public function record(string $table, array $row, string $entityId): void
+    public function record(string $table, array $row, string $entityId, int $revision = AccountingDatasetSchema::REVISION): void
     {
         if (! isset(AccountingDatasetSchema::COLUMNS[$table])) {
             throw new AuditEvidenceException('Unknown dataset table.');
         }
-        $columns = explode(' ', AccountingDatasetSchema::COLUMNS[$table]);
+        $columns = explode(' ', AccountingDatasetSchema::columns($revision)[$table]);
         if (count($columns) !== count($row) || array_diff($columns, array_keys($row)) !== []
             || ! is_string($row['id']) || ! ctype_digit($row['id'])) {
             throw new AuditEvidenceException('Malformed dataset record.');
@@ -112,7 +112,7 @@ final class DatasetInspection
         if (count($entities) !== 1 || $entities[0]['id'] !== $header['legal_entity_id'] || $entities[0]['uuid'] !== $header['legal_entity_uuid']) {
             throw new AuditEvidenceException('Dataset company identity mismatch.');
         }
-        foreach (AccountingDatasetSchema::references() as $source => $target) {
+        foreach (AccountingDatasetSchema::references($header['schema_revision'] ?? 1) as $source => $target) {
             [$table, $column] = explode('.', $source);
             $sql = 'SELECT 1 FROM "'.$table.'" a LEFT JOIN "'.$target.'" b ON a."'.$column.'" = b.id WHERE a."'.$column.'" IS NOT NULL AND b.id IS NULL LIMIT 1';
             if ($this->database->query($sql)->fetchColumn() !== false) {

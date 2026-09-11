@@ -2,17 +2,24 @@
 
 namespace FilamentAccounting\Tests\Audit;
 
+use FilamentAccounting\Audit\AuditEventHasher;
+use FilamentAccounting\Audit\CanonicalJson;
 use FilamentAccounting\Banking\Data\BankStatementLineData;
+use FilamentAccounting\Banking\FinTs\Models\DirectDebitCreditorProfile;
+use FilamentAccounting\Banking\FinTs\Models\DirectDebitMandate;
 use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Exceptions\AuditEvidenceException;
 use FilamentAccounting\Exceptions\DocumentException;
+use FilamentAccounting\Export\AccountingDatasetSchema;
 use FilamentAccounting\Export\DatasetInspection;
 use FilamentAccounting\Export\StreamDatasetExporter;
 use FilamentAccounting\Export\StreamDatasetVerifier;
 use FilamentAccounting\Models\Attachment;
 use FilamentAccounting\Models\AuditEvent;
 use FilamentAccounting\Models\BankStatementLine;
+use FilamentAccounting\Models\CatalogItem;
 use FilamentAccounting\Models\LegalEntity;
+use FilamentAccounting\Models\PartyBankAccount;
 use FilamentAccounting\Services\AssignStatementLine;
 use FilamentAccounting\Services\ImportBankStatementLines;
 use FilamentAccounting\Services\ImportPurchaseInvoice;
@@ -43,6 +50,134 @@ class StreamDatasetTest extends TestCase
         $this->actingAs($this->makeUser());
 
         return $this->makeEntity(['address_line1' => 'Street 1', 'postal_code' => '10115', 'city' => 'Berlin', 'vat_id' => 'DE123456789']);
+    }
+
+    #[Test]
+    public function earlier_stream_schema_remains_readable_without_inventing_new_values(): void
+    {
+        $built = app(StreamDatasetExporter::class)->build($this->entity());
+        $legacy = tmpfile();
+        $json = app(CanonicalJson::class);
+        $columns = AccountingDatasetSchema::columns(1);
+        $hash = hash_init('sha256');
+        hash_update($hash, StreamDatasetVerifier::MAGIC);
+        fwrite($legacy, fgets($built['stream']));
+        $table = null;
+        $digest = null;
+        $eventHash = null;
+        try {
+            while (($line = fgets($built['stream'])) !== false) {
+                $frame = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+                if ($frame['kind'] === 'header') {
+                    unset($frame['schema_revision']);
+                    $frame['columns'] = $columns;
+                    $frame['references'] = AccountingDatasetSchema::references(1);
+                } elseif ($frame['kind'] === 'table') {
+                    $table = $frame['name'];
+                } elseif ($frame['kind'] === 'record') {
+                    $frame['data'] = array_intersect_key($frame['data'], array_flip(explode(' ', $columns[$table])));
+                } elseif ($frame['kind'] === 'dataset_end') {
+                    $frame['sha256'] = $digest = hash_final($hash);
+                } elseif ($frame['kind'] === 'event' && $frame['data']['operation'] === 'accounting_export.prepared') {
+                    $event = &$frame['data'];
+                    $payload = json_decode($event['payload'], true, 512, JSON_THROW_ON_ERROR);
+                    $payload['dataset_sha256'] = $digest;
+                    $event['payload'] = json_encode($payload, JSON_THROW_ON_ERROR);
+                    $event['canonical_payload'] = $json->encode($payload);
+                    $event['event_hash'] = $eventHash = app(AuditEventHasher::class)->hash($event);
+                    unset($event);
+                } elseif ($frame['kind'] === 'footer') {
+                    $frame['head']['last_event_hash'] = $eventHash;
+                }
+                $line = $json->encode($frame)."\n";
+                if ($digest === null) {
+                    hash_update($hash, $line);
+                }
+                fwrite($legacy, $line);
+            }
+            rewind($legacy);
+            $this->assertTrue(app(StreamDatasetVerifier::class)->verify($legacy, function (DatasetInspection $index): void {
+                $this->assertNull($index->database->query('SELECT invoice_contact_name FROM accounting_legal_entities')->fetchColumn());
+            })['valid']);
+        } finally {
+            fclose($legacy);
+            fclose($built['stream']);
+        }
+    }
+
+    #[Test]
+    public function export_schema_tracks_all_accounting_table_columns(): void
+    {
+        foreach (AccountingDatasetSchema::COLUMNS as $table => $columns) {
+            if ($table === 'fints_bank_connections') {
+                continue; // Deliberately restricted projection: no credentials or protocol state.
+            }
+            $this->assertEqualsCanonicalizing(
+                (new LegalEntity)->getConnection()->getSchemaBuilder()->getColumnListing($table),
+                explode(' ', $columns),
+                'Review export schema changes for '.$table,
+            );
+        }
+    }
+
+    #[Test]
+    public function revised_export_preserves_versions_payment_links_catalog_and_original_bytes(): void
+    {
+        $entity = $this->entity();
+        $entity->update(['invoice_subtitle' => 'Services', 'invoice_contact_name' => 'Demo Contact']);
+        config()->set('filament-accounting.e_invoice.generate_on_issue', true);
+        $party = $this->makeParty($entity);
+        $bank = PartyBankAccount::query()->create(['party_id' => $party->id, 'iban' => 'DE89370400440532013000']);
+        $creditor = DirectDebitCreditorProfile::query()->create(['legal_entity_id' => $entity->id, 'creditor_identifier' => 'DE98ZZZ09999999999']);
+        $mandate = DirectDebitMandate::query()->create([
+            'party_bank_account_id' => $bank->id, 'creditor_profile_id' => $creditor->id,
+            'reference' => 'EXPORT-MANDATE', 'scheme' => 'CORE', 'mandate_type' => 'recurring', 'signed_on' => '2026-01-01',
+        ]);
+        $catalog = CatalogItem::query()->create([
+            'legal_entity_id' => $entity->id, 'sku' => 'SERVICE-1', 'ean' => '0001234567895', 'purchase_price_minor' => 4321,
+            'name' => 'Service', 'type' => 'service', 'unit' => 'HUR', 'currency' => 'EUR', 'default_unit_price_minor' => 10000,
+        ]);
+        $payload = ['party_id' => $party->id, 'issue_date' => '2026-09-11', 'currency' => 'EUR',
+            'payment_method' => 'direct_debit', 'direct_debit_mandate_id' => $mandate->id,
+            'lines' => [['catalog_item_id' => $catalog->id, 'description' => 'Work', 'quantity' => '1', 'unit_price_minor' => 10000, 'tax_code' => 'DE-19']]];
+        $issuer = app(IssueSalesInvoice::class);
+        $first = $issuer->handle($entity, $payload);
+        $second = $issuer->issue($issuer->correct($first, $payload, 'Second version'));
+        $third = $issuer->issue($issuer->correct($second, $payload, 'Third version'));
+        $originalHashes = Attachment::query()->pluck('sha256')->all();
+        $built = app(StreamDatasetExporter::class)->build($entity);
+        try {
+            $report = app(StreamDatasetVerifier::class)->verify($built['stream'], function (DatasetInspection $index) use ($first, $second, $third, $originalHashes): void {
+                $rows = $index->database->query('SELECT d.id,d.invoice_version,d.corrected_document_id,d.payment_snapshot,m.reference FROM accounting_documents d JOIN fints_direct_debit_mandates m ON m.id=d.direct_debit_mandate_id ORDER BY CAST(d.invoice_version AS INTEGER)')->fetchAll(PDO::FETCH_ASSOC);
+                $this->assertSame(['1', '2', '3'], array_column($rows, 'invoice_version'));
+                $this->assertSame([null, (string) $first->id, (string) $second->id], array_column($rows, 'corrected_document_id'));
+                $this->assertSame((string) $third->id, $rows[2]['id']);
+                foreach ($rows as $row) {
+                    $this->assertSame('EXPORT-MANDATE', $row['reference']);
+                    $this->assertSame('EXPORT-MANDATE', json_decode($row['payment_snapshot'], true)['mandate_reference']);
+                }
+                $this->assertSame('0001234567895', $index->database->query('SELECT ean FROM accounting_catalog_items')->fetchColumn());
+                $this->assertSame('4321', $index->database->query('SELECT purchase_price_minor FROM accounting_catalog_items')->fetchColumn());
+                $this->assertSame('SERVICE-1', $index->database->query('SELECT catalog_sku FROM accounting_document_lines LIMIT 1')->fetchColumn());
+                $this->assertSame('Services', $index->database->query('SELECT invoice_subtitle FROM accounting_legal_entities')->fetchColumn());
+                $totals = $index->database->query('SELECT SUM(CAST(base_debit_minor AS INTEGER)),SUM(CAST(base_credit_minor AS INTEGER)) FROM accounting_journal_lines')->fetch(PDO::FETCH_NUM);
+                $this->assertSame([59500, 59500], array_map('intval', $totals));
+                $hashes = [];
+                foreach ($index->rows('stored_files') as $file) {
+                    $query = $index->database->prepare('SELECT bytes FROM file_chunks WHERE key=? ORDER BY ordinal');
+                    $query->execute([$file['key']]);
+                    $hash = hash_init('sha256');
+                    while (($bytes = $query->fetchColumn()) !== false) {
+                        hash_update($hash, $bytes);
+                    }
+                    $hashes[] = hash_final($hash);
+                }
+                $this->assertEqualsCanonicalizing($originalHashes, $hashes);
+            });
+            $this->assertTrue($report['valid']);
+        } finally {
+            fclose($built['stream']);
+        }
     }
 
     #[Test]

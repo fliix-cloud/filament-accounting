@@ -8,6 +8,7 @@ use FilamentAccounting\Banking\Data\BankStatementLineData;
 use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Exceptions\AuditEvidenceException;
 use FilamentAccounting\Export\AccountingDatasetExporter;
+use FilamentAccounting\Export\AccountingDatasetSchema;
 use FilamentAccounting\Export\AccountingDatasetVerifier;
 use FilamentAccounting\Models\AuditEvent;
 use FilamentAccounting\Models\BankStatementLine;
@@ -41,6 +42,35 @@ class AccountingDatasetTest extends TestCase
         $this->actingAs($this->makeUser());
 
         return $this->makeEntity(['address_line1' => 'Street 1', 'postal_code' => '10115', 'city' => 'Berlin', 'vat_id' => 'DE123456789']);
+    }
+
+    #[Test]
+    public function earlier_json_schema_remains_verifiable(): void
+    {
+        $package = app(AccountingDatasetExporter::class)->build($this->entity());
+        unset($package['dataset']['schema_revision']);
+        $columns = AccountingDatasetSchema::columns(1);
+        $package['dataset']['schema']['columns'] = $columns;
+        $package['dataset']['schema']['references'] = AccountingDatasetSchema::references(1);
+        foreach ($columns as $table => $names) {
+            foreach ($package['dataset']['records'][$table] as &$row) {
+                $row = array_intersect_key($row, array_flip(explode(' ', $names)));
+            }
+            unset($row);
+        }
+        $json = app(CanonicalJson::class);
+        $hash = $package['dataset_sha256'] = hash('sha256', $json->encode($package['dataset']));
+        $audit = &$package['audit_evidence'];
+        $event = &$audit['audit_chain']['events'][array_key_last($audit['audit_chain']['events'])];
+        $payload = json_decode($event['payload'], true, 512, JSON_THROW_ON_ERROR);
+        $payload['dataset_sha256'] = $hash;
+        $event['payload'] = json_encode($payload, JSON_THROW_ON_ERROR);
+        $event['canonical_payload'] = $json->encode($payload);
+        $event['event_hash'] = app(AuditEventHasher::class)->hash($event);
+        $audit['audit_chain']['head']['last_event_hash'] = $event['event_hash'];
+        unset($event, $audit['evidence_hash']);
+        $audit['evidence_hash'] = hash('sha256', $json->encode($audit));
+        $this->assertTrue(app(AccountingDatasetVerifier::class)->verify($json->encode($package))['valid']);
     }
 
     #[Test]
@@ -203,7 +233,8 @@ class AccountingDatasetTest extends TestCase
         Schema::swap(DB::connection('dataset_accounting')->getSchemaBuilder());
         try {
             foreach (['2026_08_30_000001_create_filament_accounting_tables', '2026_08_31_000002_create_accounting_party_bank_accounts',
-                '2026_09_01_000003_create_filament_accounting_banking_tables', '2026_09_04_000004_add_tax_rule_to_reconciliation_splits', '2026_09_04_000005_add_party_contact_columns'] as $migration) {
+                '2026_09_01_000003_create_filament_accounting_banking_tables', '2026_09_04_000004_add_tax_rule_to_reconciliation_splits', '2026_09_04_000005_add_party_contact_columns',
+                '2026_09_10_000001_add_catalog_purchase_price_and_ean', '2026_09_10_000002_add_invoice_versions', '2026_09_10_000003_add_invoice_payment_and_layout_fields'] as $migration) {
                 (require __DIR__.'/../../database/migrations/'.$migration.'.php')->up();
             }
         } finally {

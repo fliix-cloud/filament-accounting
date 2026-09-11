@@ -75,8 +75,8 @@ final class StreamDatasetVerifier
                         || ! is_string($item['legal_entity_uuid'] ?? null) || ! is_string($item['export_id'] ?? null)
                         || ! is_bool($item['anchor_requested'] ?? null) || ! is_bool($item['anchor_policy']['required'] ?? null)
                         || ! is_bool($item['anchor_policy']['immutable_storage_attested'] ?? null)
-                        || $this->json->encode($item['columns'] ?? null) !== $this->json->encode(AccountingDatasetSchema::COLUMNS)
-                        || $this->json->encode($item['references'] ?? null) !== $this->json->encode(AccountingDatasetSchema::references())
+                        || $this->json->encode($item['columns'] ?? null) !== $this->json->encode(AccountingDatasetSchema::columns($item['schema_revision'] ?? 1))
+                        || $this->json->encode($item['references'] ?? null) !== $this->json->encode(AccountingDatasetSchema::references($item['schema_revision'] ?? 1))
                         || $this->json->encode($item['polymorphic_references'] ?? null) !== $this->json->encode(AccountingDatasetSchema::POLYMORPHIC)
                         || ! is_array($item['morph_types'] ?? null)) {
                         throw new AuditEvidenceException('Invalid streaming dataset header.');
@@ -103,7 +103,7 @@ final class StreamDatasetVerifier
                     if ($filePhase || $activeTable === null || ! is_array($item['data'] ?? null)) {
                         throw new AuditEvidenceException('Unexpected dataset record.');
                     }
-                    $index->record($activeTable, $item['data'], $header['legal_entity_id']);
+                    $index->record($activeTable, $item['data'], $header['legal_entity_id'], $header['schema_revision'] ?? 1);
                     $counts['records']++;
                     break;
                 case 'pending':
@@ -217,7 +217,7 @@ final class StreamDatasetVerifier
             $inspect($index);
         }
 
-        return ['schema_version' => 2, 'valid' => true, 'issues' => [], 'dataset_sha256' => $end['sha256'], 'export_event_anchored' => $anchored,
+        return ['schema_version' => 2, 'schema_revision' => $header['schema_revision'] ?? 1, 'valid' => true, 'issues' => [], 'dataset_sha256' => $end['sha256'], 'export_event_anchored' => $anchored,
             'package_sha256' => hash_final($transportHash),
             'table_count' => count($tables), 'file_count' => $counts['files'], 'record_count' => $counts['records'], 'pending_count' => $counts['pending']];
     }

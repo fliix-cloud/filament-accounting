@@ -63,7 +63,7 @@ final class StreamDatasetExporter
                     throw new AuditEvidenceException('Audit integrity failed before export.');
                 }
                 $this->journals->assertValid((int) $entity->getKey());
-                $header = ['kind' => 'header', 'schema_version' => 2, 'scope' => 'accounting-dataset-v2', 'export_id' => (string) Str::uuid(),
+                $header = ['kind' => 'header', 'schema_version' => 2, 'schema_revision' => AccountingDatasetSchema::REVISION, 'scope' => 'accounting-dataset-v2', 'export_id' => (string) Str::uuid(),
                     'exported_at' => now()->utc()->toIso8601String(), 'legal_entity_id' => (string) $entity->getKey(), 'legal_entity_uuid' => $entity->uuid,
                     'columns' => AccountingDatasetSchema::COLUMNS, 'references' => AccountingDatasetSchema::references(), 'polymorphic_references' => AccountingDatasetSchema::POLYMORPHIC,
                     'morph_types' => ['document' => (new Document)->getMorphClass(), 'journal' => (new JournalEntry)->getMorphClass(), 'reconciliation' => (new Reconciliation)->getMorphClass(), 'legal_entity' => (new LegalEntity)->getMorphClass()],

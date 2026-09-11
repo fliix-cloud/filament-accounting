@@ -78,7 +78,7 @@ final class AccountingDatasetExporter
             }
             ksort($files);
             $dataset = [
-                'schema_version' => 1,
+                'schema_version' => 1, 'schema_revision' => AccountingDatasetSchema::REVISION,
                 'scope' => 'accounting-dataset-v1',
                 'export_id' => (string) Str::uuid(),
                 'legal_entity_id' => (string) $entity->getKey(),

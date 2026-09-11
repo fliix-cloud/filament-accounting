@@ -108,6 +108,16 @@ money and decimal values do not pass through floating-point conversion. IDs join
 records inside the package. Host actor identities and custom journal source IDs
 remain external references; corresponding host records are not included.
 
+New dataset exports declare `schema_revision: 2` inside the streaming header or
+JSON dataset, independently of the container's `schema_version`. This revision
+includes invoice versions, payment method and snapshot, the direct-debit mandate
+reference, line SKU, catalog EAN/purchase price, and company subtitle/contact.
+The revision is covered by the dataset digest. Verifiers accept the original
+revision 1 field set when the marker is absent; unknown revisions are rejected.
+Older packages cannot supply the newly introduced fields: the temporary SQLite
+inspection leaves those columns null. The verification report exposes the schema
+revision. Earlier verifier implementations need updating before reading revision 2.
+
 All selected records belong to the requested company, including child records
 scoped through their parent. The transfer includes drafts, discarded documents,
 bank source versions, settlements, reversals, and open intakes. An input that was

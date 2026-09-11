@@ -100,7 +100,7 @@ No production database, live bank connection, or host installation was changed.
 | F1 / F3 / F7 / F9 / F11 | A committed intake manifest and verified private raw files precede parsing. PDF, standalone XML, and PDF/XML pairs are supported. Identity includes roles and contents. Attempts are audited; retry reuses preserved inputs. Business rollback retains intake evidence. Purchase registration uses the accounting connection. Source-total mismatches block conversion. Filament exposes open imports, safe downloads, and retry within purchase invoices. | Production concurrency and crash tests, complete conformance/accounting conversion checks, derived-file orphan recovery, complete converted-line evidence, and third-party import/restore validation. |
 | F1 / F3 | Purchase draft disposal retains the document, lines, PDF/XML, and actor/reason evidence. It requires a dedicated permission, current company scope, and a locked persisted draft. UI offers “Discard draft”; physical deletion is disabled. Invalid accepted imports are now retained independently of drafts. | Complete operational review/correction of blocked intakes and production retention evidence. |
 | F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. Sales corrections now retain prior versions and files and reverse/replace postings. | Bulk/SQL write prevention, concurrent mutation evidence, correction after reversed payments, and remaining correction workflows. |
-| F2 / F8 / F10 | Each ledger posting includes a versioned full journal snapshot and SHA-256 digest. Verification detects changed/missing journal data; CSV/UI use historical account values. Linked streaming export includes records, retained originals, relationships, audit events, and anchors, with isolated inspection tests. Invoice artifacts bind render snapshots and payment/correction details. | Complete finalized settlement and other business evidence; protect storage/database privileges; update export columns for the current model and prove third-party import/restore. This is tamper detection, not prevention of privileged SQL writes. |
+| F2 / F8 / F10 | Each ledger posting includes a versioned full journal snapshot and SHA-256 digest. Verification detects changed/missing journal data; CSV/UI use historical account values. Linked streaming export includes records, retained originals, relationships, audit events, and anchors, with isolated inspection tests. Invoice artifacts bind render snapshots and payment/correction details. | Complete finalized settlement and other business evidence; protect storage/database privileges; prove third-party import/restore and production snapshot consistency. This is tamper detection, not prevention of privileged SQL writes. |
 | F3 | Undefined Gates now deny access; the provider no longer creates permissive fallback Gates. Tests explicitly configure fixture permissions; hosts must configure their own Gates. | Complete the authorization audit of all public mutation paths and integrations. |
 | F5 | Closing cannot weaken a hard lock. Reopening requires a separate permission and non-blank reason. Both record before/after state, use the accounting connection, and lock entity before period. Repeated close is idempotent. | Production database concurrency tests and protection against direct period-model/SQL changes. |
 | F6 / F9 | Posting reloads persisted state and accepts issued/received invoices and credit notes. Foreign currency is rejected until conversion exists. Line discounts apply before tax. Non-recoverable purchase tax stays on the expense account. Sequence uses the posted-on year. Ledger posting/reversal and changed document/period services use the accounting connection. | Remaining tax edge cases; connection consistency in the remaining services and cross-connection rollback tests. |
@@ -475,15 +475,34 @@ and the historical meaning of changed master data therefore remain F8/F9 work.
 The package demo seeders reduce host/package drift; demo fixtures are not
 evidence of a production upgrade or recovery procedure.
 
+### Export schema integration — 11 September 2026 (F10)
+
+The export-schema gap identified above is now addressed for the current model.
+Both JSON and streaming exporters include invoice versions, payment method,
+mandate ID and payment snapshot, line SKU, catalog EAN/purchase price, and company
+subtitle/contact. The document-to-mandate relationship is checked with the other
+declared references. Exported metadata declares `schema_revision: 2`, covered by
+the dataset commitment; container versions remain unchanged. Revision 1 packages
+remain readable using their original field and relationship definitions. Their
+missing newer values are not reconstructed or inferred.
+
+[StreamDatasetTest](../tests/Audit/StreamDatasetTest.php) exports an issued invoice
+and two corrections with direct-debit details and catalog data. Isolated SQL
+inspection checks versions, predecessor/mandate links, payment snapshots, EAN and
+prices, SKU, balanced journal sums, and reconstructed original-file hashes.
+A schema-drift test compares database columns with the allowlist for all fully
+exported tables; bank connections remain an explicitly restricted projection.
+Compatibility fixtures exercise earlier streaming and JSON schemas, and the
+separate-connection fixture now applies all current migrations. This completes
+the identified field-integration slice, not F10 as a whole: independent third-party
+import, production snapshots, and full restore remain open. Filament is unchanged.
+
+Validation for this continuation on Herd PHP 8.4.25: **391 tests, 3,276
+assertions** passed, as did PHPStan, Pint, strict Composer validation, and local
+documentation link checks.
+
 Concrete gaps to address next:
 
-- **Export schema drift (F10):** [AccountingDatasetSchema](../src/Export/AccountingDatasetSchema.php)
-  omits `invoice_version`, `payment_method`, `direct_debit_mandate_id`,
-  `payment_snapshot`, line `catalog_sku`, catalog `ean`/`purchase_price_minor`,
-  and company `invoice_subtitle`/`invoice_contact_name`. The direct document-to-
-  mandate reference is also absent. Some values survive inside retained snapshots
-  or files, but that is not equivalent to complete structured table transfer.
-  Update the schema with explicit format compatibility and round-trip coverage.
 - **Correction after reversed payments (F4/F8):** creation, issuance, and posting
   currently reject any `settlements()->exists()`, including retained reversed
   settlements. The workflow documentation's instruction to reverse allocations
@@ -495,21 +514,16 @@ Concrete gaps to address next:
 
 ### Next slices
 
-1. **Bring evidence transfer up to the current model (F10).** Include the fields
-   and mandate reference listed above; preserve readability of earlier packages.
-   Export/import an original invoice and two corrections with payment snapshots,
-   SKU and catalog data; independently compare versions, references, sums, and
-   original bytes. Add a schema-drift regression to catch future omissions.
-2. **Finish the correction/payment boundary (F4/F8/F9).** Specify handling of
+1. **Finish the correction/payment boundary (F4/F8/F9).** Specify handling of
    reversed settlements, test correction after payment reversal, and inject failure
    between reversal and replacement. Prove concurrent correction/payment requests
    on the selected production database; align catalog transactions with the
    accounting connection. Keep the existing reason-and-version UI.
-3. **Prove operation and recovery (F2/F7/F9–F11).** Test consistent export snapshots,
+2. **Prove operation and recovery (F2/F7/F9–F11).** Test consistent export snapshots,
    duplicate requests, termination/retry, independent import and full restore;
    measure temporary storage and lock duration. Establish integrity/pending alerts.
    Only then add a company-authorized, simple export action in Filament.
-4. Complete remaining service authorization, finalized business evidence, supported
+3. Complete remaining service authorization, finalized business evidence, supported
    tax cases and bank catch-up completeness (F2/F3/F6/F8/F12), then the documented
    release and operating gates. Keep technical controls automatic where possible;
    do not add bookkeeping forms solely to expose internal verification details.
