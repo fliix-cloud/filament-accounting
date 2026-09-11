@@ -3,6 +3,7 @@
 namespace FilamentAccounting\Livewire;
 
 use Filament\Notifications\Notification;
+use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Enums\OpenItemKind;
 use FilamentAccounting\Enums\SplitPurpose;
 use FilamentAccounting\Enums\StatementLineStatus;
@@ -62,6 +63,7 @@ class ReconciliationAssistant extends Component
 
     public function mount(string $line, string $context = 'page'): void
     {
+        app(AccountingAuthorizer::class)->authorize('draft_reconciliation');
         $this->line = $line;
         $this->context = in_array($context, ['page', 'modal'], true) ? $context : 'page';
 
@@ -187,6 +189,7 @@ class ReconciliationAssistant extends Component
 
     public function finalize(AssignStatementLine $assigner, SplitStatementLine $splitter): void
     {
+        app(AccountingAuthorizer::class)->authorize('finalize_reconciliation');
         $this->resetErrorBag();
         $line = $this->statementLine();
         if (! $line instanceof BankStatementLine) {

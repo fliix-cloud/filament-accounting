@@ -20,12 +20,12 @@ trait HasAccountingNavigation
 
     public static function canCreate(): bool
     {
-        return static::canViewAny();
+        return app(AccountingAuthorizer::class)->can(static::createAbility());
     }
 
     public static function canEdit($record): bool
     {
-        return static::canViewAny();
+        return app(AccountingAuthorizer::class)->can(static::createAbility());
     }
 
     public static function canDelete($record): bool
@@ -33,9 +33,19 @@ trait HasAccountingNavigation
         return false;
     }
 
+    public static function canDeleteAny(): bool
+    {
+        return false;
+    }
+
     protected static function ability(): string
     {
         return 'view';
+    }
+
+    protected static function createAbility(): string
+    {
+        return static::ability();
     }
 
     protected static function scopesToLegalEntity(): bool

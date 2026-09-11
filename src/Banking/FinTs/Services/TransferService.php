@@ -22,7 +22,6 @@ use FilamentAccounting\Banking\FinTs\Support\Iban;
 use FilamentAccounting\Banking\FinTs\Support\Money;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 
 class TransferService
 {
@@ -36,7 +35,7 @@ class TransferService
 
     public function submit(BankTransfer $transfer, ?Model $actor = null, ?string $returnUrl = null): ScaOutcome
     {
-        $claimed = DB::transaction(function () use ($transfer): array|ScaOutcome {
+        $claimed = $transfer->getConnection()->transaction(function () use ($transfer): array|ScaOutcome {
             /** @var BankTransfer $locked */
             $locked = BankTransfer::query()->whereKey($transfer->getKey())->lockForUpdate()->firstOrFail();
 
@@ -102,7 +101,7 @@ class TransferService
             $mapped = ErrorMapper::map($e);
             $status = ErrorMapper::paymentStatusAfterSubmit($mapped);
 
-            DB::transaction(function () use ($transfer, $mapped, $status): void {
+            $transfer->getConnection()->transaction(function () use ($transfer, $mapped, $status): void {
                 /** @var BankTransfer|null $locked */
                 $locked = BankTransfer::query()->whereKey($transfer->getKey())->lockForUpdate()->first();
                 if (! $locked instanceof BankTransfer || $locked->status === PaymentStatus::Submitted) {

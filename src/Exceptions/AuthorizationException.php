@@ -2,4 +2,6 @@
 
 namespace FilamentAccounting\Exceptions;
 
-class AuthorizationException extends AccountingException {}
+use Illuminate\Auth\Access\AuthorizationException as LaravelAuthorizationException;
+
+class AuthorizationException extends LaravelAuthorizationException {}

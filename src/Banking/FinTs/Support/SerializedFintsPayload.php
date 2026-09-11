@@ -8,9 +8,9 @@ final class SerializedFintsPayload
 {
     public static function unserialize(string $payload, bool $requireObject = false): mixed
     {
-        self::assertOnlyFhpClasses($payload);
+        $classes = self::assertOnlyFhpClasses($payload);
 
-        $value = unserialize($payload, ['allowed_classes' => true]);
+        $value = unserialize($payload, ['allowed_classes' => $classes === [] ? false : $classes]);
         if ($requireObject && ! is_object($value)) {
             throw new ScaExpiredException('Stored FinTS action is invalid.');
         }
@@ -18,19 +18,22 @@ final class SerializedFintsPayload
         return $value;
     }
 
-    private static function assertOnlyFhpClasses(string $payload): void
+    /** @return list<class-string> */
+    private static function assertOnlyFhpClasses(string $payload): array
     {
         if (preg_match_all('/(?:C|O):\d+:"([^"]+)"/', $payload, $matches) === false) {
             throw new ScaExpiredException('Stored FinTS payload could not be inspected.');
         }
 
+        $classes = [];
         foreach ($matches[1] as $class) {
-            if (self::isAllowedClass($class)) {
-                continue;
+            if (! self::isAllowedClass($class)) {
+                throw new ScaExpiredException("Stored FinTS payload contains a disallowed class [{$class}].");
             }
-
-            throw new ScaExpiredException("Stored FinTS payload contains a disallowed class [{$class}].");
+            $classes[] = $class;
         }
+
+        return array_values(array_unique($classes));
     }
 
     private static function isAllowedClass(string $class): bool
@@ -38,7 +41,8 @@ final class SerializedFintsPayload
         if ($class === \DateTime::class
             || $class === \DateTimeImmutable::class
             || $class === \stdClass::class
-            || str_starts_with($class, 'Fhp\\')) {
+            || str_starts_with($class, 'Fhp\\')
+            || str_starts_with($class, 'FilamentAccounting\\Banking\\FinTs\\')) {
             return true;
         }
 
