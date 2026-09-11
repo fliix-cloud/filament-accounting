@@ -22,6 +22,7 @@ use Illuminate\Support\Str;
  * @property SyncStatus $status
  * @property Carbon|null $from_date
  * @property Carbon|null $to_date
+ * @property Carbon|null $requested_from_date
  * @property int $item_count
  * @property string|null $error_code
  * @property string|null $error_message
@@ -54,6 +55,7 @@ class BankSyncRun extends Model
             'status' => SyncStatus::class,
             'from_date' => 'date',
             'to_date' => 'date',
+            'requested_from_date' => 'date',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
         ];

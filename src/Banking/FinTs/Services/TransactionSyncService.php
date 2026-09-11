@@ -48,10 +48,7 @@ class TransactionSyncService
         $from ??= $account->last_transaction_sync_at
             ? Carbon::parse($account->last_transaction_sync_at)->subDays((int) config('filament-accounting.banking.fints.sync.incremental_overlap_days', 3))
             : Carbon::today()->subDays((int) config('filament-accounting.banking.fints.sync.initial_lookback_days', 90));
-        $maxDays = (int) config('filament-accounting.banking.fints.sync.max_range_days', 90);
-        if (Carbon::parse($from)->diffInDays(Carbon::parse($to)) > $maxDays) {
-            $from = Carbon::parse($to)->subDays($maxDays);
-        }
+        [$from, $requestedFrom] = $this->boundedRange(Carbon::parse($from), Carbon::parse($to));
 
         $run = BankSyncRun::query()->create([
             'bank_connection_id' => $connection->id,
@@ -60,6 +57,7 @@ class TransactionSyncService
             'status' => SyncStatus::Running,
             'from_date' => $from,
             'to_date' => $to,
+            'requested_from_date' => $requestedFrom ?: null,
             'started_at' => now(),
         ]);
         $client = $this->factory->make($connection);
@@ -148,6 +146,19 @@ class TransactionSyncService
         if (! $account->isUsable()) {
             throw new UnsupportedCapabilityException(__('filament-accounting::banking/fints/errors.account_not_usable'));
         }
+    }
+
+    /**
+     * @return array{Carbon, ?Carbon} The bounded from-date and the requested from-date (null if not truncated).
+     */
+    public function boundedRange(Carbon $from, Carbon $to): array
+    {
+        $maxDays = (int) config('filament-accounting.banking.fints.sync.max_range_days', 90);
+        if ($from->diffInDays($to) > $maxDays) {
+            return [$to->copy()->subDays($maxDays), $from];
+        }
+
+        return [$from, null];
     }
 
     private function mapTransaction(

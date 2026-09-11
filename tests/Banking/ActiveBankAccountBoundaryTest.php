@@ -33,6 +33,7 @@ class ActiveBankAccountBoundaryTest extends TestCase
             'is_active' => true,
         ]);
 
+        $this->actingAs($this->makeUser());
         $line = app(ImportBankStatementLines::class)->handle($inactive, [
             new BankStatementLineData(
                 externalId: 'inactive-line',
@@ -62,6 +63,8 @@ class ActiveBankAccountBoundaryTest extends TestCase
     {
         $account = $this->makeBankAccount($this->makeEntity());
         $account->update(['is_active' => false]);
+
+        $this->actingAs($this->makeUser());
 
         $this->expectException(AccountingException::class);
         $this->expectExceptionMessage(__('filament-accounting::errors.bank_account_inactive'));
