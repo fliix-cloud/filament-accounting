@@ -28,7 +28,6 @@ use FilamentAccounting\Models\TaxRuleVersion;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use FilamentAccounting\Reconciliation\StoreReconciliationLearningRules;
 use FilamentAccounting\Support\LineMoneyCalculator;
-use Illuminate\Support\Facades\DB;
 
 final class FinalizeReconciliation
 {
@@ -49,9 +48,11 @@ final class FinalizeReconciliation
         $this->authorizer->authorize('finalize_reconciliation', $line);
         $this->scope->assertSame((int) $line->legal_entity_id);
 
-        return DB::transaction(function () use ($line, $splits, $reason, $idempotencyKey): Reconciliation {
+        return $line->getConnection()->transaction(function () use ($line, $splits, $reason, $idempotencyKey): Reconciliation {
+            LegalEntity::query()->lockForUpdate()->findOrFail($line->getRawOriginal('legal_entity_id'));
             $line = BankStatementLine::query()->lockForUpdate()->with('bankAccount')->findOrFail($line->getKey());
             $this->scope->assertSame((int) $line->legal_entity_id);
+            $this->authorizer->authorize('finalize_reconciliation', $line);
             if (! $line->bankAccount->is_active) {
                 throw new ReconciliationException(__('filament-accounting::errors.bank_account_inactive'));
             }
@@ -193,7 +194,7 @@ final class FinalizeReconciliation
                 'journal_entry_id' => $entry->getKey(),
             ]);
 
-            DB::afterCommit(fn () => ReconciliationFinalized::dispatch($reconciliation->fresh(['splits', 'journalEntry'])));
+            $line->getConnection()->afterCommit(fn () => ReconciliationFinalized::dispatch($reconciliation->fresh(['splits', 'journalEntry'])));
 
             return $reconciliation->fresh(['splits', 'journalEntry']) ?? $reconciliation;
         });

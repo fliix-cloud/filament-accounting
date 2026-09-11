@@ -6,7 +6,6 @@ use FilamentAccounting\Enums\CatalogItemType;
 use FilamentAccounting\Enums\PartyKind;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Party;
-use FilamentAccounting\Models\PartyAddress;
 use FilamentAccounting\Models\PartyTaxId;
 use FilamentAccounting\Services\ResolveTaxRuleVersion;
 use FilamentAccounting\Tax\Data\SalesTaxSuggestion;
@@ -102,10 +101,7 @@ final class SalesTaxSuggestionService
 
     private function customerCountry(Party $customer): string
     {
-        $customer->loadMissing('addresses');
-        $address = $customer->addresses->firstWhere('is_primary', true) ?? $customer->addresses->first();
-
-        return strtoupper((string) ($address instanceof PartyAddress ? $address->country_code : $customer->country_code));
+        return strtoupper(trim((string) $customer->country_code));
     }
 
     private function hasVatId(Party $customer, string $country): bool

@@ -13,7 +13,6 @@ use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Reconciliation;
 use FilamentAccounting\Models\Settlement;
 use FilamentAccounting\Ownership\LegalEntityScope;
-use Illuminate\Support\Facades\DB;
 
 final class ReverseReconciliation
 {
@@ -30,9 +29,13 @@ final class ReverseReconciliation
         $this->authorizer->authorize('reverse_reconciliation', $reconciliation);
         $this->scope->assertSame((int) $reconciliation->legal_entity_id);
 
-        return DB::transaction(function () use ($reconciliation, $postedOn, $reason): Reconciliation {
+        return $reconciliation->getConnection()->transaction(function () use ($reconciliation, $postedOn, $reason): Reconciliation {
+            LegalEntity::query()->lockForUpdate()->findOrFail($reconciliation->getRawOriginal('legal_entity_id'));
             /** @var Reconciliation $reconciliation */
             $reconciliation = Reconciliation::query()->lockForUpdate()->findOrFail($reconciliation->getKey());
+
+            $this->scope->assertSame((int) $reconciliation->legal_entity_id);
+            $this->authorizer->authorize('reverse_reconciliation', $reconciliation);
 
             if ($reconciliation->status !== ReconciliationStatus::Posted) {
                 throw new ReconciliationException(__('filament-accounting::errors.reconciliation_not_posted'));
@@ -101,7 +104,7 @@ final class ReverseReconciliation
                 'reason' => $reason,
             ], $reason);
 
-            DB::afterCommit(fn () => ReconciliationReversed::dispatch($reconciliation->fresh()));
+            $reconciliation->getConnection()->afterCommit(fn () => ReconciliationReversed::dispatch($reconciliation->fresh()));
 
             return $reconciliation->fresh() ?? $reconciliation;
         });

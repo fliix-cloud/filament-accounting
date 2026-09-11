@@ -116,6 +116,7 @@ class SalesInvoiceResource extends Resource
                 ->live()
                 ->afterStateUpdated(function (Get $get, Set $set): void {
                     self::resetTaxConfirmations($get, $set);
+                    self::prefillCustomerTaxes($get, $set);
                     self::updateDueDate($get, $set);
                     $set('direct_debit_mandate_id', null);
                 })
@@ -188,7 +189,7 @@ class SalesInvoiceResource extends Resource
                             ->all())
                         ->searchable()
                         ->live()
-                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                        ->afterStateUpdated(function (Get $get, Set $set, mixed $state): void {
                             $set('tax_confirmed', false);
                             $item = CatalogItem::query()
                                 ->where('legal_entity_id', app(LegalEntityScope::class)->require()->getKey())
@@ -204,7 +205,7 @@ class SalesInvoiceResource extends Resource
                             $set('unit', $item->unit);
                             $set('unit_price', ExactMoney::ofMinor((int) $item->default_unit_price_minor, (string) $item->currency)->decimalString());
 
-                            $set('tax_code', $item->default_tax_code);
+                            $set('tax_code', self::lineTaxSuggestion($get)->taxCode ?? $item->default_tax_code);
                         })
                         ->columnSpan(5),
                     TextInput::make('quantity')->label(__('filament-accounting::fields.quantity'))
@@ -264,6 +265,23 @@ class SalesInvoiceResource extends Resource
     {
         foreach (array_keys($get('lines') ?? []) as $key) {
             $set("lines.{$key}.tax_confirmed", false);
+        }
+    }
+
+    private static function prefillCustomerTaxes(Get $get, Set $set): void
+    {
+        $entity = app(LegalEntityScope::class)->require();
+        $party = Party::query()->where('legal_entity_id', $entity->getKey())->find($get('party_id'));
+        if (! $party instanceof Party) {
+            return;
+        }
+        foreach ($get('lines') ?? [] as $key => $line) {
+            $item = CatalogItem::query()->where('legal_entity_id', $entity->getKey())->find($line['catalog_item_id'] ?? null);
+            if ($item instanceof CatalogItem) {
+                $suggestion = app(SalesTaxSuggestionService::class)->suggest($entity, $party, $item->type,
+                    (string) ($get('supply_date') ?: $get('issue_date') ?: now()->toDateString()), $item->default_tax_code);
+                $set("lines.{$key}.tax_code", $suggestion->taxCode);
+            }
         }
     }
 

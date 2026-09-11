@@ -99,7 +99,7 @@ No production database, live bank connection, or host installation was changed.
 | F11 / F9 | New `StoreAttachment` writes retain files after failure and verify retries. Outgoing invoices commit a fixed PDF/XML set, render snapshot, paths, hashes, and preparation evidence before file writes. Retries recover missing attachment references and verify contents before posting. Issuance uses the accounting connection; Filament offers “Complete invoice”. Streaming transfer and offline verification include retained artifact data. | General orphan recovery, production concurrency/storage/restore evidence, third-party import validation, and a supported installation/release baseline. |
 | F1 / F3 / F7 / F9 / F11 | A committed intake manifest and verified private raw files precede parsing. PDF, standalone XML, and PDF/XML pairs are supported. Identity includes roles and contents. Attempts are audited; retry reuses preserved inputs. Business rollback retains intake evidence. Purchase registration uses the accounting connection. Source-total mismatches block conversion. Filament exposes open imports, safe downloads, and retry within purchase invoices. | Production concurrency and crash tests, complete conformance/accounting conversion checks, derived-file orphan recovery, complete converted-line evidence, and third-party import/restore validation. |
 | F1 / F3 | Purchase draft disposal retains the document, lines, PDF/XML, and actor/reason evidence. It requires a dedicated permission, current company scope, and a locked persisted draft. UI offers “Discard draft”; physical deletion is disabled. Invalid accepted imports are now retained independently of drafts. | Complete operational review/correction of blocked intakes and production retention evidence. |
-| F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. Sales corrections now retain prior versions and files and reverse/replace postings. | Bulk/SQL write prevention, concurrent mutation evidence, correction after reversed payments, and remaining correction workflows. |
+| F2 / F4 | Original attachment metadata and original-file model deletion are guarded. Documents reject final-state downgrades and identity changes; lines reject reparenting and consult stored parent state. Stale journal models cannot edit posted data. Sales corrections now retain prior versions and files and reverse/replace postings. | Bulk/SQL write prevention, concurrent mutation evidence and remaining correction workflows; sequential correction after reversed payments is now tested. |
 | F2 / F8 / F10 | Each ledger posting includes a versioned full journal snapshot and SHA-256 digest. Verification detects changed/missing journal data; CSV/UI use historical account values. Linked streaming export includes records, retained originals, relationships, audit events, and anchors, with isolated inspection tests. Invoice artifacts bind render snapshots and payment/correction details. | Complete finalized settlement and other business evidence; protect storage/database privileges; prove third-party import/restore and production snapshot consistency. This is tamper detection, not prevention of privileged SQL writes. |
 | F3 | Undefined Gates now deny access; the provider no longer creates permissive fallback Gates. Tests explicitly configure fixture permissions; hosts must configure their own Gates. | Complete the authorization audit of all public mutation paths and integrations. |
 | F5 | Closing cannot weaken a hard lock. Reopening requires a separate permission and non-blank reason. Both record before/after state, use the accounting connection, and lock entity before period. Repeated close is idempotent. | Production database concurrency tests and protection against direct period-model/SQL changes. |
@@ -503,22 +503,33 @@ documentation link checks.
 
 Concrete gaps to address next:
 
-- **Correction after reversed payments (F4/F8):** creation, issuance, and posting
-  currently reject any `settlements()->exists()`, including retained reversed
-  settlements. The workflow documentation's instruction to reverse allocations
-  does not establish that correction then succeeds. Define the supported path and
-  test allocation, reversal, correction, and replacement posting end to end.
+- **Correction/payment verification (F4/F8/F9):** the earlier assertion that
+  retained reversed settlements block correction was incorrect. The
+  [Document settlement relation](../src/Models/Document.php) already filters
+  `accounting_settlements.is_reversed = false`; the service-level `exists()` checks
+  therefore consider active allocations only. No runtime change was needed.
+  New [correction regressions](../tests/Documents/SalesInvoiceCorrectionTest.php)
+  now exercise real bank allocation, allocation reversal, correction, and
+  reallocation to the replacement while preserving both historical settlement
+  records. A payment added after issuance still blocks replacement posting.
+  Injected failure when creating the replacement journal rolls back the invoice
+  reversal, open-item change, and correction event together; retry retains the
+  prepared artifacts and produces exactly one reversal/replacement. These are
+  sequential SQLite tests, not proof of concurrent production behavior.
+  Validation for this test/documentation continuation: **89 tests, 487 assertions**
+  passed across correction, reconciliation, and audit suites on Herd PHP 8.4.25;
+  Pint passed. The earlier full-suite result remains the result of its own slice.
 - **Operational proof (F9/F11):** demonstrate correction/export under concurrent
   writes, process interruption, and backup/restore on the database and storage
   selected for the first supported deployment.
 
 ### Next slices
 
-1. **Finish the correction/payment boundary (F4/F8/F9).** Specify handling of
-   reversed settlements, test correction after payment reversal, and inject failure
-   between reversal and replacement. Prove concurrent correction/payment requests
-   on the selected production database; align catalog transactions with the
-   accounting connection. Keep the existing reason-and-version UI.
+1. **Prove concurrent payment/correction behavior (F9).** On the selected production
+   database, test competing allocations, allocation reversal versus correction,
+   and rollback after interruption. The reconciliation connection slice below now
+   covers separate-connection rollback and commit timing locally. Review remaining
+   accounting mutation paths for connection consistency. Keep the existing UI.
 2. **Prove operation and recovery (F2/F7/F9–F11).** Test consistent export snapshots,
    duplicate requests, termination/retry, independent import and full restore;
    measure temporary storage and lock duration. Establish integrity/pending alerts.
@@ -530,6 +541,33 @@ Concrete gaps to address next:
 
 The other open P0 findings and all release gates still apply. This continuation
 does not authorize a GoBD-readiness claim.
+
+### Reconciliation transaction boundaries — 11 September 2026 (F9)
+
+[FinalizeReconciliation](../src/Services/FinalizeReconciliation.php) and
+[ReverseReconciliation](../src/Services/ReverseReconciliation.php) now use the
+accounting model's connection for the transaction and after-commit callbacks.
+Both lock the entity before the bank/reconciliation record, matching the entity-first
+ordering used for invoice posting and correction. Authorization and company scope
+are checked again on the reloaded record. Filament needs no new fields or actions.
+
+[ReconciliationConnectionTest](../tests/Reconciliation/ReconciliationConnectionTest.php)
+uses a separate, disposable SQLite accounting database and real transaction
+commits. Injected failure at the final audit write rolls back journal entries,
+settlements and reconciliation records, with audit counts unchanged. Reversal
+failure retains the active settlement and removes the attempted reversal.
+Retries succeed; completion/reversal events are withheld until the outer
+accounting transaction commits. Default-connection tables do not receive the
+accounting reconciliation. This is not a production concurrency or process-kill
+test, and does not establish connection consistency for every package service.
+
+Validation: **91 tests, 507 assertions** passed across reconciliation, correction,
+and audit suites on Herd PHP 8.4.25; PHPStan and Pint passed.
+
+Catalog, customer and supplier imports remain a separate data-quality workstream.
+Catalog texts/prices are editable defaults, not binding invoice contents. Their
+import frequency is not itself a GoBD criterion. For this assessment, preserving
+the finalized invoice snapshots takes priority over catalog import enhancements.
 
 ## Existing foundation
 

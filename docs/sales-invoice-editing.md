@@ -40,6 +40,16 @@ units. Each line displays its net total, including any existing discount. The
 PDF preview downloads a marked draft using current form values without creating
 a document, allocating a number, posting, or archiving files.
 
+Catalog entries supply editable position defaults. Selecting an article prefills
+its description, quantity, unit and price, plus the existing tax suggestion for
+the selected customer and article type. Customer `country_code` is the invoice
+destination for this suggestion; a differing contact address does not override it.
+Changing the customer refreshes tax defaults on catalog-linked lines and resets
+tax confirmations, while preserving customized position text and prices. Manual
+tax choices remain editable and are not replaced by quantity or price changes.
+Existing warnings and confirmations still apply to ambiguous cases. Opening an
+existing invoice does not itself recalculate these defaults.
+
 Drafts can be edited and deleted. The deletion is logged. Editing an issued invoice
 requires an issuance permission and a nonempty reason in addition to the draft
 permission. Saving creates a draft of the next version using the same invoice

@@ -4,19 +4,26 @@ namespace FilamentAccounting\Tests\Documents;
 
 use FilamentAccounting\Audit\AuditChainVerifier;
 use FilamentAccounting\Audit\InvoiceEvidenceVerifier;
+use FilamentAccounting\Banking\Data\BankStatementLineData;
 use FilamentAccounting\Enums\DocumentStatus;
 use FilamentAccounting\Exceptions\AuthorizationException;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Exceptions\InvalidMoneyException;
 use FilamentAccounting\Filament\Support\DocumentAttachmentActions;
 use FilamentAccounting\Models\AuditEvent;
+use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\Document;
 use FilamentAccounting\Models\DocumentSequence;
 use FilamentAccounting\Models\InvoiceArtifactSet;
 use FilamentAccounting\Models\JournalEntry;
+use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Models\Settlement;
+use FilamentAccounting\Services\AssignStatementLine;
 use FilamentAccounting\Services\GenerateInvoiceArtifacts;
+use FilamentAccounting\Services\ImportBankStatementLines;
 use FilamentAccounting\Services\IssueSalesInvoice;
+use FilamentAccounting\Services\PostDocument;
+use FilamentAccounting\Services\ReverseReconciliation;
 use FilamentAccounting\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Gate;
@@ -29,6 +36,93 @@ class SalesInvoiceCorrectionTest extends TestCase
     {
         RefreshDatabaseState::$migrated = false;
         $this->migrateDatabases();
+    }
+
+    #[Test]
+    public function payment_added_after_issuance_blocks_replacement_posting(): void
+    {
+        $original = $this->invoice();
+        $issuer = app(IssueSalesInvoice::class);
+        $replacement = $issuer->issue($issuer->correct($original, $this->payload($original), 'Correction'), post: false);
+        Settlement::query()->create([
+            'legal_entity_id' => $original->legal_entity_id, 'open_item_id' => $original->openItem->id,
+            'journal_entry_id' => JournalEntry::query()->sole()->id,
+            'amount_minor' => 100, 'currency' => 'EUR', 'is_reversed' => false,
+        ]);
+        try {
+            app(PostDocument::class)->handle($replacement);
+            $this->fail('A payment added after issuance must block posting.');
+        } catch (DocumentException $exception) {
+            $this->assertSame(__('filament-accounting::errors.invoice_correction_has_settlements'), $exception->getMessage());
+        }
+        $this->assertSame(1, JournalEntry::query()->count());
+        $this->assertFalse($original->fresh()->openItem->is_reversed);
+    }
+
+    #[Test]
+    public function reversed_payment_history_allows_correction_and_reallocation(): void
+    {
+        $original = $this->invoice();
+        $entity = LegalEntity::query()->findOrFail($original->legal_entity_id);
+        $bank = $this->makeBankAccount($entity);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData('correction-payment', 11900, 'EUR', 'synthetic', 'acc-1', '2026-09-10', null, 'booked'),
+        ]);
+        $line = BankStatementLine::query()->sole();
+        $assign = app(AssignStatementLine::class);
+        $payment = $assign->handle($line, ['purpose' => 'settle_open_item', 'open_item_id' => $original->openItem->id]);
+        $issuer = app(IssueSalesInvoice::class);
+        try {
+            $issuer->correct($original, $this->payload($original), 'Correction');
+            $this->fail('Active payment must block correction.');
+        } catch (DocumentException $exception) {
+            $this->assertSame(__('filament-accounting::errors.invoice_correction_has_settlements'), $exception->getMessage());
+        }
+        app(ReverseReconciliation::class)->handle($payment, '2026-09-10', 'Reallocate to corrected invoice');
+        $history = $original->openItem->settlements()->orderBy('id')->get()->map->getAttributes()->all();
+        $this->assertCount(2, $history);
+        $this->assertSame(11900, $original->fresh()->openItem->remainingMinor());
+        $replacement = $issuer->issue($issuer->correct($original, $this->payload($original), 'Correct invoice'));
+        $issuer->issue($replacement);
+        $this->assertTrue($original->fresh()->openItem->is_reversed);
+        $this->assertSame($history, $original->openItem->settlements()->orderBy('id')->get()->map->getAttributes()->all());
+        $assign->handle($line->fresh(), ['purpose' => 'settle_open_item', 'open_item_id' => $replacement->openItem->id]);
+        $this->assertSame(0, $replacement->fresh()->openItem->remainingMinor());
+        $this->assertSame(3, Settlement::query()->count());
+        $this->assertTrue(app(AuditChainVerifier::class)->verify($original->legal_entity_id)->isValid());
+        $this->assertSame([], app(InvoiceEvidenceVerifier::class)->verify($original->legal_entity_id)['issues']);
+    }
+
+    #[Test]
+    public function replacement_posting_failure_rolls_back_reversal_and_can_be_retried(): void
+    {
+        $original = $this->invoice();
+        $issuer = app(IssueSalesInvoice::class);
+        $draft = $issuer->correct($original, $this->payload($original, '2'), 'Replacement');
+        $fail = true;
+        JournalEntry::creating(function (JournalEntry $entry) use ($draft, &$fail): void {
+            if ($fail && $entry->source_type === 'document' && (string) $entry->source_id === (string) $draft->id) {
+                throw new \RuntimeException('Injected replacement posting failure');
+            }
+        });
+        try {
+            $issuer->issue($draft);
+            $this->fail('Expected replacement posting failure.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Injected replacement posting failure', $exception->getMessage());
+        } finally {
+            $fail = false;
+        }
+        $this->assertSame(1, JournalEntry::query()->count());
+        $this->assertFalse($original->fresh()->openItem->is_reversed);
+        $this->assertSame(0, AuditEvent::query()->where('operation', 'document.corrected')->count());
+        $this->assertSame(DocumentStatus::Issued, $draft->fresh()->document_status);
+        $this->assertSame(2, InvoiceArtifactSet::query()->count());
+        $issuer->issue($draft->fresh());
+        $issuer->issue($draft->fresh());
+        $this->assertSame(3, JournalEntry::query()->count());
+        $this->assertSame(1, AuditEvent::query()->where('operation', 'document.corrected')->count());
+        $this->assertTrue($original->fresh()->openItem->is_reversed);
     }
 
     #[Test]
