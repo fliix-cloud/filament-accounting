@@ -3,6 +3,7 @@
 namespace FilamentAccounting\Documents;
 
 use FilamentAccounting\Documents\Data\EInvoiceParseResult;
+use FilamentAccounting\Exceptions\InvalidMoneyException;
 use FilamentAccounting\Support\ExactMoney;
 
 final class UblEInvoiceParser
@@ -45,7 +46,7 @@ final class UblEInvoiceParser
                 'quantity' => $quantity,
                 'unit' => $quantityNode instanceof \DOMElement ? $quantityNode->getAttribute('unitCode') : null,
                 'unit_price' => $unitPrice,
-                'tax_rate_bp' => $percent !== '' ? (int) round(((float) $percent) * 100) : null,
+                'tax_rate_bp' => $this->percentToBasisPoints($percent),
                 'tax_category' => $this->value($xpath, ".//*[local-name()='ClassifiedTaxCategory']/*[local-name()='ID']", $lineNode),
                 'line_net_minor' => $this->minor($this->value($xpath, "./*[local-name()='LineExtensionAmount']", $lineNode), $currency),
             ];
@@ -104,6 +105,20 @@ final class UblEInvoiceParser
     private function value(\DOMXPath $xpath, string $expression, ?\DOMNode $context = null): string
     {
         return trim((string) $xpath->evaluate('string('.$expression.')', $context));
+    }
+
+    private function percentToBasisPoints(string $percent): ?int
+    {
+        $percent = trim(str_replace(',', '.', $percent));
+        if ($percent === '' || ! is_numeric($percent)) {
+            return null;
+        }
+
+        try {
+            return ExactMoney::ofString($percent, 'EUR')->minorAmount;
+        } catch (InvalidMoneyException) {
+            return null;
+        }
     }
 
     private function minor(string $value, string $currency): int

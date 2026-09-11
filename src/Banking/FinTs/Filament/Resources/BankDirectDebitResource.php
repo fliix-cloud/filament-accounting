@@ -23,12 +23,15 @@ use FilamentAccounting\Banking\FinTs\Models\DirectDebitCreditorProfile;
 use FilamentAccounting\Banking\FinTs\Models\DirectDebitMandate;
 use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope as OwnerScope;
 use FilamentAccounting\Banking\FinTs\Services\CapabilityService;
+use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
 use Illuminate\Database\Eloquent\Builder;
 
 class BankDirectDebitResource extends Resource
 {
+    use HasAccountingNavigation;
+
     protected static ?string $model = BankDirectDebit::class;
 
     protected static ?string $slug = 'bank/direct-debits';
@@ -55,6 +58,16 @@ class BankDirectDebitResource extends Resource
     public static function getPluralModelLabel(): string
     {
         return __('filament-accounting::banking/fints/resources.direct_debit.plural');
+    }
+
+    protected static function ability(): string
+    {
+        return 'view_bank';
+    }
+
+    protected static function createAbility(): string
+    {
+        return 'create_bank_direct_debit';
     }
 
     public static function getEloquentQuery(): Builder

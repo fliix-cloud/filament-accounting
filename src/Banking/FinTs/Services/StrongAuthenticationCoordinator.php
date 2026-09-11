@@ -48,7 +48,6 @@ use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class StrongAuthenticationCoordinator
@@ -653,7 +652,7 @@ class StrongAuthenticationCoordinator
         bool $submissionMayBeAmbiguous = false,
     ): ScaOutcome {
         try {
-            return DB::transaction(function () use ($sessionUuid, $connection, $callback): ScaOutcome {
+            return $connection->getConnection()->transaction(function () use ($sessionUuid, $connection, $callback): ScaOutcome {
                 $session = $this->lockOpenSession($sessionUuid, $connection);
 
                 return $callback($session);
@@ -687,7 +686,7 @@ class StrongAuthenticationCoordinator
         PaymentStatus $relatedStatus,
         ?string $message = null,
     ): void {
-        $session = DB::transaction(function () use ($sessionUuid, $connection, $state, $relatedStatus, $message): ?StrongAuthenticationSession {
+        $session = $connection->getConnection()->transaction(function () use ($sessionUuid, $connection, $state, $relatedStatus, $message): ?StrongAuthenticationSession {
             /** @var StrongAuthenticationSession|null $session */
             $session = StrongAuthenticationSession::query()
                 ->where('uuid', $sessionUuid)

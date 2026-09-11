@@ -5,6 +5,7 @@ namespace FilamentAccounting\Banking\FinTs\Services;
 use FilamentAccounting\Banking\FinTs\Exceptions\NetworkException;
 use FilamentAccounting\Banking\FinTs\Models\BankInstitute;
 use FilamentAccounting\Banking\FinTs\Support\BankQuirks;
+use FilamentAccounting\Banking\FinTs\Support\EndpointValidator;
 use Illuminate\Support\Facades\Http;
 
 class InstituteDirectoryService
@@ -121,6 +122,7 @@ class InstituteDirectoryService
 
     private function download(string $url): string
     {
+        $url = EndpointValidator::validate($url);
         $response = Http::timeout((int) config('filament-accounting.banking.fints.institutes.timeout', 30))
             ->accept('text/plain')
             ->withHeaders([

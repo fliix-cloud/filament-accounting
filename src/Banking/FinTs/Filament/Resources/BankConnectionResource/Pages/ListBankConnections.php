@@ -8,6 +8,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use FilamentAccounting\Banking\FinTs\Filament\Resources\BankConnectionResource;
 use FilamentAccounting\Banking\FinTs\Services\InstituteDirectoryService;
+use FilamentAccounting\Contracts\AccountingAuthorizer as BankAuthorizer;
 
 class ListBankConnections extends ListRecords
 {
@@ -18,7 +19,9 @@ class ListBankConnections extends ListRecords
         return [
             Action::make('syncInstitutes')
                 ->label(__('filament-accounting::banking/fints/actions.sync_institutes'))
+                ->visible(fn (): bool => app(BankAuthorizer::class)->can('manage_bank_connections'))
                 ->action(function (InstituteDirectoryService $directory): void {
+                    app(BankAuthorizer::class)->authorize('manage_bank_connections');
                     $result = $directory->sync();
                     Notification::make()
                         ->title(__('filament-accounting::banking/fints/notifications.institutes_synced'))

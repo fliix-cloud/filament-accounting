@@ -3,6 +3,7 @@
 namespace FilamentAccounting\Tests\Banking\FinTs;
 
 use FilamentAccounting\Banking\FinTs\Exceptions\FintsValidationException;
+use FilamentAccounting\Banking\FinTs\Services\InstituteDirectoryService;
 use FilamentAccounting\Banking\FinTs\Support\EndpointValidator;
 use FilamentAccounting\Banking\FinTs\Support\RedactingLogger;
 use FilamentAccounting\Tests\TestCase;
@@ -39,6 +40,25 @@ class SecurityBoundaryTest extends TestCase
         config()->set('filament-accounting.banking.fints.security.allowed_hosts', ['fints.example-bank.de']);
         $this->expectException(FintsValidationException::class);
         EndpointValidator::validate('https://fints.other-bank.de/cgi/fints');
+    }
+
+    #[Test]
+    public function institute_directory_downloads_reject_private_and_non_https_urls(): void
+    {
+        $directory = app(InstituteDirectoryService::class);
+
+        foreach ([
+            'http://example.com/blz.properties',
+            'https://127.0.0.1/blz.properties',
+            'https://169.254.169.254/latest/meta-data/',
+        ] as $url) {
+            try {
+                $directory->sync($url);
+                $this->fail("The unsafe directory URL {$url} must be rejected.");
+            } catch (FintsValidationException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 
     #[Test]

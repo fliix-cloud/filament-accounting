@@ -24,12 +24,15 @@ use FilamentAccounting\Banking\FinTs\Models\BankInstitute;
 use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope as OwnerScope;
 use FilamentAccounting\Banking\FinTs\Support\BankQuirks;
 use FilamentAccounting\Banking\FinTs\Support\ProductRegistration;
+use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
 use Illuminate\Database\Eloquent\Builder;
 
 class BankConnectionResource extends Resource
 {
+    use HasAccountingNavigation;
+
     protected static ?string $model = BankConnection::class;
 
     protected static ?string $slug = 'bank/settings';
@@ -61,6 +64,16 @@ class BankConnectionResource extends Resource
     public static function getPluralModelLabel(): string
     {
         return __('filament-accounting::banking/fints/resources.connection.plural');
+    }
+
+    protected static function ability(): string
+    {
+        return 'manage_bank_connections';
+    }
+
+    public static function canDelete($record): bool
+    {
+        return static::canViewAny();
     }
 
     /** @return Builder<BankConnection> */

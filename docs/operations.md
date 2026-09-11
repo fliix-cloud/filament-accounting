@@ -445,9 +445,18 @@ has a truncated range.
 ## Audit export in Filament
 
 The package provides a route `filament-accounting.audit-export` that streams a
-dataset with an attested anchor. Define the `accounting.audit.export` Gate to
-control access. Authorized users see an **Export audit dataset** action on the
-company settings page.
+dataset with an attested anchor. The route uses `web` and `auth`, checks the
+current company, then the `accounting.audit.export` Gate. Isolation failures
+return 404. Define that Gate to control access. Authorized users see an
+**Export audit dataset** action on the company settings page.
+
+Banking Filament resources now require the mapped Gates (`view_bank`,
+`create_bank_transfer`, `create_bank_direct_debit`, `manage_bank_connections`).
+Authentication alone does not open transfers, lastschriften, connections,
+mandates, or creditor profiles. Institute-directory sync in the UI also
+requires `manage_bank_connections`. Console `filament-accounting:sync-institutes`
+still has no web authorization; it now rejects non-HTTPS and private directory
+URLs the same way FinTS endpoints are validated.
 
 ## New authorization abilities
 

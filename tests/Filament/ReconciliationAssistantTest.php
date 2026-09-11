@@ -16,6 +16,7 @@ use FilamentAccounting\Services\ImportBankStatementLines;
 use FilamentAccounting\Services\IssueSalesInvoice;
 use FilamentAccounting\Services\RegisterPurchaseInvoice;
 use FilamentAccounting\Tests\TestCase;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -228,6 +229,31 @@ class ReconciliationAssistantTest extends TestCase
 
         $this->assertSame(PaymentStatus::Paid, $bill->fresh('openItem.settlements')->paymentStatus());
         $this->assertSame(2, Reconciliation::query()->sole()->splits()->count());
+    }
+
+    #[Test]
+    public function unauthorized_actors_cannot_open_the_assistant(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        Gate::define(config('filament-accounting.authorization.abilities.draft_reconciliation'), fn (): bool => false);
+        $bank = $this->makeBankAccount($entity);
+        app(ImportBankStatementLines::class)->handle($bank, [
+            new BankStatementLineData(
+                externalId: 'denied-assistant',
+                amountMinor: 11900,
+                currency: 'EUR',
+                driverKey: 'synthetic',
+                sourceAccountExternalId: 'acc-1',
+                bookingDate: '2026-03-10',
+                valueDate: '2026-03-10',
+                sourceStatus: 'booked',
+            ),
+        ]);
+        $line = BankStatementLine::query()->where('external_id', 'denied-assistant')->firstOrFail();
+
+        Livewire::test(ReconciliationAssistant::class, ['line' => $line->uuid])
+            ->assertForbidden();
     }
 
     #[Test]

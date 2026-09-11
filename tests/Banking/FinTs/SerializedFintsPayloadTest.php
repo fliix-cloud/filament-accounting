@@ -26,6 +26,16 @@ class SerializedFintsPayloadTest extends TestCase
     }
 
     #[Test]
+    public function php_unserialize_does_not_enable_all_classes(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3).'/src/Banking/FinTs/Support/SerializedFintsPayload.php');
+
+        $this->assertIsString($source);
+        $this->assertStringNotContainsString("'allowed_classes' => true", $source);
+        $this->assertStringContainsString("'allowed_classes' => \$classes === [] ? false : \$classes", $source);
+    }
+
+    #[Test]
     public function stored_action_graphs_may_include_tan_request_implementations(): void
     {
         $action = new FakeAction;

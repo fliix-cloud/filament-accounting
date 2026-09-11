@@ -135,4 +135,41 @@ class RecordProtectionTest extends TestCase
         $this->assertSame(100, $line->fresh()->debit_minor);
         $this->assertSame(JournalStatus::Posted, $entry->fresh()->status);
     }
+
+    #[Test]
+    public function accounts_used_in_journals_cannot_change_identity_fields(): void
+    {
+        $entity = $this->makeEntity();
+        $account = $entity->ledgerAccounts()->whereDoesntHave('roleAssignments')->whereDoesntHave('journalLines')->firstOrFail();
+        $originalCode = $account->code;
+        $account->update(['name' => 'Operating bank']);
+        $this->assertSame('Operating bank', $account->fresh()->name);
+
+        app(LedgerEngine::class)->post(new PostJournalCommand(
+            legalEntityId: (int) $entity->getKey(),
+            postedOn: '2026-03-10',
+            sourceType: 'test',
+            sourceId: 'ledger-identity',
+            currency: 'EUR',
+            baseCurrency: 'EUR',
+            lines: [
+                JournalLineDraft::debit((int) $entity->ledgerAccounts()->where('code', '1200')->value('id'), 100, 'EUR', 'Bank'),
+                JournalLineDraft::credit((int) $account->getKey(), 100, 'EUR', 'Revenue'),
+            ],
+            idempotencyKey: 'ledger-identity',
+        ));
+
+        foreach (['name' => 'Renamed', 'code' => '1200-X'] as $field => $value) {
+            try {
+                $account->fresh()->update([$field => $value]);
+                $this->fail("Used account field [{$field}] must stay immutable.");
+            } catch (PostedRecordImmutableException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertSame('Operating bank', $account->fresh()->name);
+        $this->assertSame($originalCode, $account->fresh()->code);
+        $account->fresh()->update(['is_active' => false]);
+        $this->assertFalse($account->fresh()->is_active);
+    }
 }

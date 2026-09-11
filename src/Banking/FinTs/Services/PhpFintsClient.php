@@ -200,7 +200,7 @@ final class PhpFintsClient implements FintsClient, ProvidesCamtStatementSchemas
 
     public function hasOpenDialog(): bool
     {
-        $data = @unserialize($this->fints->persist(), ['allowed_classes' => true]);
+        $data = @unserialize($this->fints->persist(), ['allowed_classes' => false]);
 
         return is_array($data) && count($data) >= 8 && ($data[7] ?? null) !== null && $data[7] !== '';
     }

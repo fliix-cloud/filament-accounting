@@ -10,7 +10,8 @@ final class RichText
             return null;
         }
 
-        $clean = strip_tags((string) $html, '<p><br><strong><b><em><i><ul><ol><li>');
+        $clean = preg_replace('#<(script|style)\b[^>]*>.*?</\1>#is', '', (string) $html) ?? '';
+        $clean = strip_tags($clean, '<p><br><strong><b><em><i><ul><ol><li>');
         $clean = preg_replace('/<(p|br|strong|b|em|i|ul|ol|li)\b[^>]*>/i', '<$1>', $clean) ?? '';
         $clean = trim($clean);
 

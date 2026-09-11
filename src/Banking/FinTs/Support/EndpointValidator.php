@@ -54,12 +54,24 @@ final class EndpointValidator
             return true;
         }
 
-        $ip = filter_var($host, FILTER_VALIDATE_IP) ? $host : gethostbyname($host);
+        $ip = filter_var($host, FILTER_VALIDATE_IP) ? $host : null;
+        $ips = $ip !== null
+            ? [$ip]
+            : array_values(array_filter(array_merge(
+                gethostbynamel($host) ?: [],
+                array_column(@dns_get_record($host, DNS_AAAA) ?: [], 'ipv6'),
+            )));
 
-        if (! filter_var($ip, FILTER_VALIDATE_IP)) {
+        if ($ips === []) {
             return false;
         }
 
-        return ! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+        foreach ($ips as $resolved) {
+            if (! filter_var($resolved, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -95,7 +95,19 @@ class SalesInvoiceResource extends Resource
 
     protected static function ability(): string
     {
-        return 'create_draft_invoices';
+        return 'view';
+    }
+
+    public static function canViewAny(): bool
+    {
+        $authorizer = app(AccountingAuthorizer::class);
+
+        return $authorizer->can('view') || $authorizer->can('create_draft_invoices');
+    }
+
+    public static function canCreate(): bool
+    {
+        return app(AccountingAuthorizer::class)->can('create_draft_invoices');
     }
 
     public static function getEloquentQuery(): Builder

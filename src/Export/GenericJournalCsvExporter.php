@@ -10,6 +10,7 @@ use FilamentAccounting\Enums\JournalStatus;
 use FilamentAccounting\Exceptions\JournalIntegrityException;
 use FilamentAccounting\Models\JournalEntry;
 use FilamentAccounting\Models\LegalEntity;
+use FilamentAccounting\Support\CsvFormula;
 
 final class GenericJournalCsvExporter implements AccountingExporter
 {
@@ -51,7 +52,7 @@ final class GenericJournalCsvExporter implements AccountingExporter
 
                 foreach ($entries as $entry) {
                     foreach ($entry->lines->sortBy([['position', 'asc'], ['id', 'asc']]) as $line) {
-                        fputcsv($handle, [
+                        fputcsv($handle, array_map(CsvFormula::escape(...), [
                             $entry->sequence,
                             $entry->posted_on?->toDateString(),
                             $line->account_snapshot['code'],
@@ -64,7 +65,7 @@ final class GenericJournalCsvExporter implements AccountingExporter
                             $entry->source_type,
                             $entry->source_id,
                             $entry->period_snapshot['fiscal_year'].'-'.$entry->period_snapshot['period_number'],
-                        ], escape: '');
+                        ]), escape: '');
                     }
                 }
 

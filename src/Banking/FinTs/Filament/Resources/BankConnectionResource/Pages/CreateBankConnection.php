@@ -46,8 +46,10 @@ class CreateBankConnection extends CreateRecord
         return [
             Action::make('syncInstitutes')
                 ->label(__('filament-accounting::banking/fints/actions.sync_institutes'))
-                ->visible(fn (): bool => BankInstitute::query()->count() === 0)
+                ->visible(fn (): bool => BankInstitute::query()->count() === 0
+                    && app(BankAuthorizer::class)->can('manage_bank_connections'))
                 ->action(function (InstituteDirectoryService $directory): void {
+                    app(BankAuthorizer::class)->authorize('manage_bank_connections');
                     $result = $directory->sync();
                     Notification::make()
                         ->title(__('filament-accounting::banking/fints/notifications.institutes_synced'))

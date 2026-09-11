@@ -17,11 +17,14 @@ use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitCreditorProfi
 use FilamentAccounting\Banking\FinTs\Filament\Resources\DirectDebitCreditorProfileResource\Pages\ListDirectDebitCreditorProfiles;
 use FilamentAccounting\Banking\FinTs\Models\DirectDebitCreditorProfile;
 use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope as OwnerScope;
+use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use Illuminate\Database\Eloquent\Builder;
 
 class DirectDebitCreditorProfileResource extends Resource
 {
+    use HasAccountingNavigation;
+
     protected static ?string $model = DirectDebitCreditorProfile::class;
 
     protected static ?string $slug = 'bank/direct-debit-creditors';
@@ -53,6 +56,16 @@ class DirectDebitCreditorProfileResource extends Resource
     public static function getPluralModelLabel(): string
     {
         return __('filament-accounting::banking/fints/resources.direct_debit_creditor.plural');
+    }
+
+    protected static function ability(): string
+    {
+        return 'manage_bank_connections';
+    }
+
+    public static function canDelete($record): bool
+    {
+        return static::canViewAny();
     }
 
     public static function getEloquentQuery(): Builder

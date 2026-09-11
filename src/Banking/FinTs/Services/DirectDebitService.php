@@ -24,7 +24,6 @@ use FilamentAccounting\Banking\FinTs\Support\Money;
 use FilamentAccounting\Banking\FinTs\Support\SepaIdentifier;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 
 class DirectDebitService
 {
@@ -38,7 +37,7 @@ class DirectDebitService
 
     public function submit(BankDirectDebit $debit, ?Model $actor = null, ?string $returnUrl = null): ScaOutcome
     {
-        $claimed = DB::transaction(function () use ($debit): array|ScaOutcome {
+        $claimed = $debit->getConnection()->transaction(function () use ($debit): array|ScaOutcome {
             $locked = BankDirectDebit::query()->whereKey($debit->getKey())->lockForUpdate()->firstOrFail();
 
             if ($locked->status === PaymentStatus::Submitted) {
@@ -96,7 +95,7 @@ class DirectDebitService
             $mapped = ErrorMapper::map($e);
             $status = ErrorMapper::paymentStatusAfterSubmit($mapped);
 
-            DB::transaction(function () use ($debit, $mapped, $status): void {
+            $debit->getConnection()->transaction(function () use ($debit, $mapped, $status): void {
                 $locked = BankDirectDebit::query()->whereKey($debit->getKey())->lockForUpdate()->first();
                 if (! $locked instanceof BankDirectDebit || $locked->status === PaymentStatus::Submitted) {
                     return;

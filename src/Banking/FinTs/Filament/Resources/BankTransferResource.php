@@ -21,6 +21,8 @@ use FilamentAccounting\Banking\FinTs\Models\BankConnection;
 use FilamentAccounting\Banking\FinTs\Models\BankTransfer;
 use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope as OwnerScope;
 use FilamentAccounting\Banking\FinTs\Services\CapabilityService;
+use FilamentAccounting\Contracts\AccountingAuthorizer;
+use FilamentAccounting\Filament\Concerns\HasAccountingNavigation;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
 use FilamentAccounting\Support\ReferenceData;
@@ -28,6 +30,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class BankTransferResource extends Resource
 {
+    use HasAccountingNavigation;
+
     protected static ?string $model = BankTransfer::class;
 
     protected static ?string $slug = 'bank/transfers';
@@ -54,6 +58,23 @@ class BankTransferResource extends Resource
     public static function getPluralModelLabel(): string
     {
         return __('filament-accounting::banking/fints/resources.transfer.plural');
+    }
+
+    protected static function ability(): string
+    {
+        return 'view_bank';
+    }
+
+    protected static function createAbility(): string
+    {
+        return 'create_bank_transfer';
+    }
+
+    public static function canDelete($record): bool
+    {
+        return $record instanceof BankTransfer
+            && $record->status->isDeletable()
+            && app(AccountingAuthorizer::class)->can('create_bank_transfer', $record);
     }
 
     public static function getEloquentQuery(): Builder
