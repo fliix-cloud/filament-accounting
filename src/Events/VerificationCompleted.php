@@ -12,7 +12,7 @@ class VerificationCompleted
     use SerializesModels;
 
     /**
-     * @param array<string, mixed> $report The JSON report for this entity (schema v2).
+     * @param  array<string, mixed>  $report  The JSON report for this entity (schema v2).
      */
     public function __construct(
         public LegalEntity $entity,

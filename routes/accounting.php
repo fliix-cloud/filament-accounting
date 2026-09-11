@@ -1,5 +1,7 @@
 <?php
 
+use FilamentAccounting\Contracts\AccountingAuthorizer;
+use FilamentAccounting\Export\StreamDatasetExporter;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Ownership\LegalEntityScope;
 use Illuminate\Support\Facades\Route;
@@ -7,11 +9,11 @@ use Illuminate\Support\Facades\Route;
 Route::name('filament-accounting.')->group(function (): void {
     Route::get('accounting/audit/export/{legalEntity}', function (LegalEntity $legalEntity, LegalEntityScope $scope) {
         $scope->assertModel($legalEntity);
-        if (! app(\FilamentAccounting\Contracts\AccountingAuthorizer::class)->can('export_audit', $legalEntity)) {
+        if (! app(AccountingAuthorizer::class)->can('export_audit', $legalEntity)) {
             abort(403, __('filament-accounting::errors.unauthorized', ['ability' => 'export_audit']));
         }
 
-        $result = app(\FilamentAccounting\Export\StreamDatasetExporter::class)->build($legalEntity, anchor: true);
+        $result = app(StreamDatasetExporter::class)->build($legalEntity, anchor: true);
 
         return response()->streamDownload(function () use ($result): void {
             $stream = $result['stream'];

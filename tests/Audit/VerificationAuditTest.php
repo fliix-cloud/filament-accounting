@@ -4,7 +4,6 @@ namespace FilamentAccounting\Tests\Audit;
 
 use FilamentAccounting\Events\VerificationCompleted;
 use FilamentAccounting\Models\AuditEvent;
-use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Artisan;

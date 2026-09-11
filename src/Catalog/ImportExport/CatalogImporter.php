@@ -5,10 +5,16 @@ namespace FilamentAccounting\Catalog\ImportExport;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Models\CatalogItem;
 use FilamentAccounting\Ownership\LegalEntityScope;
+use FilamentAccounting\Services\AuditLogger;
 
 final class CatalogImporter
 {
-    public function __construct(private CatalogSerializer $serializer, private LegalEntityScope $scope, private AccountingAuthorizer $authorizer) {}
+    public function __construct(
+        private CatalogSerializer $serializer,
+        private LegalEntityScope $scope,
+        private AccountingAuthorizer $authorizer,
+        private AuditLogger $audit,
+    ) {}
 
     public function import(string $path, string $format, bool $updateExisting = true): CatalogImportResult
     {
@@ -27,7 +33,6 @@ final class CatalogImporter
         $rows = $this->serializer->read($path, $format);
 
         return $entity->getConnection()->transaction(function () use ($entity, $rows, $format, $updateExisting, $preview): CatalogImportResult {
-            // Serialize catalog imports for this entity, including imports of previously absent SKUs.
             $entity->newQuery()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
             $normalized = [];
             $skus = [];
@@ -42,6 +47,7 @@ final class CatalogImporter
                 $normalized[] = $data;
             }
             $created = $updated = $skipped = 0;
+            $createdSkus = $updatedSkus = [];
             foreach ($normalized as $data) {
                 $item = $data['sku'] === null ? null : CatalogItem::query()->where('legal_entity_id', $entity->getKey())
                     ->where('sku', $data['sku'])->lockForUpdate()->first();
@@ -52,10 +58,12 @@ final class CatalogImporter
                 }
                 if ($item) {
                     $updated++;
+                    $updatedSkus[] = $item->sku;
                 } else {
                     $created++;
                     $item = new CatalogItem;
                     $item->legal_entity_id = $entity->getKey();
+                    $createdSkus[] = $data['sku'];
                 }
                 if (! $preview) {
                     $item->fill($data);
@@ -63,6 +71,16 @@ final class CatalogImporter
                         throw CatalogImportException::because('persistence');
                     }
                 }
+            }
+
+            if (! $preview) {
+                $this->audit->log($entity, 'catalog.imported', $entity, [
+                    'created' => $created,
+                    'updated' => $updated,
+                    'skipped' => $skipped,
+                    'created_skus' => $createdSkus,
+                    'updated_skus' => $updatedSkus,
+                ]);
             }
 
             return new CatalogImportResult($created, $updated, $skipped);

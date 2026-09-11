@@ -2,7 +2,6 @@
 
 namespace FilamentAccounting\Models;
 
-use FilamentAccounting\Enums\ReconciliationStatus;
 use FilamentAccounting\Exceptions\PostedRecordImmutableException;
 use FilamentAccounting\Support\HasUuid;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
