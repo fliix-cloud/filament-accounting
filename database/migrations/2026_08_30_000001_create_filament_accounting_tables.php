@@ -287,6 +287,8 @@ return new class extends Migration
             $table->boolean('classification_confirmed')->default(false);
             $table->boolean('tax_confirmed')->default(false);
             $table->string('imported_tax_code', 32)->nullable();
+            $table->unsignedInteger('source_line_index')->nullable();
+            $table->string('source_line_hash', 64)->nullable();
             $table->date('service_from')->nullable();
             $table->date('service_to')->nullable();
             $table->timestamps();

@@ -157,7 +157,11 @@ final class ImportPurchaseInvoice
             $format = ($embeddedXml !== null ? 'hybrid-' : 'pdf+').$supplied->formatKey;
         }
         [$party, $match] = $parsed ? $this->matchSupplier($entity, $parsed) : [null, 'unmatched', false];
-        $lines = $parsed ? array_map(fn (array $line): array => $this->importedLine($line), $parsed->lines) : [];
+        $lines = $parsed ? array_map(
+            fn (array $line, int $index): array => $this->importedLine($line, $index + 1),
+            $parsed->lines,
+            array_keys($parsed->lines),
+        ) : [];
         $meta = [
             'structured' => $parsed instanceof EInvoiceParseResult,
             'format' => $format,
@@ -349,7 +353,7 @@ final class ImportPurchaseInvoice
     }
 
     /** @param array<string, mixed> $line */
-    private function importedLine(array $line): array
+    private function importedLine(array $line, int $sourceIndex): array
     {
         $rate = isset($line['tax_rate_bp']) ? (int) $line['tax_rate_bp'] : 0;
         $taxCode = match ($rate) {
@@ -367,6 +371,8 @@ final class ImportPurchaseInvoice
             'tax_code' => $taxCode,
             'imported_tax_code' => $taxCode,
             'imported_tax_rate_bp' => $rate,
+            'source_line_index' => $sourceIndex,
+            'source_line_hash' => hash('sha256', app(\FilamentAccounting\Audit\CanonicalJson::class)->encode($line)),
             'classification_code' => null,
             'classification_confirmed' => false,
             'tax_confirmed' => false,

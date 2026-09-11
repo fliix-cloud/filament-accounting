@@ -312,6 +312,8 @@ final class RegisterPurchaseInvoice
                 'classification_confirmed' => $reviewed && $classificationCode !== null,
                 'tax_confirmed' => $reviewed && filled($taxCodeValue),
                 'imported_tax_code' => $input['imported_tax_code'] ?? null,
+                'source_line_index' => $input['source_line_index'] ?? null,
+                'source_line_hash' => $input['source_line_hash'] ?? null,
                 'service_from' => $input['service_from'] ?? null,
                 'service_to' => $input['service_to'] ?? null,
             ]);

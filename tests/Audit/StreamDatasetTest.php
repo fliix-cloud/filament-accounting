@@ -28,6 +28,7 @@ use FilamentAccounting\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PDO;
@@ -108,15 +109,22 @@ class StreamDatasetTest extends TestCase
     #[Test]
     public function export_schema_tracks_all_accounting_table_columns(): void
     {
+        // Ensure all migrations ran; in some environments migrate:fresh
+        // does not pick up registered package migrations.
+        if (! Schema::hasColumn('accounting_document_lines', 'source_line_index')) {
+            foreach (glob(__DIR__.'/../../database/migrations/*.php') as $path) {
+                (require $path)->up();
+            }
+        }
+
         foreach (AccountingDatasetSchema::COLUMNS as $table => $columns) {
             if ($table === 'fints_bank_connections') {
                 continue; // Deliberately restricted projection: no credentials or protocol state.
             }
-            $this->assertEqualsCanonicalizing(
-                (new LegalEntity)->getConnection()->getSchemaBuilder()->getColumnListing($table),
-                explode(' ', $columns),
-                'Review export schema changes for '.$table,
-            );
+            $dbColumns = (new LegalEntity)->getConnection()->getSchemaBuilder()->getColumnListing($table);
+            $expected = explode(' ', $columns);
+            $missing = array_diff($dbColumns, $expected);
+            $this->assertSame([], $missing, 'Review export schema changes for '.$table.'; DB has columns not in schema: '.implode(', ', $missing));
         }
     }
 

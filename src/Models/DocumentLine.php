@@ -36,6 +36,8 @@ use Illuminate\Support\Carbon;
  * @property bool $classification_confirmed
  * @property bool $tax_confirmed
  * @property string|null $imported_tax_code
+ * @property int|null $source_line_index
+ * @property string|null $source_line_hash
  * @property Carbon|null $service_from
  * @property Carbon|null $service_to
  * @property-read Document $document
@@ -70,6 +72,8 @@ class DocumentLine extends AccountingModel
         'classification_confirmed',
         'tax_confirmed',
         'imported_tax_code',
+        'source_line_index',
+        'source_line_hash',
         'service_from',
         'service_to',
     ];
