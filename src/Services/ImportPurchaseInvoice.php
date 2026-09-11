@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Services;
 
+use FilamentAccounting\Audit\CanonicalJson;
 use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Documents\Data\EInvoiceParseResult;
 use FilamentAccounting\Documents\Data\PurchaseInvoiceUploadResult;
@@ -372,7 +373,7 @@ final class ImportPurchaseInvoice
             'imported_tax_code' => $taxCode,
             'imported_tax_rate_bp' => $rate,
             'source_line_index' => $sourceIndex,
-            'source_line_hash' => hash('sha256', app(\FilamentAccounting\Audit\CanonicalJson::class)->encode($line)),
+            'source_line_hash' => hash('sha256', app(CanonicalJson::class)->encode($line)),
             'classification_code' => null,
             'classification_confirmed' => false,
             'tax_confirmed' => false,
