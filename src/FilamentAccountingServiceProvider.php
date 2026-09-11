@@ -15,6 +15,7 @@ use FilamentAccounting\Commands\CreateAuditAnchorCommand;
 use FilamentAccounting\Commands\ExportAuditEvidenceCommand;
 use FilamentAccounting\Commands\InstallCommand;
 use FilamentAccounting\Commands\SeedProfileCommand;
+use FilamentAccounting\Commands\StorageIntegrityCommand;
 use FilamentAccounting\Commands\VerifyAuditEvidenceCommand;
 use FilamentAccounting\Commands\VerifyCommand;
 use FilamentAccounting\Contracts\AccountingActorResolver;
@@ -53,6 +54,7 @@ class FilamentAccountingServiceProvider extends PackageServiceProvider
                 ExportAuditEvidenceCommand::class,
                 InstallCommand::class,
                 SeedProfileCommand::class,
+                StorageIntegrityCommand::class,
                 SyncCommand::class,
                 SyncInstitutesCommand::class,
                 VerifyAuditEvidenceCommand::class,

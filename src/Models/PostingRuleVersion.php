@@ -2,6 +2,8 @@
 
 namespace FilamentAccounting\Models;
 
+use FilamentAccounting\Enums\ReconciliationStatus;
+use FilamentAccounting\Exceptions\PostedRecordImmutableException;
 use FilamentAccounting\Support\HasUuid;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -26,6 +28,13 @@ class PostingRuleVersion extends AccountingModel
 
     protected $table = 'accounting_posting_rule_versions';
 
+    public const IMMUTABLE_FIELDS = [
+        'account_mappings',
+        'direction',
+        'line_templates',
+        'tax_code',
+    ];
+
     protected $fillable = [
         'posting_rule_id',
         'version',
@@ -48,6 +57,22 @@ class PostingRuleVersion extends AccountingModel
             'account_mappings' => 'array',
             'line_templates' => 'array',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(function (self $version): void {
+            if (array_intersect(array_keys($version->getDirty()), self::IMMUTABLE_FIELDS) === []) {
+                return;
+            }
+            if (ReconciliationSplit::query()
+                ->where('posting_rule_version_id', $version->getKey())
+                ->exists()) {
+                throw new PostedRecordImmutableException(
+                    __('filament-accounting::errors.posting_rule_version_immutable')
+                );
+            }
+        });
     }
 
     /** @return BelongsTo<PostingRule, $this> */

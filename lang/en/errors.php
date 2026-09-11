@@ -86,4 +86,5 @@ return [
     'foreign_currency_unsupported' => 'Postings must use the legal entity base currency. Foreign-currency conversion is not implemented.',
     'invalid_line_discount' => 'The line discount is invalid. Use a percent such as 10% or an amount in the document currency that does not exceed the line net.',
     'unsupported_document_type' => 'This document type is not valid for the current workflow.',
+    'posting_rule_version_immutable' => 'A posting rule version referenced by a posted reconciliation cannot be changed.',
 ];
