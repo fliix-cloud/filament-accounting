@@ -527,10 +527,16 @@ Concrete gaps to address next:
 
 1. **Extend concurrency and interruption evidence (F9).** The MySQL slice below
    covers duplicate/competing allocations and payment versus correction in both
-   winning orders. Next test process termination with uncommitted writes,
-   allocation reversal versus correction, and retry after interruption. Include
-   the full artifact/storage workflow and review remaining mutation paths for
-   connection consistency. Keep the existing UI.
+   winning orders, plus booking-process termination before/after commit and retry.
+   Allocation reversal versus correction is also covered in both lock orders.
+   Invoice and correction issuance now also cover worker termination after XML/PDF
+   writes on local storage and concurrent issuance with artifact generation.
+   Rejected writes and successful-but-truncated writes are covered through a
+   test-only storage adapter. A quiescent full-fixture restore now verifies all
+   backed-up tables and retained files after source removal. Next test export
+   snapshot consistency during concurrent writes and review remaining mutation
+   paths for connection consistency.
+   Keep the existing UI.
 2. **Prove operation and recovery (F2/F7/F9–F11).** Test consistent export snapshots,
    duplicate requests, termination/retry, independent import and full restore;
    measure temporary storage and lock duration. Establish integrity/pending alerts.
@@ -589,8 +595,8 @@ inside the worker process. [CI](../.github/workflows/tests.yml) now contains a
 dedicated PHP 8.4 / MySQL 8.4 job; its remote execution has not been observed here.
 See [operations](operations.md) for the local command and access requirements.
 
-These cases isolate the database boundary and disable generated invoice artifacts
-in their fixtures. They do not prove process-kill recovery, production storage
+These contention cases isolate the database boundary and disable generated invoice artifacts
+in their fixtures. They do not prove production storage
 durability, full rendering under contention, or all database isolation settings.
 F9 and the wider release gates remain open.
 
@@ -601,6 +607,203 @@ because repeated `information_schema.innodb_trx` polling was not reliable in the
 local run. The ordinary opt-out path and separate-connection regressions passed;
 Pint, strict Composer validation, workflow YAML parsing and documentation links
 passed. The configured MySQL 8.4 CI job remains unverified until CI executes it.
+
+### Booking-process interruption and retry — 11 September 2026 (F9)
+
+[MySqlConcurrencyTest](../tests/Integration/MySqlConcurrencyTest.php) additionally
+terminates a separate PHP booking process at two explicit barriers: after the
+final reconciliation audit row has been inserted inside the transaction, and
+inside the after-commit completion event before the caller receives its result.
+The worker reports actual journal, settlement and reconciliation counts plus its
+transaction level before pausing. The parent forcibly terminates that worker
+(`SIGKILL` on Unix, `taskkill /F /T` through Symfony on Windows).
+
+Before commit, the independent parent connection cannot see the settlement.
+After termination, acquiring the entity lock waits for MySQL to finish rollback;
+the test checks that the original open balance and complete audit history remain,
+with no attempted payment journal, settlement or reconciliation left behind.
+After commit, the payment remains complete. A fresh PHP process retries with the
+same idempotency key and returns the already committed reconciliation without
+additional audit events. A further replay also preserves counts and audit history.
+Both cases verify the audit chain and journal integrity before and after retry.
+
+This evidence covers termination of the application worker during a bank-payment
+allocation. It does not simulate database-server termination, power loss, durable
+event delivery, invoice artifact storage, or backup restoration. Generated invoice
+artifacts remain disabled in these fixtures. F9 stays open for the remaining
+concurrency, storage and recovery gates; no Filament controls were added.
+
+Validation: **six MySQL scenarios, 89 assertions passed** on MySQL 9.7.0 / Herd
+PHP 8.4.25 (four contention cases and two interruption cases; one expected skip
+for the worker-only entry point). The ordinary opt-out run skipped all seven
+MySQL entries and passed the two separate-connection regressions with 20
+assertions. Pint passed. The MySQL 8.4 CI execution remains unverified.
+
+### Concurrent payment reversal and invoice correction — 11 September 2026 (F9)
+
+[MySqlConcurrencyTest](../tests/Integration/MySqlConcurrencyTest.php) now covers
+a correction draft followed by a payment allocation, with reversal and correction
+competing for the entity lock in two independent PHP processes. Both cases wait
+for MySQL to report the child blocked on that lock before proceeding.
+
+- Reversal first: the waiting correction sees the committed reversal and succeeds.
+- Correction first: the active settlement rejects issuance with the expected
+  business error. The draft, original open item, payment and complete audit history
+  remain unchanged. After the waiting reversal commits, retrying issuance succeeds.
+
+Both cases preserve the original invoice attributes, retain the payment and its
+linked negative settlement, and create exactly one payment reversal and invoice
+correction. Reassigning the same bank line settles the replacement invoice with
+one active settlement. Journal counts, open balances, reconciliation history,
+audit-chain validity and journal integrity are checked. No runtime service or
+Filament changes were needed. Invoice artifact generation remains disabled, so
+this does not close the full storage/concurrency and recovery gates.
+
+Validation: **eight MySQL scenarios, 142 assertions passed** on MySQL 9.7.0 /
+Herd PHP 8.4.25, with one expected worker-only skip. The two new lock-order
+scenarios contribute 53 assertions. The ordinary opt-out run passed 12 correction
+and separate-connection tests with 84 assertions and skipped the nine MySQL
+entries. Pint and diff whitespace checks passed. Remote MySQL 8.4 CI remains
+unverified.
+
+### Invoice file interruption on real local storage — 11 September 2026 (F9)
+
+[MySqlConcurrencyTest](../tests/Integration/MySqlConcurrencyTest.php) adds four
+cases: initial invoice and correction issuance, each interrupted after writing
+XML or PDF bytes but before inserting the corresponding attachment record.
+These cases enable the real renderer, XML validation and embedded-XML PDF
+generation. Parent and child use the same private local disk in an exclusively
+created temporary directory named after the isolated MySQL schema. The parent
+terminates the worker forcibly and removes only its own directory during cleanup.
+
+At the barrier, the file hash already matches the committed artifact manifest,
+while its attachment record is still absent. After rollback, the document remains
+issued but unposted, the artifact set is incomplete and the evidence verifier
+reports pending work without an integrity issue. For the PDF barrier, XML and its
+attachment have already committed. A fresh process resumes issuance on the same
+document and completes storage and posting using the same manifest and evidence
+hash. A further issuance replay preserves attachment identities and journal counts.
+
+Assertions cover file sizes/hashes, exactly two files per invoice, one artifact
+set per invoice, completed evidence with no remaining pending items, and valid
+audit/journal chains. Corrections preserve the original document attributes and
+file hashes, reverse its open item and leave exactly three journal entries across
+original, reversal and replacement. The interrupted attempt remains in the audit
+history; completion of a later attempt does not rewrite it. No runtime service or
+Filament changes were needed.
+
+This proves recovery at the selected boundary after complete filesystem writes.
+It does not test a kill during a partial write, simultaneous artifact generation,
+database-server/power failure, object-store durability, immutable storage or full
+backup restoration. Those release gates remain open.
+
+Validation: **12 MySQL scenarios, 318 assertions passed** on MySQL 9.7.0 /
+Herd PHP 8.4.25 (one expected worker-only skip). The four artifact cases contribute
+176 assertions. The ordinary opt-out run passed ten correction tests with 64
+assertions and skipped all 13 MySQL entries. Pint, local documentation links and
+diff whitespace checks passed. Remote MySQL 8.4 CI remains unverified.
+
+### Concurrent issuance with real invoice files — 11 September 2026 (F9)
+
+[MySqlConcurrencyTest](../tests/Integration/MySqlConcurrencyTest.php) covers two
+simultaneous issuance requests for the same initial invoice or correction. The
+first worker pauses while the artifact-set preparation transaction is uncommitted,
+or after writing the PDF before its attachment metadata commits. The second worker
+starts issuance, and the parent verifies its entity-row lock wait through MySQL
+`performance_schema` before releasing the first worker. Neither worker is killed
+in these four scenarios; both must finish successfully with the same document ID.
+
+The tests require one issuance event, one prepared artifact set, two completed
+artifact attempts, exactly one XML/PDF pair per document, matching file hashes and
+sizes, and one posting for an initial invoice. For a correction, the original,
+reversal and replacement produce exactly three journal entries. Original invoice
+attributes remain unchanged, original files still match their manifests, and the
+old open item is reversed exactly once. Evidence verification reports neither
+integrity issues nor pending work; audit and journal verification pass.
+
+The fixtures use the real renderer and a private, isolated local directory shared
+by both workers. No runtime service or Filament changes were required. This adds
+specific contention evidence at preparation and PDF preservation; partial writes,
+storage outages, database-server crashes and full restoration remain separate gates.
+
+Validation: **16 MySQL scenarios, 466 assertions passed** on MySQL 9.7.0 /
+Herd PHP 8.4.25, with one expected worker-only skip. The four new concurrent
+artifact scenarios contribute 148 assertions. The ordinary opt-out run passed
+ten correction tests with 64 assertions and skipped all 17 MySQL entries. Pint,
+local documentation links and diff whitespace checks passed. Remote MySQL 8.4
+CI remains unverified.
+
+### Rejected and partial invoice writes — 11 September 2026 (F9)
+
+[MySqlConcurrencyTest](../tests/Integration/MySqlConcurrencyTest.php) adds four
+storage-fault cases for correction invoices: XML/PDF writes returning failure
+without creating a file, and XML/PDF writes storing half the intended bytes while
+reporting success. A test-only filesystem adapter injects these faults inside a
+separate PHP process; bytes are stored on the same isolated real local disk used
+by the other artifact tests. This is deterministic fault injection, not a hardware
+failure or an OS-level process kill during a write.
+
+Each failure leaves the correction issued but unposted, its artifact set incomplete,
+and its original invoice posting/open item intact. No attachment metadata is
+committed for the failed file; earlier XML preservation remains committed when PDF
+fails. The failure is recorded in the audit chain. Verification reports pending
+work and additionally flags the truncated file as an integrity failure.
+
+A fresh process retries without the fault adapter. A rejected write with no file
+can complete from the same prepared manifest; the correction then has exactly
+the original, reversal and replacement journal entries. A truncated existing file
+blocks retry with an integrity error and remains byte-for-byte unchanged. No
+automatic overwrite or deletion conceals it. In both cases the original invoice
+attributes and file hashes remain intact, with valid audit and journal chains.
+No runtime service or Filament changes were required.
+
+These cases establish detection and safe refusal, not automatic recovery of a
+damaged file. Independent restoration, storage outages/read failures, full-volume
+behavior, object-store durability and database/power failure remain separate gates.
+
+Validation: **four new MySQL fault scenarios, 134 assertions passed** on MySQL
+9.7.0 / Herd PHP 8.4.25. The ordinary artifact/correction regression run passed
+27 tests with 208 assertions and skipped all 21 opt-in MySQL entries. Pint and
+diff whitespace checks passed. The prior 16-scenario MySQL result above is retained
+as historical evidence; the full expanded MySQL group was not rerun in this slice.
+Remote MySQL 8.4 CI remains unverified.
+
+### Export inspection and full-fixture restoration — 11 September 2026 (F9/F10)
+
+[MySqlConcurrencyTest](../tests/Integration/MySqlConcurrencyTest.php) now builds a
+real MySQL fixture with an issued invoice, correction, payment and four PDF/XML
+files. It creates the streaming accounting export, then a separate logical backup
+of every test-database table (DDL and rows, including fixture users and audit heads)
+and copies the retained files to a new private directory. The fixture is quiescent
+during this backup; it is not a concurrent backup implementation.
+
+The test drops only its owned source database and removes its owned source file
+directory before rebuilding a newly named MySQL database from the saved backup.
+A fresh PHP process compares row hashes for every table, verifies audit/journal
+integrity and invoice evidence, and reads the exported dataset into the isolated
+SQLite inspection database. Independent SQL checks journal totals and the link
+from corrected invoice through settlement/reconciliation to the bank line. File
+chunks reconstructed from the export match both their hashes and restored files.
+
+Replaying issuance produces no new journal entry. Reversing and reallocating the
+restored payment then succeeds, leaving one active settlement, a zero open balance
+and six journal entries, with valid audit and journal chains. Both temporary
+databases/directories are cleaned up. No runtime importer or Filament controls
+were introduced.
+
+The inspection export remains distinct from the full fixture backup: its deliberate
+omissions mean it cannot alone restore an application. The backup reader executes
+only SQL saved by this test from its own schema; it is not an external-package
+importer. This exercise does not establish third-party interoperability, production
+backup tooling, encryption/key recovery, external anchors, object-store guarantees,
+live-write snapshot consistency, recovery time objectives or disaster recovery.
+
+Validation: **one MySQL restore scenario, 61 parent assertions passed** on MySQL
+9.7.0 / Herd PHP 8.4.25; the child process additionally checks all restored tables,
+exported files and continued accounting operations. The ordinary export regression
+run passed 18 tests with 140 assertions and skipped all 22 opt-in MySQL entries.
+The full expanded MySQL group was not rerun in this slice. Remote MySQL 8.4 CI
+remains unverified.
 
 ## Existing foundation
 
@@ -689,8 +892,10 @@ See also the [BMF e-invoice FAQ][einvoice].
 Release acceptance must include adversarial mutation tests, crash/retry and
 concurrency tests, end-to-end invoice/correction/settlement scenarios, and an
 auditor-style export/restore exercise. Existing [CI](../.github/workflows/tests.yml)
-uses SQLite in memory and [fake storage](../tests/Attachments/AttachmentStorageTest.php);
-it cannot establish production locking or immutable-storage behavior.
+uses SQLite in memory and [fake storage](../tests/Attachments/AttachmentStorageTest.php)
+for the ordinary suite, plus a dedicated MySQL 8.4 process-test job whose remote
+execution remains unverified here. The local MySQL evidence above covers specific
+locking and worker-termination cases; immutable-storage behavior remains unproven.
 
 Keep the core compliance and operating guidance in [installation](install.md), [architecture](architecture.md),
 [operations](operations.md), and this assessment. Deployment-specific procedures

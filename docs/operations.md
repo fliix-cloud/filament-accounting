@@ -316,7 +316,8 @@ the base migrations: rebuild **disposable DEV databases only** and verify the
 fresh installation. No legacy backfill fabricates evidence for old postings.
 Journal snapshots are mandatory for verification of posted entries.
 
-MySQL concurrency checks are opt-in and use two independent PHP processes:
+MySQL concurrency and booking-process interruption checks are opt-in and use
+independent PHP processes:
 
 ```powershell
 $env:ACCOUNTING_TEST_MYSQL = '1'
@@ -333,9 +334,52 @@ The harness chooses fresh `acct_concurrency_<random>` database names itself;
 it does not accept an existing application database as its target. Cleanup drops
 only the databases created by the parent test. A forcibly terminated harness can
 leave its temporary database behind. The ordinary SQLite suite skips these tests;
-CI runs them separately on MySQL 8.4. These tests cover database contention, with
-invoice artifact generation disabled; storage/process termination remain separate
-release checks.
+CI runs them separately on MySQL 8.4. The interruption cases forcibly terminate
+their own child PHP process before/after a payment commit, then retry in a fresh
+process using the same idempotency key. Allow child-process termination
+(`taskkill /F /T` on Windows, `SIGKILL` on Unix). These tests cover database
+contention and payment-worker termination with invoice artifact generation
+disabled in those fixtures. Separate invoice-file scenarios enable actual PDF/XML
+generation for initial invoices and corrections. They kill the worker after a
+complete XML/PDF write but before attachment metadata commits, then resume issuance
+in a fresh process. Each creates an exclusive directory under the system temporary
+directory with the same random name as its database; only that directory is removed
+at cleanup. PHP needs writable temporary storage. A killed parent harness may leave
+its directory behind. Database-server crashes, durable storage,
+event delivery and full restore remain separate release checks.
+
+Four additional cases run two issuance workers against the same initial invoice
+or correction with real PDF/XML generation. A controlled barrier during artifact
+preparation or PDF preservation holds the first worker until MySQL reports the
+second worker waiting on its entity lock. Both must then succeed with one artifact
+set and one posting per issued version (including the original reversal for a
+correction).
+
+The storage-fault cases use a test-only adapter to reject XML/PDF writes or write
+half the intended bytes while reporting success. They verify that a fresh process
+can retry a rejected write when no file exists, while a truncated file blocks
+posting and remains unchanged on retry. Such an integrity failure requires
+investigation and verified restoration; repeating issuance does not silently
+repair the file. The test adapter is confined to the worker and is never installed
+in the application. These cases do not simulate physical disk failure or power loss.
+
+The concurrency cases also exercise payment-allocation reversal versus invoice
+correction in both lock orders: premature correction is rejected without partial
+writes, succeeds after reversal, and permits allocation to the replacement invoice.
+
+The restore case creates a streaming inspection export and a separate full logical
+backup of its quiescent synthetic database, including fixture host tables. It copies
+the real invoice files, drops only its owned source schema and removes its source
+directory, then rebuilds a new schema and verifies it in a fresh PHP process. Table
+hashes, invoice files, journal/audit integrity, exported relationships and further
+payment reversal/reallocation must pass. Cleanup includes the restore schema and
+backup directory. The test-only backup reader is not a production restore command
+and must not be used to execute external SQL or import untrusted backup files.
+
+An accounting inspection export is not a full application backup: host tables,
+credentials/protocol state and other documented exclusions need the operator's
+backup procedures. This fixture exercise does not cover those operating procedures,
+encryption keys, external anchors or snapshots taken while writes continue.
 
 ```bash
 php artisan migrate:fresh --seed
