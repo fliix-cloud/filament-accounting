@@ -388,3 +388,75 @@ php artisan filament-accounting:verify
 
 The generic journal CSV export is not a DATEV export and is not a complete
 machine-readable audit export of every stored relation.
+
+## Recording and alerting
+
+Use `--record` to write each entity's verification outcome as an audit event
+(`audit.verification.completed`) and dispatch a `VerificationCompleted` event:
+
+```bash
+php artisan filament-accounting:verify --record
+```
+
+The event payload carries `valid`, `issue_count`, and `pending_count` per entity.
+Register a Laravel event listener to route integrity failures and pending work to
+your monitoring infrastructure (mail, Slack, webhook). The exit code reflects
+integrity issues only; monitor pending counts separately.
+
+```php
+// Example listener in a service provider:
+Event::listen(\FilamentAccounting\Events\VerificationCompleted::class, function ($event) {
+    if (! $event->valid) {
+        // Alert: integrity issues detected
+    }
+    if ($event->pendingCount > 0) {
+        // Alert: pending work requires attention
+    }
+});
+```
+
+A recommended schedule in `app/Console/Kernel.php`:
+
+```php
+$schedule->command('filament-accounting:verify --record')->dailyAt('06:00');
+$schedule->command('filament-accounting:storage-integrity')->dailyAt('06:15');
+```
+
+## Storage integrity and orphan detection
+
+```bash
+php artisan filament-accounting:storage-integrity --json
+```
+
+Checks all attachment rows for missing files and all intake records for missing
+blobs. With `--scan-disk`, also scans the storage directory for files that have
+no matching database record (orphaned objects). The command is read-only and
+exits non-zero when issues are found. Use `--entity=<UUID>` to limit to one
+legal entity.
+
+## Sync coverage tracking
+
+Bank sync runs record `requested_from_date` when the requested date range
+exceeded `max_range_days` and was truncated. Query `fints_sync_runs` for rows
+where `requested_from_date IS NOT NULL` to identify gaps that need follow-up
+syncs. The `filament-accounting:sync-bank` command warns when a completed run
+has a truncated range.
+
+## Audit export in Filament
+
+The package provides a route `filament-accounting.audit-export` that streams a
+dataset with an attested anchor. Define the `accounting.audit.export` Gate to
+control access. Authorized users see an **Export audit dataset** action on the
+company settings page.
+
+## New authorization abilities
+
+Define these Gates in addition to the existing list in `authorization.abilities`:
+
+| Ability key | Gate name | Required for |
+|------------|-----------|-------------|
+| `export_audit` | `accounting.audit.export` | Filament audit dataset download |
+| `sync_bank` | `accounting.bank.sync` | `ImportBankStatementLines` entry point |
+
+Console commands do not enforce authorization; protect them through server
+access controls.
