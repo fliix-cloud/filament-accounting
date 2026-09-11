@@ -23,6 +23,7 @@ class StorageIntegrityCommand extends Command
     {
         $issues = [];
         $entityConstraint = $this->option('entity');
+        $entity = null;
 
         // 1. Attachment rows whose file is missing.
         $attachmentQuery = Attachment::query();
@@ -53,12 +54,11 @@ class StorageIntegrityCommand extends Command
 
         // 2. Intake files whose stored blob is missing.
         $intakeQuery = PurchaseInvoiceIntake::query()->whereNotNull('preserved_at');
-        if ($entityConstraint && isset($entity)) {
+        if ($entityConstraint && $entity instanceof LegalEntity) {
             $intakeQuery->where('legal_entity_id', $entity->getKey());
         }
         $intakeQuery->chunk(200, function (Collection $intakes) use (&$issues): void {
             foreach ($intakes as $intake) {
-                /** @var PurchaseInvoiceIntake $intake */
                 foreach (($intake->files ?? []) as $role => $file) {
                     if (! Storage::disk($intake->disk)->exists($file['path'])) {
                         $issues[] = [
