@@ -87,4 +87,5 @@ return [
     'invalid_line_discount' => 'The line discount is invalid. Use a percent such as 10% or an amount in the document currency that does not exceed the line net.',
     'unsupported_document_type' => 'This document type is not valid for the current workflow.',
     'posting_rule_version_immutable' => 'A posting rule version referenced by a posted reconciliation cannot be changed.',
+    'ledger_account_immutable' => 'A ledger account referenced by role assignments or journal entries cannot be recoded or renamed.',
 ];

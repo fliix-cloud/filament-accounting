@@ -109,14 +109,6 @@ class StreamDatasetTest extends TestCase
     #[Test]
     public function export_schema_tracks_all_accounting_table_columns(): void
     {
-        // Ensure all migrations ran; in some environments migrate:fresh
-        // does not pick up registered package migrations.
-        if (! Schema::hasColumn('accounting_document_lines', 'source_line_index')) {
-            foreach (glob(__DIR__.'/../../database/migrations/*.php') as $path) {
-                (require $path)->up();
-            }
-        }
-
         foreach (AccountingDatasetSchema::COLUMNS as $table => $columns) {
             if ($table === 'fints_bank_connections') {
                 continue; // Deliberately restricted projection: no credentials or protocol state.

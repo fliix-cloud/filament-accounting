@@ -4,6 +4,7 @@ namespace FilamentAccounting\Models;
 
 use FilamentAccounting\Enums\AccountType;
 use FilamentAccounting\Enums\NormalBalance;
+use FilamentAccounting\Exceptions\PostedRecordImmutableException;
 use FilamentAccounting\Models\Concerns\BelongsToLegalEntity;
 use FilamentAccounting\Support\HasUuid;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -52,6 +53,28 @@ class LedgerAccount extends AccountingModel
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::updating(function (self $account): void {
+            if (! $account->isDirty(['code', 'name', 'type', 'normal_balance'])) {
+                return;
+            }
+            // System-assigned role accounts must not change identity after setup.
+            if ($account->roleAssignments()->exists()) {
+                throw new PostedRecordImmutableException(
+                    __('filament-accounting::errors.ledger_account_immutable')
+                );
+            }
+            // Accounts referenced by any journal entry retain their code/name/type in
+            // the journal's account_snapshot, but changing them would break traceability.
+            if ($account->isDirty('code') && $account->journalLines()->exists()) {
+                throw new PostedRecordImmutableException(
+                    __('filament-accounting::errors.ledger_account_immutable')
+                );
+            }
+        });
+    }
+
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');
@@ -65,6 +88,12 @@ class LedgerAccount extends AccountingModel
     public function roleAssignments(): HasMany
     {
         return $this->hasMany(AccountRoleAssignment::class);
+    }
+
+    /** @return HasMany<JournalLine, $this> */
+    public function journalLines(): HasMany
+    {
+        return $this->hasMany(JournalLine::class);
     }
 
     public function label(): string
