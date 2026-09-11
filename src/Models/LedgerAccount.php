@@ -65,9 +65,10 @@ class LedgerAccount extends AccountingModel
                     __('filament-accounting::errors.ledger_account_immutable')
                 );
             }
-            // Accounts referenced by any journal entry retain their code/name/type in
-            // the journal's account_snapshot, but changing them would break traceability.
-            if ($account->isDirty('code') && $account->journalLines()->exists()) {
+            // Accounts referenced by any journal entry keep code, name, type, and
+            // normal balance. Historical snapshots exist, but live identity must
+            // not be rewritten after use.
+            if ($account->journalLines()->exists()) {
                 throw new PostedRecordImmutableException(
                     __('filament-accounting::errors.ledger_account_immutable')
                 );

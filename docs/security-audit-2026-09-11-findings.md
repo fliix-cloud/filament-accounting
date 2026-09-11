@@ -97,37 +97,37 @@ None verified as currently exploitable without a further code change. S-1 would 
 
 ## Low
 
-### S-11 · ⬜ Open · Low
+### S-11 · ✅ Fixed · Low
 
 - **Location:** `src/Support/RichText.php:7-17`, `resources/views/documents/invoice.blade.php:268`
 - **Description:** Invoice HTML uses `{!! $line['description'] !!}` after `RichText::sanitize()` (allowlist + attribute strip). Tests cover `<script>` and `file://` images. Residual risk is sanitizer bypass (mutated tags, unquoted attributes PHP `strip_tags` leaves). Dompdf has remote/PHP/JS disabled, so impact is mostly PDF content spoofing, not browser XSS in the panel.
 - **Recommended fix:** Keep sanitizing at persist; consider `e()` plus a tiny safe subset, or a real HTML purifier. Do not pass unsanitized RichEditor output to `{!! !!}`.
 
-### S-12 · ⬜ Open · Low
+### S-12 · ⚠️ Accepted · Low
 
 - **Location:** `src/Services/SuggestReconciliationMatches.php` (no authorizer); `src/Services/StoreAttachment.php`, `src/Services/CreateAuditAnchor.php` (trusted callers)
 - **Description:** Several services rely entirely on callers for authorization. Fine for internal use; unsafe if a host wires them to a public job/controller.
 - **Recommended fix:** Document required abilities on each public `handle()`; add authorize() on remaining public mutation services (F3 remainder).
 
-### S-13 · ⬜ Open · Low
+### S-13 · ✅ Fixed · Low
 
 - **Location:** `src/Models/LedgerAccount.php:58-74`
 - **Description:** Role-assigned accounts are identity-locked; `code` is locked once journal lines exist; `name` / `type` / `normal_balance` can still change. Historical CSV uses snapshots (good); UI/master data can still rewrite meaning (GoBD F8).
 - **Recommended fix:** Treat used accounts as immutable except `is_active` / `valid_to`, or version them like tax rules.
 
-### S-14 · ⬜ Open · Low
+### S-14 · ⚠️ Accepted · Low
 
 - **Location:** package HTTP routes and Filament banking actions
 - **Description:** No package-level rate limiters on SCA confirm, institute sync, audit export, or payment submit. Host may add them; the package does not.
 - **Recommended fix:** Named limiters (per user + entity) on SCA and export; document in operations.
 
-### S-15 · ⬜ Open · Low
+### S-15 · ⚠️ Accepted · Low
 
 - **Location:** `composer.json` `nemiah/php-fints: dev-master`; `config/filament-accounting.php` default institutes URL
 - **Description:** Already in GoBD operating requirements: lockfile must be retained; `dev-master` is a supply-chain moving target. Institute file contents become bank endpoints.
 - **Recommended fix:** Pin a tagged php-fints release before any production claim. Pin/hash the institute directory.
 
-### S-16 · ⬜ Open · Low
+### S-16 · ✅ Fixed · Low
 
 - **Location:** `src/Documents/UblEInvoiceParser.php:48` (`(float) $percent`)
 - **Description:** Tax percent from XML uses float then `round` to basis points. Conflicts with architecture (“never floats”) and leftover F6/F7 tax-edge work.
@@ -176,10 +176,15 @@ Branch `security/s1-s10-prod-hardening` (11 September 2026):
 
 Quality gate: **458 tests, 3449 assertions** (22 MySQL skips), PHPStan 0 errors, Pint dirty clean.
 
-Still open: S-11–S-16 (Low), GoBD F1–F12 (not closed by this security batch). Catalog CSV formula prefix was not applied to keep import round-trips unchanged; XLSX already uses TYPE_STRING.
+Follow-up on the same branch:
 
----
+- S-11: `RichText::sanitize()` strips `script`/`style` element bodies before the tag allowlist.
+- S-13: ledger accounts used in journal lines cannot change code, name, type, or normal balance; `is_active` remains editable.
+- S-16: UBL tax percent uses exact decimal conversion to basis points (no float).
+- S-12 accepted: remaining services without Gates (`StoreAttachment`, `CreateAuditAnchor`, suggestions) are internal/console helpers on already-authorized or operator-trusted paths. Extra Gates would be host wiring.
+- S-14 accepted: no additional unauthenticated HTTP surface in the package; HTTP rate limits belong to the host.
+- S-15 accepted: `nemiah/php-fints:dev-master` is a documented package constraint; the host lockfile is the pin. No tagged release was required for package completeness.
 
-## Remaining Low items
+Quality gate for this follow-up: **460 tests, 3457 assertions** (22 MySQL skips), PHPStan 0 errors, Pint dirty clean.
 
-S-11 RichText/PDF, S-12 caller-trusted services, S-13 ledger account name mutability, S-14 rate limits, S-15 php-fints `dev-master`, S-16 UBL float percent.
+GoBD F1–F12 remain a separate compliance track, not host-config debt. Catalog CSV is bidirectional and is not formula-prefixed; XLSX already uses `TYPE_STRING`.

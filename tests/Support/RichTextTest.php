@@ -13,7 +13,8 @@ class RichTextTest extends TestCase
     {
         $html = '<p class="lead"><strong>Hosting</strong><script>alert(1)</script></p><ul><li onclick="x">Managed</li></ul>';
 
-        $this->assertSame('<p><strong>Hosting</strong>alert(1)</p><ul><li>Managed</li></ul>', RichText::sanitize($html));
-        $this->assertSame("Hostingalert(1)\n\n- Managed", RichText::plainText($html));
+        $this->assertSame('<p><strong>Hosting</strong></p><ul><li>Managed</li></ul>', RichText::sanitize($html));
+        $this->assertSame("Hosting\n\n- Managed", RichText::plainText($html));
+        $this->assertNull(RichText::sanitize('<script>alert(1)</script>'));
     }
 }
