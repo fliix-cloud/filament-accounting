@@ -31,6 +31,35 @@ jobs:
         env:
           APP_ENV: testing
 
+  mysql-concurrency:
+    name: mysql concurrency (PHP 8.4 / MySQL 8.4)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: concurrency-test
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pconcurrency-test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, pdo_sqlite, fileinfo, dom
+          coverage: none
+      - run: composer update --no-interaction --prefer-dist --no-progress
+      - run: vendor/bin/phpunit tests/Integration/MySqlConcurrencyTest.php
+        env:
+          ACCOUNTING_TEST_MYSQL: '1'
+          ACCOUNTING_TEST_MYSQL_PASSWORD: concurrency-test
+
   pint:
     name: pint
     runs-on: ubuntu-latest

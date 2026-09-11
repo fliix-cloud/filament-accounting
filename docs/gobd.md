@@ -525,11 +525,12 @@ Concrete gaps to address next:
 
 ### Next slices
 
-1. **Prove concurrent payment/correction behavior (F9).** On the selected production
-   database, test competing allocations, allocation reversal versus correction,
-   and rollback after interruption. The reconciliation connection slice below now
-   covers separate-connection rollback and commit timing locally. Review remaining
-   accounting mutation paths for connection consistency. Keep the existing UI.
+1. **Extend concurrency and interruption evidence (F9).** The MySQL slice below
+   covers duplicate/competing allocations and payment versus correction in both
+   winning orders. Next test process termination with uncommitted writes,
+   allocation reversal versus correction, and retry after interruption. Include
+   the full artifact/storage workflow and review remaining mutation paths for
+   connection consistency. Keep the existing UI.
 2. **Prove operation and recovery (F2/F7/F9–F11).** Test consistent export snapshots,
    duplicate requests, termination/retry, independent import and full restore;
    measure temporary storage and lock duration. Establish integrity/pending alerts.
@@ -568,6 +569,38 @@ Catalog, customer and supplier imports remain a separate data-quality workstream
 Catalog texts/prices are editable defaults, not binding invoice contents. Their
 import frequency is not itself a GoBD criterion. For this assessment, preserving
 the finalized invoice snapshots takes priority over catalog import enhancements.
+
+### MySQL concurrency evidence — 11 September 2026 (F9)
+
+[MySqlConcurrencyTest](../tests/Integration/MySqlConcurrencyTest.php) uses two
+independent PHP processes and an explicitly held entity lock. It verifies the
+worker's entity-row lock wait in MySQL's `performance_schema.data_lock_waits` before letting the
+winning operation commit; timing alone is not taken as evidence of contention.
+Four scenarios check duplicate requests returning the same reconciliation,
+competing bank lines not over-settling one invoice, payment preventing correction,
+and correction preventing allocation to the reversed original open item.
+Assertions include the expected rejection reason, journal/settlement counts,
+open-item state, audit-chain validity, and journal integrity.
+
+Each scenario creates a randomly named `acct_concurrency_<24 hex digits>` database
+and drops only that database during cleanup. No host/demo database is migrated or
+reset. The ordinary suite skips these opt-in scenarios; the helper test runs only
+inside the worker process. [CI](../.github/workflows/tests.yml) now contains a
+dedicated PHP 8.4 / MySQL 8.4 job; its remote execution has not been observed here.
+See [operations](operations.md) for the local command and access requirements.
+
+These cases isolate the database boundary and disable generated invoice artifacts
+in their fixtures. They do not prove process-kill recovery, production storage
+durability, full rendering under contention, or all database isolation settings.
+F9 and the wider release gates remain open.
+
+Local validation: **four contention scenarios, 40 assertions passed** on MySQL
+9.7.0 and Herd PHP 8.4.25. PHPUnit reports five tests with one expected skip for
+the worker-only entry point. Lock-wait observation uses `performance_schema`
+because repeated `information_schema.innodb_trx` polling was not reliable in the
+local run. The ordinary opt-out path and separate-connection regressions passed;
+Pint, strict Composer validation, workflow YAML parsing and documentation links
+passed. The configured MySQL 8.4 CI job remains unverified until CI executes it.
 
 ## Existing foundation
 

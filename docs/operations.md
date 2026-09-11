@@ -316,6 +316,27 @@ the base migrations: rebuild **disposable DEV databases only** and verify the
 fresh installation. No legacy backfill fabricates evidence for old postings.
 Journal snapshots are mandatory for verification of posted entries.
 
+MySQL concurrency checks are opt-in and use two independent PHP processes:
+
+```powershell
+$env:ACCOUNTING_TEST_MYSQL = '1'
+php vendor/bin/phpunit tests/Integration/MySqlConcurrencyTest.php
+Remove-Item Env:ACCOUNTING_TEST_MYSQL
+```
+
+Connection settings use `ACCOUNTING_TEST_MYSQL_HOST` (default `127.0.0.1`),
+`ACCOUNTING_TEST_MYSQL_PORT` (`3306`), `ACCOUNTING_TEST_MYSQL_USER` (`root`), and
+`ACCOUNTING_TEST_MYSQL_PASSWORD` (empty). Use a development/test MySQL server and
+an account allowed to create/drop isolated databases and inspect InnoDB lock waits
+(`PROCESS` and read access to `performance_schema.data_lock_waits`, `data_locks`, and `threads`). PHP needs `pdo_mysql` and permission to launch a child PHP process.
+The harness chooses fresh `acct_concurrency_<random>` database names itself;
+it does not accept an existing application database as its target. Cleanup drops
+only the databases created by the parent test. A forcibly terminated harness can
+leave its temporary database behind. The ordinary SQLite suite skips these tests;
+CI runs them separately on MySQL 8.4. These tests cover database contention, with
+invoice artifact generation disabled; storage/process termination remain separate
+release checks.
+
 ```bash
 php artisan migrate:fresh --seed
 php artisan filament-accounting:verify
