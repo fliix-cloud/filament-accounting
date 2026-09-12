@@ -923,6 +923,36 @@ allowance/charge e-invoice conformance stays open.
 Validation: the full local suite passed on Herd PHP 8.4.25 with **482 tests,
 3,543 assertions** (27 MySQL skips). PHPStan reported zero errors; Pint passed.
 
+### ZUGFeRD parse coverage and exact tax conversion — 12 September 2026 (F7)
+
+The ZUGFeRD (CII) parse path had no direct unit coverage and converted the tax
+rate to basis points with `(int) round($taxRate * 100)`, a float-path the UBL
+parser had already abandoned (S-16). [ZugferdEInvoiceAdapter](../src/Documents/ZugferdEInvoiceAdapter.php)
+now converts the rate via an exact two-decimal `ExactMoney` conversion, and a new
+[ZugferdEInvoiceAdapterTest](../tests/Documents/ZugferdEInvoiceAdapterTest.php)
+round-trips a generated EN16931 invoice (19% + 7% lines) through `parse()`,
+asserting exact `tax_rate_bp` (1900/700), totals, seller VAT/name, document
+number, and issue date.
+
+This adds the missing parse coverage and removes the float conversion, not the
+full allowance/charge and business-rule conformance that F7 documents as open.
+The import path already reconciles recomputed document totals against the
+declared source totals (`intake_totals_mismatch`), so internally inconsistent
+sources are rejected before posting.
+
+Validation: the full local suite passed on Herd PHP 8.4.25 with **487 tests,
+3,564 assertions** (27 MySQL skips). PHPStan reported zero errors; Pint passed.
+
+### CI verification — 12 September 2026 (F9)
+
+The previously unobserved remote MySQL 8.4 concurrency job ran and passed on
+CI for the payment connection and authorization commits
+([run 34683038525](https://github.com/fliix-cloud/filament-fints-accounting/actions/runs/34683038525)):
+all seven jobs (`phpunit` on PHP 8.3/8.4/8.5, `mysql concurrency`, `pint`,
+`phpstan`, `composer validate`) succeeded. This is the first observed remote
+execution of the opt-in concurrency suite; it does not replace the local
+MySQL 9.7 evidence or the remaining storage/restore release gates.
+
 ## Existing foundation
 
 | Area | Evidence in the reviewed code | Assessment |

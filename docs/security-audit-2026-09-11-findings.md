@@ -181,10 +181,22 @@ Follow-up on the same branch:
 - S-11: `RichText::sanitize()` strips `script`/`style` element bodies before the tag allowlist.
 - S-13: ledger accounts used in journal lines cannot change code, name, type, or normal balance; `is_active` remains editable.
 - S-16: UBL tax percent uses exact decimal conversion to basis points (no float).
-- S-12 accepted: remaining services without Gates (`StoreAttachment`, `CreateAuditAnchor`, suggestions) are internal/console helpers on already-authorized or operator-trusted paths. Extra Gates would be host wiring.
+- S-12 accepted: remaining services without Gates (`StoreAttachment`, `CreateAuditAnchor`) are internal/console helpers on already-authorized or operator-trusted paths. `SuggestReconciliationMatches` is no longer in this group: it now self-authorizes `draft_reconciliation` (see the F3 follow-up).
 - S-14 accepted: no additional unauthenticated HTTP surface in the package; HTTP rate limits belong to the host.
 - S-15 accepted: `nemiah/php-fints:dev-master` is a documented package constraint; the host lockfile is the pin. No tagged release was required for package completeness.
 
 Quality gate for this follow-up: **460 tests, 3457 assertions** (22 MySQL skips), PHPStan 0 errors, Pint dirty clean.
+
+F3 authorization follow-up (12 September 2026, F3): the payment submission
+services carried only entity scope and Filament resource Gates. `TransferService`
+now authorizes `accounting.bank.transfer.create` and `DirectDebitService`
+authorizes `accounting.bank.direct-debit.create` at the service entry point,
+before any claim; `SuggestReconciliationMatches` authorizes
+`accounting.reconciliation.draft`. New [PaymentAuthorizationTest](../tests/Banking/FinTs/PaymentAuthorizationTest.php)
+denies missing Gates before any state change or bank call and confirms an
+authorized transfer proceeds to submission. Thin delegates to an already
+authorized service (`AssignStatementLine`, `SplitStatementLine` → finalize) are
+unchanged. `StoreAttachment`, `CreateAuditAnchor`, `CreateOpenItem`, `Seed*`,
+and verify helpers remain operator/internal and documented as accepted.
 
 GoBD F1–F12 remain a separate compliance track, not host-config debt. Catalog CSV is bidirectional and is not formula-prefixed; XLSX already uses `TYPE_STRING`.

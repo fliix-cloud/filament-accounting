@@ -2,6 +2,7 @@
 
 namespace FilamentAccounting\Documents;
 
+use FilamentAccounting\Banking\FinTs\Support\Money;
 use FilamentAccounting\Contracts\EInvoiceAdapter;
 use FilamentAccounting\Documents\Data\EInvoiceParseResult;
 use FilamentAccounting\Exceptions\DocumentException;
@@ -133,7 +134,7 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
                 'quantity' => $quantity !== null ? (string) $quantity : '1',
                 'unit' => $unitCode,
                 'unit_price' => $netLine !== null ? (string) $netLine : '0',
-                'tax_rate_bp' => $taxRate !== null ? (int) round($taxRate * 100) : null,
+                'tax_rate_bp' => $taxRate !== null ? ExactMoney::ofString(Money::fromFloat($taxRate), $currency)->minorAmount : null,
                 'tax_category' => $taxCategory,
                 'tax_reason' => $taxReason,
             ];
