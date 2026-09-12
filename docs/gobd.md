@@ -950,6 +950,24 @@ The import path already reconciles recomputed document totals against the
 declared source totals (`intake_totals_mismatch`), so internally inconsistent
 sources are rejected before posting.
 
+### E-invoice line-level allowances and charges — 12 September 2026 (F7)
+
+[RegisterPurchaseInvoice::writeLines](../src/Services/RegisterPurchaseInvoice.php)
+previously recomputed every line net as quantity × price and ignored the parsed
+source net, so a valid line carrying a line-level allowance or charge (where
+`LineExtensionAmount` differs from quantity × price) was rejected by the
+source-total check. The ZUGFeRD adapter now reads the per-line summation net and
+tax, the UBL parser already exposed `line_net_minor`, and the importer carries
+the parsed net through to the draft, which posts the source amount. A new
+regression proves quantity 2 × €100 with a €50 line allowance posts €150 net /
+€28.50 tax / €178.50 gross and passes reconciliation
+([PurchaseInvoiceUploadTest](../tests/Documents/PurchaseInvoiceUploadTest.php)).
+
+This closes the line-level allowance/charge conversion case. A **document-level**
+allowance (net basis below the sum of line nets) is not distributed across lines
+and still blocks conversion (the original is preserved); that remains an
+unsupported-conversion boundary, not a silent mis-booking.
+
 Validation: the full local suite passed on Herd PHP 8.4.25 with **487 tests,
 3,564 assertions** (27 MySQL skips). PHPStan reported zero errors; Pint passed.
 

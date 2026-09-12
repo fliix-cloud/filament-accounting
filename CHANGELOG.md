@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 — 2026-09-12
+
+First taggable release baseline: one installable accounting package (Laravel
+provider + Filament plugin) with a first-party ledger, German-first sales and
+purchase workflows, FinTS banking, reconciliation, and integrity controls, on
+SQLite or MySQL/MariaDB. GoBD release gates are NOT all closed; see
+[`docs/gobd.md`](docs/gobd.md) for the scoped claim boundary and the remaining
+operator evidence.
 
 ### Added
 
