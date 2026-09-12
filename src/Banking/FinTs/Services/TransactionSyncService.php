@@ -46,7 +46,7 @@ class TransactionSyncService
         }
         $to ??= Carbon::today();
 
-        // When a previous catch-up was interrupted, resume from the earliest uncovered date.
+        // When a catch-up is in progress, resume from the oldest uncovered date.
         if ($from === null && $account->catch_up_from instanceof \DateTimeInterface) {
             $from = Carbon::parse($account->catch_up_from);
         } elseif ($from === null) {
@@ -54,13 +54,10 @@ class TransactionSyncService
                 ? Carbon::parse($account->last_transaction_sync_at)->subDays((int) config('filament-accounting.banking.fints.sync.incremental_overlap_days', 3))
                 : Carbon::today()->subDays((int) config('filament-accounting.banking.fints.sync.initial_lookback_days', 90));
         }
-        [$from, $requestedFrom] = $this->boundedRange(Carbon::parse($from), Carbon::parse($to));
-
-        // Record the coverage gap when the requested range is truncated.
-        if ($requestedFrom instanceof Carbon && $requestedFrom->lt($from)) {
-            $account->catch_up_from = $requestedFrom;
-            $account->save();
-        }
+        // Chunk the requested range oldest-first; nextFrom records the still
+        // uncovered frontier (null once the range fits) and drives the marker
+        // forward only after this chunk succeeds (in markSyncCompleted).
+        [$from, $to, $nextFrom] = $this->boundedRange(Carbon::parse($from), Carbon::parse($to));
 
         $run = BankSyncRun::query()->create([
             'bank_connection_id' => $connection->id,
@@ -69,7 +66,7 @@ class TransactionSyncService
             'status' => SyncStatus::Running,
             'from_date' => $from,
             'to_date' => $to,
-            'requested_from_date' => $requestedFrom ?: null,
+            'requested_from_date' => $nextFrom ?: null,
             'started_at' => now(),
         ]);
         $client = $this->factory->make($connection);
@@ -146,24 +143,15 @@ class TransactionSyncService
         $run->finished_at = now();
         $run->save();
 
-        // When a catch-up gap exists and this chunk did not fully close it,
-        // advance the watermark to the chunk boundary but keep the gap marker.
-        if ($account->catch_up_from instanceof \DateTimeInterface) {
-            $chunkTo = Carbon::parse($run->to_date);
-
-            // If the gap is now within a single max_range_days window of today,
-            // the next sync can cover the remainder without truncation.
-            $maxDays = (int) config('filament-accounting.banking.fints.sync.max_range_days', 90);
-            if ($account->catch_up_from->diffInDays(Carbon::today()) <= $maxDays) {
-                $account->catch_up_from = null;
-                $account->last_transaction_sync_at = now();
-            } else {
-                // Advance the sync watermark to the chunk's end so the next
-                // sync naturally slides forward. The catch_up_from marker
-                // persists until the full range is covered.
-                $account->last_transaction_sync_at = $chunkTo;
-            }
+        // Advance the catch-up marker past this chunk. On the final chunk
+        // requested_from_date is null and the marker clears: the account is
+        // fully covered. Only a successful chunk advances the frontier, so a
+        // crash mid-catch-up resumes from the last completed chunk.
+        if ($run->requested_from_date instanceof Carbon) {
+            $account->catch_up_from = Carbon::parse($run->requested_from_date);
+            $account->last_transaction_sync_at = $run->to_date ?? now();
         } else {
+            $account->catch_up_from = null;
             $account->last_transaction_sync_at = now();
         }
         $account->save();
@@ -182,16 +170,22 @@ class TransactionSyncService
     }
 
     /**
-     * @return array{Carbon, ?Carbon} The bounded from-date and the requested from-date (null if not truncated).
+     * Compute the next catch-up chunk from the oldest uncovered date forward.
+     * Chunks tile the range oldest-first so repeated syncs drain a long gap
+     * without holes. `nextFrom` is null once the whole range fits in one chunk.
+     *
+     * @return array{Carbon, Carbon, ?Carbon} chunk from, chunk to, next uncovered from (or null).
      */
     public function boundedRange(Carbon $from, Carbon $to): array
     {
         $maxDays = (int) config('filament-accounting.banking.fints.sync.max_range_days', 90);
         if ($from->diffInDays($to) > $maxDays) {
-            return [$to->copy()->subDays($maxDays), $from];
+            $chunkTo = $from->copy()->addDays($maxDays);
+
+            return [$from, $chunkTo, $chunkTo->copy()->addDay()];
         }
 
-        return [$from, null];
+        return [$from, $to, null];
     }
 
     private function mapTransaction(

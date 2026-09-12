@@ -106,20 +106,22 @@ class SyncCommand extends Command
             ->latest('id')
             ->first();
 
+        // requestFrom carries the still-uncovered frontier (oldest-first drain),
+        // so a non-null value means more chunks remain for this account.
         if ($run instanceof BankSyncRun && $run->requested_from_date !== null) {
             $this->warn(sprintf(
-                'Account %d: requested coverage from %s but synchronized only from %s to %s.',
+                'Account %d: only %s to %s synchronized; coverage gap remains from %s.',
                 $accountId,
-                $run->requested_from_date->toDateString(),
                 $run->from_date?->toDateString() ?? 'unknown',
                 $run->to_date?->toDateString() ?? 'unknown',
+                $run->requested_from_date->toDateString(),
             ));
 
             if ($account->catch_up_from instanceof \DateTimeInterface) {
                 $remainingDays = $account->catch_up_from->diffInDays(Carbon::today());
                 $chunks = (int) ceil($remainingDays / (int) config('filament-accounting.banking.fints.sync.max_range_days', 90));
                 $this->warn(sprintf(
-                    '  Catch-up gap: %s → today (%d days). Approximately %d chunk(s) remaining.',
+                    '  Catch-up gap: %s → today (%d days). Approximately %d chunk(s) remaining; run this command again to drain them.',
                     $account->catch_up_from->toDateString(),
                     $remainingDays,
                     max(1, $chunks),

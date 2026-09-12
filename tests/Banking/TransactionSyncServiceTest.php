@@ -16,101 +16,101 @@ use PHPUnit\Framework\Attributes\Test;
 class TransactionSyncServiceTest extends TestCase
 {
     #[Test]
-    public function bounded_range_within_limit_returns_same_from_and_null_requested(): void
+    public function bounded_range_within_limit_returns_the_whole_range_and_no_next(): void
     {
         $svc = app(TransactionSyncService::class);
         config()->set('filament-accounting.banking.fints.sync.max_range_days', 90);
         $from = Carbon::parse('2026-06-01');
         $to = Carbon::parse('2026-08-30');
 
-        [$bounded, $requested] = $svc->boundedRange($from, $to);
+        [$chunkFrom, $chunkTo, $next] = $svc->boundedRange($from, $to);
 
-        $this->assertEquals('2026-06-01', $bounded->toDateString());
-        $this->assertNull($requested);
+        $this->assertEquals('2026-06-01', $chunkFrom->toDateString());
+        $this->assertEquals('2026-08-30', $chunkTo->toDateString());
+        $this->assertNull($next);
     }
 
     #[Test]
-    public function bounded_range_exceeds_limit_truncates_and_returns_requested_from(): void
+    public function bounded_range_exceeds_limit_takes_the_oldest_window_and_returns_the_next_frontier(): void
     {
         $svc = app(TransactionSyncService::class);
         config()->set('filament-accounting.banking.fints.sync.max_range_days', 90);
         $from = Carbon::parse('2026-01-01');
         $to = Carbon::parse('2026-09-11');
 
-        [$bounded, $requested] = $svc->boundedRange($from, $to);
+        [$chunkFrom, $chunkTo, $next] = $svc->boundedRange($from, $to);
 
-        // 90 days before 2026-09-11 = 2026-06-13
-        $this->assertEquals('2026-06-13', $bounded->toDateString());
-        $this->assertNotNull($requested);
-        $this->assertEquals('2026-01-01', $requested->toDateString());
+        // Oldest window of 90 days: 2026-01-01 .. 2026-04-01 (Jan 31 + Feb 28 + Mar 31).
+        $this->assertEquals('2026-01-01', $chunkFrom->toDateString());
+        $this->assertEquals('2026-04-01', $chunkTo->toDateString());
+        $this->assertNotNull($next);
+        $this->assertEquals('2026-04-02', $next->toDateString());
     }
 
     #[Test]
-    public function bounded_range_exactly_at_limit_does_not_truncate(): void
+    public function bounded_range_exactly_at_limit_does_not_chunk(): void
     {
         $svc = app(TransactionSyncService::class);
         config()->set('filament-accounting.banking.fints.sync.max_range_days', 30);
         $from = Carbon::parse('2026-08-12');
         $to = Carbon::parse('2026-09-11');
 
-        [$bounded, $requested] = $svc->boundedRange($from, $to);
+        [$chunkFrom, $chunkTo, $next] = $svc->boundedRange($from, $to);
 
-        $this->assertEquals('2026-08-12', $bounded->toDateString());
-        $this->assertNull($requested);
+        $this->assertEquals('2026-08-12', $chunkFrom->toDateString());
+        $this->assertEquals('2026-09-11', $chunkTo->toDateString());
+        $this->assertNull($next);
     }
 
     #[Test]
-    public function catch_up_from_is_set_when_sync_is_truncated(): void
+    public function a_long_gap_drains_oldest_first_across_chunks_until_the_marker_clears(): void
     {
-        $entity = $this->makeEntity();
-        $connection = $this->makeBankConnection($entity);
-        $account = $this->makeBankAccountWithConnection($entity, $connection);
-        $account->last_transaction_sync_at = Carbon::parse('2026-01-01');
-        $account->save();
-
         $svc = app(TransactionSyncService::class);
         config()->set('filament-accounting.banking.fints.sync.max_range_days', 90);
-
-        $from = Carbon::parse('2026-01-01');
+        $gapStart = Carbon::today()->subDays(200);
         $to = Carbon::today();
-        [$bounded, $requested] = $svc->boundedRange($from, $to);
 
-        // The range exceeds max_range_days, so truncation happens
-        $this->assertNotNull($requested);
-        $this->assertEquals('2026-01-01', $requested->toDateString());
-
-        // Simulate the service setting catch_up_from
-        if ($requested instanceof Carbon && $requested->lt($bounded)) {
-            $account->catch_up_from = $requested;
-            $account->save();
+        // Simulate repeated syncs: each call takes the next chunk from the frontier.
+        $marker = $gapStart;
+        $chunks = [];
+        $steps = 0;
+        while ($marker instanceof Carbon && $steps < 10) {
+            [$f, $t, $marker] = $svc->boundedRange($marker, $to);
+            $chunks[] = [$f->toDateString(), $t->toDateString()];
+            $steps++;
         }
 
-        $account->refresh();
-        $this->assertNotNull($account->catch_up_from);
-        $this->assertEquals('2026-01-01', $account->catch_up_from->toDateString());
+        // A 200-day gap at a 90-day window is three chunks, then the marker clears.
+        $this->assertSame(3, $steps);
+        $this->assertNull($marker);
+
+        // The first chunk starts at the oldest uncovered date ...
+        $this->assertEquals($gapStart->toDateString(), $chunks[0][0]);
+
+        // ... chunks tile oldest-first (no destination: each starts where the last
+        // ended), and the final chunk reaches today …
+        for ($i = 1; $i < $steps; $i++) {
+            $this->assertEquals(
+                Carbon::parse($chunks[$i - 1][1])->addDay()->toDateString(),
+                $chunks[$i][0],
+                'Chunks must tile without holes.',
+            );
+        }
+        $this->assertEquals($to->toDateString(), $chunks[$steps - 1][1]);
     }
 
     #[Test]
-    public function mark_sync_completed_clears_catch_up_when_gap_is_closed(): void
+    public function mark_sync_completed_clears_the_marker_on_the_final_chunk(): void
     {
         $entity = $this->makeEntity();
         $connection = $this->makeBankConnection($entity);
         $account = $this->makeBankAccountWithConnection($entity, $connection);
-        $account->catch_up_from = Carbon::today()->subDays(30); // 30-day gap, within 90-day max
+        $account->catch_up_from = Carbon::today()->subDays(5);
         $account->save();
 
-        $run = new BankSyncRun([
-            'bank_connection_id' => $connection->id,
-            'accounting_bank_account_id' => $account->id,
-            'legal_entity_id' => $entity->id,
-            'type' => SyncType::Transactions,
-            'status' => SyncStatus::Completed,
-            'from_date' => Carbon::today()->subDays(30),
-            'to_date' => Carbon::today(),
-            'item_count' => 5,
-            'started_at' => now(),
-            'finished_at' => now(),
-        ]);
+        // Final chunk: requested_from_date is null → the gap is drained.
+        $run = $this->makeRun($connection, $account,
+            Carbon::today()->subDays(5), Carbon::today(), null);
         $run->save();
 
         $svc = app(TransactionSyncService::class);
@@ -122,59 +122,46 @@ class TransactionSyncServiceTest extends TestCase
     }
 
     #[Test]
-    public function mark_sync_completed_persists_catch_up_when_gap_remains_large(): void
+    public function mark_sync_completed_advances_the_marker_when_chunks_remain(): void
     {
         $entity = $this->makeEntity();
         $connection = $this->makeBankConnection($entity);
         $account = $this->makeBankAccountWithConnection($entity, $connection);
-        $account->catch_up_from = Carbon::today()->subDays(200); // 200-day gap, exceeds 90-day max
+        $account->catch_up_from = Carbon::today()->subDays(200);
         $account->save();
 
-        $run = new BankSyncRun([
-            'bank_connection_id' => $connection->id,
-            'accounting_bank_account_id' => $account->id,
-            'legal_entity_id' => $entity->id,
-            'type' => SyncType::Transactions,
-            'status' => SyncStatus::Completed,
-            'from_date' => Carbon::today()->subDays(90),
-            'to_date' => Carbon::today(),
-            'requested_from_date' => Carbon::today()->subDays(200),
-            'item_count' => 5,
-            'started_at' => now(),
-            'finished_at' => now(),
-        ]);
+        // This chunk covered the oldest 90 days; the next uncovered frontier is
+        // recorded as requested_from_date and must move the marker forward.
+        $nextFrontier = Carbon::today()->subDays(109);
+        $run = $this->makeRun($connection, $account,
+            Carbon::today()->subDays(200), Carbon::today()->subDays(110), $nextFrontier);
         $run->save();
 
         $svc = app(TransactionSyncService::class);
         $svc->markSyncCompleted($account, $run, ['imported' => 3, 'updated' => 2]);
 
         $account->refresh();
-        // catch_up_from should still be set (gap not closed yet)
         $this->assertNotNull($account->catch_up_from);
-        $this->assertEquals(Carbon::today()->subDays(200)->toDateString(), $account->catch_up_from->toDateString());
-        // last_transaction_sync_at should be advanced to the chunk's to_date, not now()
-        $this->assertEquals(Carbon::today()->toDateString(), $account->last_transaction_sync_at->toDateString());
+        $this->assertEquals($nextFrontier->toDateString(), $account->catch_up_from->toDateString());
+        // The watermark advances to the chunk's end, not now(), while draining.
+        $this->assertEquals(Carbon::today()->subDays(110)->toDateString(), $account->last_transaction_sync_at->toDateString());
     }
 
-    #[Test]
-    public function catch_up_from_is_not_set_when_range_fits_within_limit(): void
+    private function makeRun(BankConnection $connection, AccountingBankAccount $account, Carbon $from, Carbon $to, ?Carbon $next): BankSyncRun
     {
-        $entity = $this->makeEntity();
-        $connection = $this->makeBankConnection($entity);
-        $account = $this->makeBankAccountWithConnection($entity, $connection);
-        $account->last_transaction_sync_at = Carbon::today()->subDays(30);
-        $account->save();
-
-        $svc = app(TransactionSyncService::class);
-        config()->set('filament-accounting.banking.fints.sync.max_range_days', 90);
-
-        $from = Carbon::today()->subDays(33); // 30 days ago + 3 overlap
-        $to = Carbon::today();
-        [$bounded, $requested] = $svc->boundedRange($from, $to);
-
-        // Range is within limit, no truncation
-        $this->assertNull($requested);
-        $this->assertEquals($from->toDateString(), $bounded->toDateString());
+        return new BankSyncRun([
+            'bank_connection_id' => $connection->id,
+            'accounting_bank_account_id' => $account->id,
+            'legal_entity_id' => $account->legal_entity_id,
+            'type' => SyncType::Transactions,
+            'status' => SyncStatus::Completed,
+            'from_date' => $from,
+            'to_date' => $to,
+            'requested_from_date' => $next,
+            'item_count' => 5,
+            'started_at' => now(),
+            'finished_at' => now(),
+        ]);
     }
 
     private function makeBankConnection($entity): BankConnection

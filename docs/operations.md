@@ -467,14 +467,16 @@ legal entity.
 ## Sync coverage tracking
 
 Bank sync runs record `requested_from_date` when the requested date range
-exceeded `max_range_days` and was truncated. The service now persists the
-coverage gap as `catch_up_from` on the bank account. The next sync (UI or
-console) automatically resumes from the earliest uncovered date; the gap
-marker is cleared when the full range fits within `max_range_days`.
+exceeded `max_range_days` and was truncated. The service persists the coverage
+frontier as `catch_up_from` on the bank account and processes the gap
+**oldest-first in `max_range_days` chunks**. Each successful chunk advances the
+frontier; the marker clears once the final chunk reaches today. The next sync
+(UI or console) automatically resumes from the frontier, so repeated syncs drain
+the full gap without holes.
 
 Query `fints_sync_runs` for rows where `requested_from_date IS NOT NULL` to
-audit historical truncations. The `filament-accounting:sync-bank` command
-reports the remaining gap and estimated chunk count after each truncated run.
+audit in-flight catch-ups. The `filament-accounting:sync-bank` command reports
+the remaining gap and estimated chunk count after each truncated run.
 
 To force a full catch-up from a known date, use the `--from` option:
 
@@ -484,7 +486,9 @@ php artisan filament-accounting:sync-bank --transactions --from=2025-01-01
 
 Run the command repeatedly (e.g. via cron) until the gap closes. Each
 invocation processes one chunk of up to `max_range_days`. The command warns
-when chunks remain; exit code 0 does not mean the full range is covered.
+when chunks remain; a green exit code does not mean the full range is covered.
+A chunk that requires SCA returns control to the user; the catch-up resumes from
+the last completed chunk afterwards.
 
 ## Audit export in Filament
 

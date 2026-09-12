@@ -525,16 +525,20 @@ Concrete gaps to address next:
 
 ### Transaction sync catch-up after long interruptions — 12 September 2026 (F12)
 
-[TransactionSyncService](../src/Banking/FinTs/Services/TransactionSyncService.php) now
-persists a coverage gap marker (`catch_up_from` on `AccountingBankAccount`) when
-`boundedRange` clips the requested date range. The next sync automatically
-resumes from the earliest uncovered date instead of silently dropping the gap.
+[TransactionSyncService](../src/Banking/FinTs/Services/TransactionSyncService.php)
+persists a coverage frontier (`catch_up_from` on `AccountingBankAccount`) and
+drains a truncated range **oldest-first in `max_range_days` chunks**. Each
+successful chunk advances the marker to the next uncovered frontier and moves
+the watermark to the chunk's end; the marker clears once the final chunk reaches
+today. Repeated syncs therefore drain the full gap without holes or re-fetching
+the most recent window. The [SyncCommand](../src/Banking/FinTs/Commands/SyncCommand.php)
+reports the remaining gap and estimated chunk count after each truncated run.
 
-When the catch-up gap closes (the remaining range fits within `max_range_days`),
-the marker is cleared and `last_transaction_sync_at` advances to `now()`. While
-the gap persists, the sync watermark advances to each completed chunk's `to_date`
-so subsequent syncs slide forward naturally. The [SyncCommand](../src/Banking/FinTs/Commands/SyncCommand.php)
-now reports the remaining gap and estimated chunk count.
+The initial drain implementation advanced the watermark but never moved the
+marker, so a resumed sync re-requested the same newest window forever.
+This is corrected by oldest-first chunking, with a regression test proving a
+200-day gap drains in three 90-day chunks and the marker clears
+([TransactionSyncServiceTest](../tests/Banking/TransactionSyncServiceTest.php)).
 
 This covers the sequential case: repeated sync calls eventually cover the full
 range. It does not yet prove concurrent catch-up with SCA interruptions or
@@ -545,8 +549,8 @@ statement/balance reconciliation evidence, intake/posting backlog controls).
 The base DEV migration adds `catch_up_from` to `accounting_bank_accounts`.
 Rebuild disposable DEV databases; no production backfill is supplied.
 
-Validation: the full local suite passed on Herd PHP 8.4.25 with **476 tests,
-3,516 assertions** (27 MySQL skips). PHPStan reported zero errors; Pint passed.
+Validation: the full local suite passed on Herd PHP 8.4.25 with **486 tests,
+3,567 assertions** (27 MySQL skips). PHPStan reported zero errors; Pint passed.
 
 ### Next slices
 
