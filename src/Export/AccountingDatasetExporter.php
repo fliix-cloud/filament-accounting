@@ -27,6 +27,7 @@ final class AccountingDatasetExporter
         private readonly CanonicalJson $canonical,
         private readonly AccountingDatasetVerifier $verifier,
         private readonly CreateAuditAnchor $anchors,
+        private readonly DatasetSnapshot $snapshot,
     ) {}
 
     /** @return array<string, mixed> */
@@ -36,7 +37,7 @@ final class AccountingDatasetExporter
             throw new AuditEvidenceException('Dataset export requires an independent accounting transaction.');
         }
 
-        $package = $entity->getConnection()->transaction(function () use ($entity): array {
+        $package = $this->snapshot->run($entity->getConnection(), function () use ($entity): array {
             $entity = LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
             // Refuse compromised inputs before recording a new export commitment.
             $this->audit->build($entity);
@@ -110,7 +111,11 @@ final class AccountingDatasetExporter
         // Anchor only committed evidence: storage cannot roll back with the DB.
         if ($anchor) {
             $this->anchors->handle($entity);
-            $package['audit_evidence'] = $this->audit->build($entity);
+            $package['audit_evidence'] = $this->snapshot->run($entity->getConnection(), function () use ($entity): array {
+                LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
+
+                return $this->audit->build($entity);
+            });
         }
 
         return $package;

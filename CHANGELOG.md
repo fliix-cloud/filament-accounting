@@ -42,6 +42,14 @@
 
 ### Fixed
 
+- JSON and streaming accounting datasets use a consistent database snapshot even
+  when the MySQL host uses `READ COMMITTED`. Preserve the host session isolation
+  default and reject unsupported snapshot drivers. Protect the post-anchor audit
+  refresh with an independent snapshot and entity lock.
+- MySQL regressions cover concurrent master-data commits, payments waiting during
+  export, the next export including the committed payment, and rollback without
+  leaking export isolation into later host transactions.
+
 - Security hardening from PR #18 and its follow-up: authenticated and scoped
   audit exports, deny-by-default FinTS resource access, protected institute sync
   and reconciliation actions, endpoint validation, constrained FinTS payload

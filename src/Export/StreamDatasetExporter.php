@@ -33,6 +33,7 @@ final class StreamDatasetExporter
         private readonly AuditLogger $logger,
         private readonly CreateAuditAnchor $anchor,
         private readonly StreamDatasetVerifier $verifier,
+        private readonly DatasetSnapshot $snapshot,
     ) {}
 
     /** @return array{stream: resource, report: array<string, mixed>} */
@@ -56,7 +57,7 @@ final class StreamDatasetExporter
                 hash_update($hash, $line);
             };
             $counts = ['records' => 0, 'files' => 0, 'pending' => 0];
-            $entity->getConnection()->transaction(function () use ($entity, $anchor, $index, $stream, $hash, $body, &$counts): void {
+            $this->snapshot->run($entity->getConnection(), function () use ($entity, $anchor, $index, $stream, $hash, $body, &$counts): void {
                 $entity = LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
                 $chain = $this->chain->verify((int) $entity->getKey());
                 if (! $chain->isValid() || ! $this->anchorVerifier->verify($entity, $chain)->isValid()) {
@@ -144,7 +145,7 @@ final class StreamDatasetExporter
             if ($anchor) {
                 $this->anchor->handle($entity);
             }
-            $entity->getConnection()->transaction(function () use ($entity, $stream, $counts): void {
+            $this->snapshot->run($entity->getConnection(), function () use ($entity, $stream, $counts): void {
                 LegalEntity::query()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
                 $head = (array) $entity->getConnection()->table('accounting_audit_chain_heads')->where('legal_entity_id', $entity->getKey())->first();
                 foreach (AuditEvent::query()->where('legal_entity_id', $entity->getKey())->where('sequence', '<=', $head['last_sequence'])->orderBy('sequence')->lazy(1) as $event) {

@@ -12,7 +12,9 @@ use FilamentAccounting\Enums\ReconciliationStatus;
 use FilamentAccounting\Events\ReconciliationFinalized;
 use FilamentAccounting\Exceptions\DocumentException;
 use FilamentAccounting\Exceptions\ReconciliationException;
+use FilamentAccounting\Export\AccountingDatasetExporter;
 use FilamentAccounting\Export\DatasetInspection;
+use FilamentAccounting\Export\DatasetSnapshot;
 use FilamentAccounting\Export\StreamDatasetExporter;
 use FilamentAccounting\Export\StreamDatasetVerifier;
 use FilamentAccounting\Models\Attachment;
@@ -35,6 +37,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use PDO;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -123,6 +126,170 @@ class MySqlConcurrencyTest extends TestCase
             'payment_first' => ['payment_first'],
             'correction_first' => ['correction_first'],
         ];
+    }
+
+    public static function exportFormats(): array
+    {
+        return ['json' => [false], 'stream' => [true]];
+    }
+
+    #[Test]
+    #[DataProvider('exportFormats')]
+    public function export_reads_one_snapshot_while_independent_master_data_changes_commit(bool $streaming): void
+    {
+        $entity = $this->makeEntity();
+        $user = $this->makeUser();
+        $this->actingAs($user);
+        $party = $this->makeParty($entity);
+        $connection = $entity->getConnection();
+        $connection->table('accounting_parties')->where('id', $party->id)->update(['display_name' => 'Before snapshot']);
+        $catalog = $connection->table('accounting_catalog_items')->insertGetId([
+            'legal_entity_id' => $entity->id, 'uuid' => (string) Str::uuid(),
+            'sku' => 'SNAPSHOT', 'name' => 'Before snapshot', 'type' => 'service',
+            'unit' => 'piece', 'currency' => 'EUR', 'default_unit_price_minor' => 10000,
+        ]);
+        $connection->statement('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        $ipc = tempnam(sys_get_temp_dir(), 'acct-export-');
+        $changed = false;
+        $listening = true;
+        $process = null;
+        $connection->listen(function ($query) use ($entity, $user, $party, $catalog, $ipc, &$changed, &$listening, &$process): void {
+            if (! $listening || $changed || ! str_contains($query->sql, 'from `accounting_parties`')
+                || ! str_contains($query->sql, 'order by `id`')) {
+                return;
+            }
+            $changed = true;
+            $process = $this->bookingProcess(['database' => $this->database, 'ipc' => $ipc, 'user' => $user->id,
+                'operation' => 'update_export_inputs', 'entity' => $entity->id, 'party' => $party->id, 'catalog' => $catalog]);
+            $process->run();
+            $this->assertTrue($process->isSuccessful(), $process->getOutput().$process->getErrorOutput());
+        });
+        try {
+            if ($streaming) {
+                $export = app(StreamDatasetExporter::class)->build($entity);
+                try {
+                    $this->assertTrue($export['report']['valid']);
+                    app(StreamDatasetVerifier::class)->verify($export['stream'], function (DatasetInspection $index): void {
+                        $this->assertSame('Before snapshot', $index->database->query('SELECT display_name FROM accounting_parties')->fetchColumn());
+                        $this->assertSame('Before snapshot', $index->database->query('SELECT name FROM accounting_catalog_items WHERE sku=\'SNAPSHOT\'')->fetchColumn());
+                    });
+                } finally {
+                    fclose($export['stream']);
+                }
+            } else {
+                $export = app(AccountingDatasetExporter::class)->build($entity);
+                $this->assertSame('Before snapshot', $export['dataset']['records']['accounting_parties'][0]['display_name']);
+                $this->assertSame('Before snapshot', $export['dataset']['records']['accounting_catalog_items'][0]['name']);
+            }
+            $this->assertTrue($changed, 'The writer must commit between export table reads.');
+            $this->assertSame('After snapshot', $party->fresh()->display_name);
+            $this->assertSame('After snapshot', $connection->table('accounting_catalog_items')->where('id', $catalog)->value('name'));
+            $this->assertSame('READ-COMMITTED', $connection->selectOne('SELECT @@session.transaction_isolation AS isolation_level')->isolation_level);
+            $this->assertSame(0, $connection->transactionLevel());
+        } finally {
+            $listening = false;
+            if ($process?->isRunning()) {
+                $process->stop(1);
+            }
+            unlink($ipc);
+        }
+    }
+
+    #[Test]
+    #[DataProvider('exportFormats')]
+    public function export_serializes_with_payment_and_the_next_export_contains_the_committed_payment(bool $streaming): void
+    {
+        $entity = $this->makeEntity();
+        $user = $this->makeUser();
+        $this->actingAs($user);
+        $invoice = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $this->makeParty($entity)->id, 'issue_date' => '2026-09-11', 'currency' => 'EUR',
+            'lines' => [['description' => 'Service', 'quantity' => '1', 'unit_price_minor' => 10000, 'tax_code' => 'DE-19']],
+        ]);
+        app(ImportBankStatementLines::class)->handle($this->makeBankAccount($entity), [
+            new BankStatementLineData('export-payment', 11900, 'EUR', 'synthetic', 'acc-1', '2026-09-11', null, 'booked'),
+        ]);
+        $line = BankStatementLine::query()->sole();
+        $ipc = tempnam(sys_get_temp_dir(), 'acct-export-payment-');
+        $process = $this->bookingProcess(['database' => $this->database, 'ipc' => $ipc, 'user' => $user->id,
+            'operation' => 'assign', 'line' => $line->id, 'item' => $invoice->openItem->id]);
+        $started = false;
+        $listening = true;
+        $connection = $entity->getConnection();
+        $connection->statement('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        $connection->listen(function ($query) use ($process, $ipc, &$started, &$listening): void {
+            if (! $listening || $started || ! str_contains($query->sql, 'from `accounting_parties`')
+                || ! str_contains($query->sql, 'order by `id`')) {
+                return;
+            }
+            $started = true;
+            $process->start();
+            $this->waitForLock($process, $ipc);
+        });
+        $inspect = function (int $journals, int $settlements) use ($entity, $streaming): void {
+            if ($streaming) {
+                $export = app(StreamDatasetExporter::class)->build($entity);
+                try {
+                    $this->assertTrue($export['report']['valid']);
+                    app(StreamDatasetVerifier::class)->verify($export['stream'], function (DatasetInspection $index) use ($journals, $settlements): void {
+                        $this->assertSame($journals, (int) $index->database->query('SELECT COUNT(*) FROM accounting_journal_entries')->fetchColumn());
+                        $this->assertSame($settlements, (int) $index->database->query('SELECT COUNT(*) FROM accounting_settlements')->fetchColumn());
+                        $totals = $index->database->query('SELECT SUM(CAST(base_debit_minor AS INTEGER)), SUM(CAST(base_credit_minor AS INTEGER)) FROM accounting_journal_lines')->fetch(PDO::FETCH_NUM);
+                        $this->assertSame($totals[0], $totals[1]);
+                    });
+                } finally {
+                    fclose($export['stream']);
+                }
+            } else {
+                $export = app(AccountingDatasetExporter::class)->build($entity);
+                $this->assertCount($journals, $export['dataset']['records']['accounting_journal_entries']);
+                $this->assertCount($settlements, $export['dataset']['records']['accounting_settlements']);
+            }
+        };
+        try {
+            $inspect(1, 0);
+            $this->assertTrue($started, 'Payment must contend with the export transaction.');
+            $process->wait();
+            $this->assertTrue($process->isSuccessful(), $process->getOutput().$process->getErrorOutput());
+            $this->assertSame('ok', json_decode(file_get_contents($ipc), true, 512, JSON_THROW_ON_ERROR)['status']);
+            $this->assertSame(0, $invoice->fresh()->openItem->remainingMinor());
+            $inspect(2, 1);
+            $this->assertTrue(app(AuditChainVerifier::class)->verify($entity->id)->isValid());
+            app(JournalIntegrityVerifier::class)->assertValid($entity->id);
+        } finally {
+            $listening = false;
+            if ($process->isRunning()) {
+                $process->stop(1);
+            }
+            unlink($ipc);
+        }
+    }
+
+    #[Test]
+    public function failed_snapshot_rolls_back_and_does_not_change_subsequent_host_transactions(): void
+    {
+        $entity = $this->makeEntity();
+        $party = $this->makeParty($entity);
+        $connection = $entity->getConnection();
+        $connection->statement('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        $failure = new \RuntimeException('Interrupted export');
+        try {
+            app(DatasetSnapshot::class)->run($connection, function () use ($connection, $party, $failure): void {
+                $connection->table('accounting_parties')->where('id', $party->id)->update(['display_name' => 'Must roll back']);
+                throw $failure;
+            });
+            $this->fail('The snapshot callback must propagate its failure.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame($failure, $exception);
+        }
+        $this->assertSame(0, $connection->transactionLevel());
+        $connection->transaction(function () use ($connection, $party): void {
+            $read = fn () => $connection->table('accounting_parties')->where('id', $party->id)->value('display_name');
+            $this->assertSame($party->display_name, $read());
+            $statement = $this->admin->prepare('UPDATE `'.$this->database.'`.accounting_parties SET display_name = ? WHERE id = ?');
+            $statement->execute(['Host read committed', $party->id]);
+            $this->assertSame('Host read committed', $read(), 'The next host transaction must retain READ COMMITTED behavior.');
+        });
     }
 
     #[Test]
@@ -941,6 +1108,17 @@ class MySqlConcurrencyTest extends TestCase
         }
         if ($this->job['operation'] === 'verify_restore') {
             $this->verifyRestoredFixture();
+
+            return;
+        }
+        if ($this->job['operation'] === 'update_export_inputs') {
+            DB::transaction(function (): void {
+                DB::table('accounting_parties')->where('legal_entity_id', $this->job['entity'])
+                    ->where('id', $this->job['party'])->update(['display_name' => 'After snapshot']);
+                DB::table('accounting_catalog_items')->where('legal_entity_id', $this->job['entity'])
+                    ->where('id', $this->job['catalog'])->update(['name' => 'After snapshot']);
+            });
+            $this->assertSame(0, DB::transactionLevel());
 
             return;
         }

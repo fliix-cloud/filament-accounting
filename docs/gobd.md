@@ -533,12 +533,15 @@ Concrete gaps to address next:
    writes on local storage and concurrent issuance with artifact generation.
    Rejected writes and successful-but-truncated writes are covered through a
    test-only storage adapter. A quiescent full-fixture restore now verifies all
-   backed-up tables and retained files after source removal. Next test export
-   snapshot consistency during concurrent writes and review remaining mutation
-   paths for connection consistency.
+   backed-up tables and retained files after source removal. The 12 September
+   export slice below now covers consistent JSON/streaming reads during concurrent
+   master-data commits and payment allocation. Next review remaining mutation
+   paths for connection consistency and validate the reference host's storage
+   and backup snapshot behavior.
    Keep the existing UI.
-2. **Prove operation and recovery (F2/F7/F9–F11).** Test consistent export snapshots,
-   duplicate requests, termination/retry, independent import and full restore;
+2. **Prove operation and recovery (F2/F7/F9–F11).** Extend the database export
+   evidence to the production storage and backup system; test independent import
+   and full restore with real keys and external anchors;
    measure temporary storage and lock duration. Establish integrity/pending alerts.
    Only then add a company-authorized, simple export action in Filament.
 3. Complete remaining service authorization, finalized business evidence, supported
@@ -804,6 +807,53 @@ exported files and continued accounting operations. The ordinary export regressi
 run passed 18 tests with 140 assertions and skipped all 22 opt-in MySQL entries.
 The full expanded MySQL group was not rerun in this slice. Remote MySQL 8.4 CI
 remains unverified.
+
+### Consistent dataset reads under concurrent writes — 12 September 2026 (F9/F10)
+
+The JSON and streaming exporters previously inherited the host's transaction
+isolation. The entity lock serialized cooperating bookings, but did not stop
+independent master-data updates. Under MySQL `READ COMMITTED`, a worker updating
+a party and catalog item in one committed transaction between export table reads
+produced a mixed dataset: the old party and new catalog item. Both formats passed
+their portable integrity verification despite this inconsistency. Two real
+MySQL regressions reproduced that failure before the fix.
+
+Both exporters now use `DatasetSnapshot` to select `REPEATABLE READ` for their
+independent MySQL/MariaDB transaction. This is a next-transaction setting, not a
+session-default change. The existing entity lock remains in place. The later
+audit-evidence read also has its own snapshot and entity lock, including the
+JSON export's post-anchor refresh. Anchors still follow database commit.
+SQLite remains available; unsupported database drivers explicitly fail.
+MySQL/MariaDB accounting tables must use InnoDB. See the MySQL documentation for
+[consistent reads](https://dev.mysql.com/doc/refman/8.4/en/innodb-consistent-read.html)
+and [transaction setting scope](https://dev.mysql.com/doc/refman/8.4/en/set-transaction.html).
+
+Five new scenarios passed on local MySQL 9.7.0 / Herd PHP 8.4.25 (50 assertions):
+both formats retain the pre-update party/catalog state while an independent
+worker commits changes; both formats make a payment worker wait on the entity
+lock (observed in `performance_schema`), exclude that payment from the first
+dataset, and include it in the subsequent verified export. The fifth scenario
+injects failure, verifies rollback, and proves that a subsequent ordinary host
+transaction retains `READ COMMITTED` visibility. An ordinary unit regression
+also rejects unsupported drivers before executing the export callback.
+
+Final validation of this slice: the **entire opt-in MySQL group** ran on MySQL
+9.7.0 / Herd PHP 8.4.25: **27 entries, 711 parent assertions, one expected skip**
+for the worker-only entry point (26 executed scenarios, including the existing
+crash/retry, invoice-file and full-fixture restoration tests). The ordinary suite
+passed **472 tests, 3,502 assertions**, with the 27 opt-in entries skipped there.
+PHPStan reported zero errors; Pint, strict Composer validation and local Markdown
+link checks passed. The configured remote MySQL 8.4 CI job was not observed in
+this session; this is local 9.7.0 evidence, not an 8.4 deployment approval.
+
+This closes the demonstrated mixed-read defect, not F9/F10 as a whole. The
+snapshot covers database rows; retained file hashes/sizes still detect changed
+bytes but do not establish immutable storage or a coordinated physical backup.
+Schema changes during export are outside the operating contract. Audit evidence
+may extend beyond the dataset's `export_event_sequence`; it must not be treated
+as a replayable backup. Independent import, real key/anchor recovery, production
+storage guarantees and export duration/temp-space/lock-wait measurements remain
+release work. No live bank connection or application database was changed.
 
 ## Existing foundation
 

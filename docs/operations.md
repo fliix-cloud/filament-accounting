@@ -305,6 +305,34 @@ evidence those controls in the deployment environment.
 
 ## Release checks
 
+### Consistent accounting dataset exports
+
+The JSON and streaming dataset exporters use an independent snapshot transaction
+and hold the legal-entity row lock while preparing the dataset. On MySQL/MariaDB,
+all accounting tables must use InnoDB. The exporter sets `REPEATABLE READ` for
+the next transaction only; the host's session isolation default is unchanged.
+This prevents different table reads from observing different commits on hosts
+configured with `READ COMMITTED`. SQLite remains supported for development and
+tests. Other database drivers are explicitly rejected until their snapshot
+behavior is implemented and validated.
+
+The read view covers database rows. File bytes are checked against their retained
+manifest sizes and hashes, but the database snapshot does not freeze external
+storage. Keep preserved files immutable and prohibit schema migrations while
+exporting. A missing or changed required file must still abort the export.
+
+The dataset commitment is committed before creating an external anchor. Audit
+evidence collected afterward may contain later events than the dataset itself;
+`export_event_sequence` identifies the commitment to the exported snapshot.
+The later audit read has its own snapshot and entity lock. This is an inspection
+export, not an application backup or a replay of all events in its audit footer.
+
+Payment operations using the entity lock wait while the dataset is prepared.
+Large exports therefore require adequate temporary disk capacity and can delay
+bookings. Measure export size, duration and lock waits on the reference host.
+The exporter does not retry a failed transaction internally: a streamed file is
+not transactional. Retry the whole export as a new operation after investigation.
+
 Run the repository quality gate before release:
 
 ```bash

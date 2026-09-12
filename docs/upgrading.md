@@ -64,6 +64,12 @@ authorization mappings, or ownership settings with `vendor:publish --force`.
 
 ## First 0.x release requirements
 
+Dataset exports now require a supported snapshot connection: MySQL/MariaDB with
+InnoDB tables, or SQLite. They explicitly reject other drivers rather than
+inherit an unverified isolation mode. The change adds no schema migration and
+does not change export container versions or schema revision. MySQL's session
+isolation default remains unchanged; only export transactions use repeatable reads.
+
 The first tagged release must identify its supported schema baseline, exact
 dependency state, supported database engines, and remaining limitations.
 Version numbers come from Git tags; `Unreleased` remains the changelog heading
