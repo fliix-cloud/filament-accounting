@@ -2,9 +2,21 @@
 
 namespace FilamentAccounting\Tests\Integration;
 
+use Fhp\Model\StatementOfAccount\Statement;
+use Fhp\Model\StatementOfAccount\StatementOfAccount;
+use Fhp\Model\StatementOfAccount\Transaction as FhpTransaction;
+use FilamentAccounting\Banking\FinTs\Enums\BankConnectionStatus;
+use FilamentAccounting\Banking\FinTs\Enums\SyncStatus;
+use FilamentAccounting\Banking\FinTs\Enums\SyncType;
+use FilamentAccounting\Banking\FinTs\Models\BankConnection;
+use FilamentAccounting\Banking\FinTs\Models\BankSyncRun;
+use FilamentAccounting\Banking\FinTs\Services\TransactionSyncService;
+use FilamentAccounting\Models\AccountingBankAccount;
+use FilamentAccounting\Models\BankStatementLine;
 use FilamentAccounting\Models\LegalEntity;
 use FilamentAccounting\Services\IssueSalesInvoice;
 use FilamentAccounting\Tests\TestCase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -116,5 +128,120 @@ class MySqlInstallBaselineTest extends TestCase
         $this->assertSame(11900, (int) $invoice->gross_minor);
         $this->assertNotNull($invoice->openItem);
         $this->assertSame(11900, (int) $invoice->openItem->original_minor);
+    }
+
+    #[Test]
+    public function a_long_gap_drains_oldest_first_across_chunks_with_idempotent_imports_on_mysql(): void
+    {
+        config()->set('filament-accounting.banking.fints.sync.max_range_days', 90);
+        $account = $this->syncAccount($this->makeEntity());
+        $account->catch_up_from = Carbon::today()->subDays(200);
+        $account->save();
+        $svc = app(TransactionSyncService::class);
+
+        // Drain the gap the way repeated sync() calls would: one chunk per loop,
+        // each window imported once, the marker advancing and finally clearing.
+        [$dates, $chunks] = [['-150', '-60', '-5'], []];
+        $steps = 0;
+        $marker = $account->catch_up_from;
+        while ($marker instanceof Carbon && $steps < 10) {
+            [$from, $to, $next] = $svc->boundedRange($marker, Carbon::today());
+            $statement = new TestStatementOfAccount;
+            $day = new Statement;
+            $day->setDate(new \DateTime(Carbon::now()->addDays((int) $dates[$steps])->toDateString()));
+            $day->addTransaction($this->transaction((int) $dates[$steps]));
+            $statement->push($day);
+
+            $count = $svc->importStatement($account, $statement);
+            $run = new BankSyncRun([
+                'bank_connection_id' => $account->bank_connection_id,
+                'accounting_bank_account_id' => $account->id,
+                'legal_entity_id' => $account->legal_entity_id,
+                'type' => SyncType::Transactions,
+                'status' => SyncStatus::Completed,
+                'from_date' => $from,
+                'to_date' => $to,
+                'requested_from_date' => $next,
+                'item_count' => $count,
+                'started_at' => now(),
+                'finished_at' => now(),
+            ]);
+            $run->save();
+            $svc->markSyncCompleted($account, $run, ['imported' => $count, 'updated' => 0]);
+            $chunks[] = $count;
+            $marker = $next;
+            $steps++;
+        }
+
+        // Three chunks drained a 200-day gap at a 90-day window, each importing
+        // exactly one distinct transaction, and the marker cleared.
+        $this->assertSame(3, $steps);
+        $this->assertNull($marker);
+        $this->assertNull($account->fresh()?->catch_up_from);
+        $this->assertSame([1, 1, 1], $chunks);
+        $this->assertSame(3, BankStatementLine::query()->where('bank_account_id', $account->id)->count());
+        $this->assertNotNull($account->fresh()?->last_transaction_sync_at);
+    }
+
+    private function syncAccount(LegalEntity $entity): AccountingBankAccount
+    {
+        $connection = BankConnection::query()->create([
+            'legal_entity_id' => $entity->getKey(),
+            'display_name' => 'Testbank',
+            'bank_code' => '12030000',
+            'endpoint_url' => 'https://fints.example.test/cgi-bin/fints',
+            'username' => 'login-id',
+            'pin' => 'secret-pin',
+            'status' => BankConnectionStatus::Active,
+        ]);
+
+        return AccountingBankAccount::query()->create([
+            'legal_entity_id' => $entity->getKey(),
+            'bank_connection_id' => $connection->getKey(),
+            'display_name' => 'Geschäftskonto',
+            'external_account_id' => 'account-'.$connection->getKey(),
+            'fingerprint' => 'fingerprint-'.$connection->getKey(),
+            'iban' => 'DE89370400440532013000',
+            'bic' => 'COBADEFFXXX',
+            'account_number' => '0532013000',
+            'bank_code' => '37040044',
+            'currency' => 'EUR',
+            'account_holder_name' => 'Demo GmbH',
+            'is_available' => true,
+            'is_enabled' => true,
+        ]);
+    }
+
+    private function transaction(int $seed): FhpTransaction
+    {
+        $transaction = new FhpTransaction;
+        $transaction->setBookingDate(new \DateTime(Carbon::now()->addDays($seed)->toDateString()));
+        $transaction->setValutaDate(new \DateTime(Carbon::now()->addDays($seed)->toDateString()));
+        $transaction->setAmount(12.34);
+        $transaction->setCreditDebit(FhpTransaction::CD_CREDIT);
+        $transaction->setIsStorno(false);
+        $transaction->setBookingCode('NTRF');
+        $transaction->setBookingText('GUTSCHRIFT');
+        $transaction->setDescription1('Drain '.$seed);
+        $transaction->setDescription2('');
+        $transaction->setStructuredDescription(['SVWZ' => 'Invoice '.$seed]);
+        $transaction->setBankCode('37040044');
+        $transaction->setAccountNumber('123456');
+        $transaction->setName('Acme GmbH');
+        $transaction->setBooked(true);
+        $transaction->setPN(1);
+        $transaction->setTextKeyAddition(0);
+
+        return $transaction;
+    }
+}
+
+final class TestStatementOfAccount extends StatementOfAccount
+{
+    public function push(Statement $statement): self
+    {
+        $this->statements[] = $statement;
+
+        return $this;
     }
 }

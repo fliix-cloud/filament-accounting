@@ -74,7 +74,9 @@
 - An opt-in MySQL fresh-install baseline test (`MySqlInstallBaselineTest`) run
   from the MySQL CI job: it proves every migration, the German profile boot,
   chart provisioning, a bank account, and a posted sales invoice work on the
-  supported engine, not only on SQLite.
+  supported engine, not only on SQLite. It also drains a 200-day sync gap
+  oldest-first in three 90-day chunks with idempotent imports and a clearing
+  coverage marker, passing locally on MySQL 9.7.0.
 - Service-level authorization Gates on `TransferService`
   (`create_bank_transfer`), `DirectDebitService` (`create_bank_direct_debit`),
   and `SuggestReconciliationMatches` (`draft_reconciliation`), with a

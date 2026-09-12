@@ -539,12 +539,18 @@ marker, so a resumed sync re-requested the same newest window forever.
 This is corrected by oldest-first chunking, with a regression test proving a
 200-day gap drains in three 90-day chunks and the marker clears
 ([TransactionSyncServiceTest](../tests/Banking/TransactionSyncServiceTest.php)).
+The opt-in [MySqlInstallBaselineTest](../tests/Integration/MySqlInstallBaselineTest.php)
+repeats the long-outage drain on MySQL: three oldest-first chunks each import a
+distinct transaction once (idempotent across chunk boundaries) and the coverage
+marker clears; it passed locally on MySQL 9.7.0.
 
 This covers the sequential case: repeated sync calls eventually cover the full
 range. It does not yet prove concurrent catch-up with SCA interruptions or
 automatically queue subsequent chunks. F12 remains open for those production
 behaviors and the remaining requirements (pending/booked transitions, bank
 statement/balance reconciliation evidence, intake/posting backlog controls).
+Concurrent catch-up would serialize on the same entity lock already proven for
+other banking operations in the MySQL concurrency suite.
 
 The base DEV migration adds `catch_up_from` to `accounting_bank_accounts`.
 Rebuild disposable DEV databases; no production backfill is supplied.
