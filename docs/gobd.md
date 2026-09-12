@@ -880,6 +880,49 @@ as a replayable backup. Independent import, real key/anchor recovery, production
 storage guarantees and export duration/temp-space/lock-wait measurements remain
 release work. No live bank connection or application database was changed.
 
+### Payment claim connection consistency — 12 September 2026 (F9/S-8)
+
+[S-8](../docs/security-audit-2026-09-11-findings.md) moved the transfer, direct
+debit, and SCA claims to the accounting model connection. The reconciliation,
+invoice, and import paths had cross-connection rollback tests, but the payment
+path did not. New [PaymentConnectionTest](../tests/Banking/FinTs/PaymentConnectionTest.php)
+mirrors `ReconciliationConnectionTest` with its own migrated SQLite accounting
+connection and proves:
+
+- A transfer whose bank is unreachable after the claim commits ends up
+  `Ambiguous` **on the accounting connection**, and the default connection's
+  `fints_bank_transfers` stays at zero rows for the whole lifecycle.
+- A transfer failing local validation inside the claim transaction rolls back
+  to `Draft` atomically (no `Initiating` residue) and never leaks to the default
+  connection.
+
+This closes the missing payment-path cross-connection regression, not F9 as a
+whole: the SCA resume (`mutateOpenSession`) and DirectDebit paths share the same
+claim structure, and production concurrency / abrupt-process-kill behavior under
+a separate connection remain release-level evidence.
+
+Validation: the full local suite passed on Herd PHP 8.4.25 with **478 tests,
+3,525 assertions** (27 MySQL skips). PHPStan reported zero errors; Pint passed.
+
+### Supported tax and rounding evidence — 12 September 2026 (F6)
+
+The F6 requirement to "test ... discounts, credit notes, non-recoverable tax,
+mixed/zero rates, and rounding against reviewed expected journals" lacked cent
+boundary evidence for rounding. [LineMoneyCalculatorTest](../tests/Support/LineMoneyCalculatorTest.php)
+now covers quantity × price, discount, and tax rounding at half-up cent
+boundaries, plus exact-value preservation and zero-rate short-circuits.
+[InvoiceFlowTest](../tests/Documents/InvoiceFlowTest.php) adds an end-to-end
+posting of a fractional quantity (`0.333` units × €1.00, 19% tax): the document
+rounds net 33, tax 6, gross 39 and the posted journal balances to those exact
+amounts across receivable, revenue, and output-tax accounts.
+
+This adds rounding evidence to the supported tax cases; it does not close F6 as
+a whole. Foreign exchange remains rejected until conversion exists, and complete
+allowance/charge e-invoice conformance stays open.
+
+Validation: the full local suite passed on Herd PHP 8.4.25 with **482 tests,
+3,543 assertions** (27 MySQL skips). PHPStan reported zero errors; Pint passed.
+
 ## Existing foundation
 
 | Area | Evidence in the reviewed code | Assessment |

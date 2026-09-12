@@ -465,6 +465,58 @@ class InvoiceFlowTest extends TestCase
     }
 
     #[Test]
+    public function fractional_quantity_rounding_posts_a_balanced_journal_to_rounded_amounts(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+        $customer = $this->makeParty($entity);
+
+        $document = app(IssueSalesInvoice::class)->handle($entity, [
+            'party_id' => $customer->getKey(),
+            'issue_date' => '2026-03-10',
+            'currency' => 'EUR',
+            'lines' => [[
+                'description' => 'Fractional',
+                'quantity' => '0.333',
+                'unit_price_minor' => 100, // €1.00
+                'tax_code' => 'DE-19',
+            ]],
+        ]);
+
+        // 0.333 × 100 = 33.3 → half-up 33 cents net; 33 × 19% = 6.27 → 6 cents tax.
+        $this->assertSame(33, $document->net_minor);
+        $this->assertSame(6, $document->tax_minor);
+        $this->assertSame(39, $document->gross_minor);
+        $this->assertSame(39, $document->openItem->original_minor);
+
+        $journal = JournalEntry::query()
+            ->where('source_type', 'document')
+            ->where('source_id', (string) $document->getKey())
+            ->firstOrFail();
+        $ar = (int) AccountRoleAssignment::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('role', AccountRole::Receivable)
+            ->value('ledger_account_id');
+        $revenue = (int) AccountRoleAssignment::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('role', AccountRole::Revenue)
+            ->value('ledger_account_id');
+        $outputTax = (int) AccountRoleAssignment::query()
+            ->where('legal_entity_id', $entity->getKey())
+            ->where('role', AccountRole::OutputTax)
+            ->value('ledger_account_id');
+
+        $this->assertSame(39, (int) $journal->lines->firstWhere('ledger_account_id', $ar)?->debit_minor);
+        $this->assertSame(33, (int) $journal->lines->firstWhere('ledger_account_id', $revenue)?->credit_minor);
+        $this->assertSame(6, (int) $journal->lines->firstWhere('ledger_account_id', $outputTax)?->credit_minor);
+        $this->assertSame(
+            (int) $journal->lines->sum('debit_minor'),
+            (int) $journal->lines->sum('credit_minor'),
+            'The rounded journal must remain balanced.',
+        );
+    }
+
+    #[Test]
     public function drafts_cannot_be_posted_and_foreign_currency_is_rejected(): void
     {
         $entity = $this->makeEntity();
