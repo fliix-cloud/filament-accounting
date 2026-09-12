@@ -7,11 +7,12 @@ upgrade matrix has been established. The schema and public API may change,
 including changes to previously shipped base migrations. There is no production
 or GoBD release approval; see [GoBD readiness](gobd.md).
 
-As of 12 September 2026, `database/migrations` contains nine migrations: three
-table-creation migrations and six forward alterations (reconciliation tax rule,
+As of 12 September 2026, `database/migrations` contains ten migrations: three
+table-creation migrations and seven forward alterations (reconciliation tax rule,
 party contacts, catalog purchase price/EAN, invoice versions, invoice payment
-and layout fields, and FinTS requested sync range). Laravel loads them directly
-from the package via its service provider. Do not publish a second copy.
+and layout fields, FinTS requested sync range, and the bank-account catch-up
+frontier). Laravel loads them directly from the package via its service provider.
+Do not publish a second copy.
 
 Forward migrations preserve data for their expected starting schema. They do
 not repair every historical development schema: Laravel does not rerun a base
@@ -74,6 +75,13 @@ The first tagged release must identify its supported schema baseline, exact
 dependency state, supported database engines, and remaining limitations.
 Version numbers come from Git tags; `Unreleased` remains the changelog heading
 until a release is actually made.
+
+The fresh-install baseline on MySQL, the supported production engine, is
+verified by an opt-in `MySqlInstallBaselineTest` that runs in the MySQL CI job:
+it creates a disposable database, applies every migration, and proves the German
+profile boot, chart provisioning, a bank account, and a posted sales invoice. It
+passed locally on MySQL 9.7.0 before this release draft; the SQLite path is
+covered by the ordinary suite.
 
 For the supported baseline, keep executed migrations immutable and add forward
 migrations with tests against populated previous-version databases. Each release

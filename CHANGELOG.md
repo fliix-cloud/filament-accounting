@@ -58,3 +58,27 @@
   removal, immutable used-account identity, and exact UBL tax-percent parsing.
   See `docs/security-audit-2026-09-11-findings.md` for S-1 through S-16; S-12,
   S-14, and S-15 remain accepted, and GoBD findings remain a separate open track.
+- Payment- and reconciliation-connection rollback regressions: money and SCA
+  claims land exclusively on the configured accounting connection, never the
+  default connection, so a separate `ACCOUNTING_DB_CONNECTION` cannot split a
+  claim's commit and rollback. See `docs/gobd.md` (F9/S-8).
+- ZUGFeRD (CII) parse coverage and an exact tax-rate to basis-point conversion,
+  replacing a float path already abandoned in the UBL parser (F7).
+- Bank sync catch-up drains a long gap oldest-first in `max_range_days` chunks;
+  each successful chunk advances the coverage frontier, and the marker clears
+  once the final chunk reaches today, instead of re-fetching the newest window
+  forever (F12).
+
+### Added
+
+- An opt-in MySQL fresh-install baseline test (`MySqlInstallBaselineTest`) run
+  from the MySQL CI job: it proves every migration, the German profile boot,
+  chart provisioning, a bank account, and a posted sales invoice work on the
+  supported engine, not only on SQLite.
+- Service-level authorization Gates on `TransferService`
+  (`create_bank_transfer`), `DirectDebitService` (`create_bank_direct_debit`),
+  and `SuggestReconciliationMatches` (`draft_reconciliation`), with a
+  PaymentAuthorization regression test (F3).
+- Rounding boundary tests (quantity × price, discount, and tax half-up at the
+  cent) and an end-to-end fractional-quantity posting that proves the balanced
+  journal to rounded amounts (F6).

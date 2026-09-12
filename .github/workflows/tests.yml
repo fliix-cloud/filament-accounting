@@ -55,7 +55,7 @@ jobs:
           extensions: mbstring, pdo_mysql, pdo_sqlite, fileinfo, dom
           coverage: none
       - run: composer update --no-interaction --prefer-dist --no-progress
-      - run: vendor/bin/phpunit tests/Integration/MySqlConcurrencyTest.php
+      - run: vendor/bin/phpunit tests/Integration/MySqlConcurrencyTest.php tests/Integration/MySqlInstallBaselineTest.php
         env:
           ACCOUNTING_TEST_MYSQL: '1'
           ACCOUNTING_TEST_MYSQL_PASSWORD: concurrency-test
