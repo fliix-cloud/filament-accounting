@@ -364,11 +364,17 @@ final class ImportPurchaseInvoice
             default => null,
         };
 
+        // A parsed e-invoice line may carry its own net (after a line-level
+        // allowance or charge) that differs from quantity × unit price. Carry it
+        // through so the draft posts the source amount and the totals reconcile.
+        $netMinor = $line['net_minor'] ?? $line['line_net_minor'] ?? null;
+
         return [
             'description' => (string) ($line['description'] ?? ''),
             'quantity' => (string) ($line['quantity'] ?? '1'),
             'unit' => $line['unit'] ?? null,
             'unit_price' => (string) ($line['unit_price'] ?? '0'),
+            'net_minor' => $netMinor,
             'tax_code' => $taxCode,
             'imported_tax_code' => $taxCode,
             'imported_tax_rate_bp' => $rate,

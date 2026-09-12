@@ -269,13 +269,21 @@ final class RegisterPurchaseInvoice
             $unitPrice = array_key_exists('unit_price_minor', $input)
                 ? (int) $input['unit_price_minor']
                 : ExactMoney::ofString((string) ($input['unit_price'] ?? '0'), $currency)->minorAmount;
-            $lineNet = LineMoneyCalculator::netMinor($quantity, $unitPrice);
+            // A parsed e-invoice line may carry its exact net (including any
+            // line-level allowance or charge) which differs from quantity ×
+            // price. Prefer it so the posted line matches the source; a discount
+            // string is still applied when no source net was supplied.
+            $lineNet = array_key_exists('net_minor', $input) && $input['net_minor'] !== null
+                ? (int) $input['net_minor']
+                : LineMoneyCalculator::netMinor($quantity, $unitPrice);
             try {
-                $lineNet = LineMoneyCalculator::netAfterDiscount(
-                    $lineNet,
-                    array_key_exists('discount', $input) ? (string) $input['discount'] : null,
-                    $currency,
-                );
+                $lineNet = array_key_exists('net_minor', $input) && $input['net_minor'] !== null
+                    ? $lineNet
+                    : LineMoneyCalculator::netAfterDiscount(
+                        $lineNet,
+                        array_key_exists('discount', $input) ? (string) $input['discount'] : null,
+                        $currency,
+                    );
             } catch (InvalidMoneyException $e) {
                 throw new DocumentException(__('filament-accounting::errors.invalid_line_discount'), 0, $e);
             }

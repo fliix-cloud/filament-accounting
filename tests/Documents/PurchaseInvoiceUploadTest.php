@@ -598,6 +598,25 @@ class PurchaseInvoiceUploadTest extends TestCase
         $this->assertSame('complete', PurchaseInvoiceIntake::query()->sole()->status);
     }
 
+    #[Test]
+    public function a_line_level_allowance_net_is_preserved_and_passes_source_total_reconciliation(): void
+    {
+        $entity = $this->makeEntity();
+        $this->actingAs($this->makeUser());
+
+        // Quantity 2 × €100 but line net €150 after a €50 line allowance. The
+        // parsed line net must win over the recomputed quantity-times-price, or
+        // the source-total check rejects a valid invoice.
+        $result = app(ImportPurchaseInvoice::class)->handle($entity, 'invoice.xml', $this->ublInvoiceWithLineAllowance());
+        $document = $result->document;
+
+        $this->assertSame(15000, (int) $document->net_minor);
+        $this->assertSame(2850, (int) $document->tax_minor);
+        $this->assertSame(17850, (int) $document->gross_minor);
+        $line = $document->lines->sole();
+        $this->assertSame(15000, (int) $line->net_minor);
+    }
+
     private function plainPdf(): string
     {
         return "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF";
@@ -615,6 +634,22 @@ class PurchaseInvoiceUploadTest extends TestCase
   <cac:TaxTotal><cbc:TaxAmount currencyID="EUR">19.00</cbc:TaxAmount></cac:TaxTotal>
   <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="EUR">100.00</cbc:LineExtensionAmount><cbc:TaxExclusiveAmount currencyID="EUR">100.00</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="EUR">119.00</cbc:TaxInclusiveAmount></cac:LegalMonetaryTotal>
   <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="C62">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="EUR">100.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>Hosting</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="EUR">100.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine>
+</Invoice>
+XML;
+    }
+
+    private function ublInvoiceWithLineAllowance(): string
+    {
+        return <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+ xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+ xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:ID>INV-ALLOW</cbc:ID><cbc:IssueDate>2026-03-10</cbc:IssueDate><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+  <cac:AccountingSupplierParty><cac:Party><cac:PartyName><cbc:Name>Vendor GmbH</cbc:Name></cac:PartyName><cac:PartyTaxScheme><cbc:CompanyID>DE999999999</cbc:CompanyID></cac:PartyTaxScheme></cac:Party></cac:AccountingSupplierParty>
+  <cac:TaxTotal><cbc:TaxAmount currencyID="EUR">28.50</cbc:TaxAmount></cac:TaxTotal>
+  <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="EUR">150.00</cbc:LineExtensionAmount><cbc:TaxExclusiveAmount currencyID="EUR">150.00</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="EUR">178.50</cbc:TaxInclusiveAmount></cac:LegalMonetaryTotal>
+  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="C62">2</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="EUR">150.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>Hosting with allowance</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="EUR">100.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine>
 </Invoice>
 XML;
     }

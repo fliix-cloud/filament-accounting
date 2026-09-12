@@ -128,6 +128,17 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
             $taxReason = null;
             $taxReasonCode = null;
             $reader->getDocumentPositionTax($taxCategory, $taxType, $taxRate, $calculatedTax, $taxReason, $taxReasonCode);
+            // The line's own net, tax and grand totals (after any line-level
+            // allowance or charge) keep the import faithful to the source.
+            $lineTotal = null;
+            $chargeTotal = null;
+            $allowanceTotal = null;
+            $lineTax = null;
+            $lineGrand = null;
+            $allowanceCharge = null;
+            $reader->getDocumentPositionLineSummationExt(
+                $lineTotal, $chargeTotal, $allowanceTotal, $lineTax, $lineGrand, $allowanceCharge,
+            );
             $lines[] = [
                 'position' => $lineId,
                 'description' => $name ?: $description,
@@ -137,6 +148,8 @@ final class ZugferdEInvoiceAdapter implements EInvoiceAdapter
                 'tax_rate_bp' => $taxRate !== null ? ExactMoney::ofString(Money::fromFloat($taxRate), $currency)->minorAmount : null,
                 'tax_category' => $taxCategory,
                 'tax_reason' => $taxReason,
+                'net_minor' => $this->toMinor($lineTotal ?? $netLine, $currency),
+                'tax_minor' => $this->toMinor($lineTax ?? $calculatedTax, $currency),
             ];
         } while ($reader->nextDocumentPosition());
 

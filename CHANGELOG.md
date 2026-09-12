@@ -64,6 +64,10 @@
   claim's commit and rollback. See `docs/gobd.md` (F9/S-8).
 - ZUGFeRD (CII) parse coverage and an exact tax-rate to basis-point conversion,
   replacing a float path already abandoned in the UBL parser (F7).
+- E-invoice line-level allowances/charges: importers prefer the parsed per-line
+  net (UBL `LineExtensionAmount`, ZUGFeRD line summation) over quantity × price,
+  so a discounted or surcharged line posts its source net and passes source-total
+  reconciliation instead of being rejected (F7).
 - Bank sync catch-up drains a long gap oldest-first in `max_range_days` chunks;
   each successful chunk advances the coverage frontier, and the marker clears
   once the final chunk reaches today, instead of re-fetching the newest window
