@@ -42,7 +42,6 @@ return [
         'journal' => true,
         'chart_of_accounts' => false,
         'tax_and_posting_rules' => true,
-        'reports' => true,
         'settings' => true,
         'audit' => false,
     ],

@@ -143,7 +143,7 @@ class AccountingNavigationTest extends TestCase
             fn ($item): string => $item->getLabel(),
         );
 
-        $this->assertSame(['Bank', 'Steuersätze', 'Unternehmensdaten'], $settings->keys()->all());
+        $this->assertSame(['Bank', 'Steuersätze', 'Unternehmensdaten', 'Steuerfälle'], $settings->keys()->all());
         $this->assertSame(
             ['Bankverbindungen', 'Bankkonten', 'Gläubiger', 'Mandate', 'Lernregeln'],
             collect($settings->get('Bank')?->getChildItems())->map(fn ($item): string => $item->getLabel())->values()->all(),

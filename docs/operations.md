@@ -311,9 +311,11 @@ Run the repository quality gate before release:
 composer check
 ```
 
-There are no production installations yet. Schema changes are made directly in
-the base migrations: rebuild **disposable DEV databases only** and verify the
-fresh installation. No legacy backfill fabricates evidence for old postings.
+There are no production installations yet. Development schema changes include
+both base-migration edits and forward migrations. Follow the
+[schema and release policy](upgrading.md) for the exact source/target commits;
+rebuild **disposable DEV databases only** and verify the fresh installation.
+No legacy backfill fabricates evidence for old postings.
 Journal snapshots are mandatory for verification of posted entries.
 
 MySQL concurrency and booking-process interruption checks are opt-in and use

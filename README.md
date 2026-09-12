@@ -47,7 +47,8 @@ see [Installation und Inbetriebnahme](docs/install.md).
 Install the product package and its migrations:
 
 ```bash
-composer require fliix-cloud/filament-fints-accounting
+composer config repositories.filament-fints-accounting vcs https://github.com/fliix-cloud/filament-fints-accounting.git
+composer require fliix-cloud/filament-fints-accounting:dev-main nemiah/php-fints:@dev
 php artisan filament-accounting:install --migrate --country=DE
 php artisan filament-accounting:verify
 ```
@@ -80,9 +81,11 @@ Configure `FINTS_PRODUCT_ID` before creating a bank connection. The integrated
 commands are `filament-accounting:sync-institutes`,
 `filament-accounting:sync-bank`, and `filament-accounting:cleanup-sca`.
 
-The project is pre-release. Development databases use the final schema directly;
-after schema changes, recreate them with `php artisan migrate:fresh --seed`.
-There is no data-upgrade or consolidation workflow.
+The project is pre-release. The schema may change, including edits to base
+migrations. Recreate **disposable development databases only** with
+`php artisan migrate:fresh --seed`. Never use this command on retained accounting
+data. Existing forward migrations do not establish a supported upgrade path
+from every earlier development commit. See the [schema and release policy](docs/upgrading.md).
 
 ## Package rename
 
@@ -98,6 +101,8 @@ Artisan commands, routes, and view/translation namespaces remain unchanged.
   reconciliation, e-invoices, and extension points
 - [Operations](docs/operations.md) — production responsibilities, audit anchors,
   retention, recovery, and release checks
+- [Schema and release policy](docs/upgrading.md) — development updates, retained
+  data, compatibility changes, and requirements for the first 0.x release
 - [GoBD readiness](docs/gobd.md) — code assessment, release blockers, and the
   conditions for a defensible compliance claim
 

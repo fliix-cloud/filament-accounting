@@ -16,11 +16,14 @@ use FilamentAccounting\Banking\FinTs\Filament\Widgets\BankBalancesWidget;
 use FilamentAccounting\Filament\Navigation\AccountingNavigation;
 use FilamentAccounting\Filament\Pages\ReconciliationPage;
 use FilamentAccounting\Filament\Resources\AccountingBankAccountResource;
+use FilamentAccounting\Filament\Resources\AuditEventResource;
 use FilamentAccounting\Filament\Resources\BankStatementLineResource;
 use FilamentAccounting\Filament\Resources\CatalogItemResource;
 use FilamentAccounting\Filament\Resources\CustomerResource;
 use FilamentAccounting\Filament\Resources\JournalEntryResource;
+use FilamentAccounting\Filament\Resources\LedgerAccountResource;
 use FilamentAccounting\Filament\Resources\LegalEntityResource;
+use FilamentAccounting\Filament\Resources\PostingRuleResource;
 use FilamentAccounting\Filament\Resources\PurchaseInvoiceResource;
 use FilamentAccounting\Filament\Resources\ReconciliationLearningRuleResource;
 use FilamentAccounting\Filament\Resources\SalesInvoiceResource;
@@ -47,6 +50,14 @@ class FilamentAccountingPlugin implements Plugin
     protected bool $hasJournal = true;
 
     protected bool $hasSettings = true;
+
+    protected bool $hasChartOfAccounts = true;
+
+    protected bool $hasTaxAndPostingRules = true;
+
+    protected bool $hasAudit = true;
+
+    protected bool $usesFullWidth = false;
 
     public static function make(): static
     {
@@ -137,6 +148,34 @@ class FilamentAccountingPlugin implements Plugin
         return $this->hasCustomers && $this->enabled('customers');
     }
 
+    public function chartOfAccounts(bool $condition = true): static
+    {
+        $this->hasChartOfAccounts = $condition;
+
+        return $this;
+    }
+
+    public function taxAndPostingRules(bool $condition = true): static
+    {
+        $this->hasTaxAndPostingRules = $condition;
+
+        return $this;
+    }
+
+    public function audit(bool $condition = true): static
+    {
+        $this->hasAudit = $condition;
+
+        return $this;
+    }
+
+    public function fullWidth(bool $condition = true): static
+    {
+        $this->usesFullWidth = $condition;
+
+        return $this;
+    }
+
     public function hasSuppliers(): bool
     {
         return $this->hasSuppliers && $this->enabled('suppliers');
@@ -151,9 +190,7 @@ class FilamentAccountingPlugin implements Plugin
     {
         $pages = [];
         $resources = [];
-        $widgets = [
-            BankBalancesWidget::class,
-        ];
+        $widgets = [];
 
         if ($this->enabled('dashboard') && $this->hasDashboard) {
             array_unshift($widgets, AccountingOverviewStats::class);
@@ -180,6 +217,7 @@ class FilamentAccountingPlugin implements Plugin
         }
 
         if ($this->enabled('bank_reconciliation') && $this->hasBankReconciliation) {
+            $widgets[] = BankBalancesWidget::class;
             $resources[] = AccountingBankAccountResource::class;
             $resources[] = BankStatementLineResource::class;
             $resources[] = BankTransferResource::class;
@@ -193,22 +231,41 @@ class FilamentAccountingPlugin implements Plugin
             $resources[] = JournalEntryResource::class;
         }
 
+        if ($this->enabled('chart_of_accounts') && $this->hasChartOfAccounts) {
+            $resources[] = LedgerAccountResource::class;
+        }
+
+        if ($this->enabled('tax_and_posting_rules') && $this->hasTaxAndPostingRules) {
+            $resources[] = TaxCodeResource::class;
+            $resources[] = PostingRuleResource::class;
+        }
+
+        if ($this->enabled('audit') && $this->hasAudit) {
+            $resources[] = AuditEventResource::class;
+        }
+
         if ($this->enabled('settings') && $this->hasSettings) {
             $resources[] = LegalEntityResource::class;
             $resources[] = BankConnectionResource::class;
             $resources[] = DirectDebitCreditorProfileResource::class;
             $resources[] = DirectDebitMandateResource::class;
-            $resources[] = TaxCodeResource::class;
+        }
+
+        if ($this->usesFullWidth) {
+            $panel->maxContentWidth(Width::Full);
+        }
+
+        if (in_array(AccountingBankAccountResource::class, $resources, true)
+            || in_array(BankConnectionResource::class, $resources, true)) {
+            $panel->navigationItems(AccountingNavigation::items());
         }
 
         $panel
-            ->maxContentWidth(Width::Full)
             ->colors([
                 'accounting-negative' => Color::hex('#0072B2'),
                 'accounting-positive' => Color::hex('#009E73'),
             ])
             ->navigationGroups(AccountingNavigation::groups())
-            ->navigationItems(AccountingNavigation::items())
             ->pages($pages)
             ->resources($resources)
             ->widgets($widgets);

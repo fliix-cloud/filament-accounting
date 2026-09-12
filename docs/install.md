@@ -25,13 +25,11 @@ Für den aktuellen Entwicklungsstand:
 
 ```bash
 composer config repositories.filament-fints-accounting vcs https://github.com/fliix-cloud/filament-fints-accounting.git
-composer config minimum-stability dev
-composer config prefer-stable true
-composer require fliix-cloud/filament-fints-accounting:dev-main
+composer require fliix-cloud/filament-fints-accounting:dev-main nemiah/php-fints:@dev
 composer check-platform-reqs
 ```
 
-Die Einstellung `minimum-stability` betrifft den gesamten Host. Sie wird hier wegen der Entwicklungsabhängigkeit `nemiah/php-fints:dev-master` verwendet; `prefer-stable` bevorzugt ansonsten stabile Pakete. Laravel erkennt den Paket-Service-Provider automatisch. Die früheren separaten Accounting-/FinTS-Pakete nicht zusätzlich installieren.
+Die explizite Host-Anforderung `nemiah/php-fints:@dev` erlaubt nur dieser transitiven Entwicklungsabhängigkeit die benötigte Stabilität; die globale `minimum-stability` kann `stable` bleiben. Siehe [Composer zu Stabilitätsfreigaben](https://getcomposer.org/doc/04-schema.md#package-links). Die Host-`composer.lock` versionieren und für Deployments `composer install` verwenden. Laravel erkennt den Paket-Service-Provider automatisch. Die früheren separaten Accounting-/FinTS-Pakete nicht zusätzlich installieren.
 
 In der Host-`.env` die üblichen Laravel-Werte für `APP_URL`, `DB_*` und einen bestehenden, gesicherten `APP_KEY` konfigurieren. Bei einer **neuen** Anwendung ohne Schlüssel einmal `php artisan key:generate` ausführen; einen vorhandenen Schlüssel nicht ersetzen.
 
@@ -81,6 +79,42 @@ use FilamentAccounting\FilamentAccountingPlugin;
 ```
 
 Der Panel Provider muss in `bootstrap/providers.php` registriert sein. Bei einem neuen Standardpanel lautet der Pfad `/admin`; vorhandene Panels behalten ihren eigenen Pfad.
+
+Die Inhaltsbreite bleibt beim Host. Für die bisherige volle Breite ausdrücklich
+`FilamentAccountingPlugin::make()->fullWidth()` verwenden. Das Plugin ergänzt
+die Farbnamen `accounting-negative` (Blau) und `accounting-positive` (Grün) für
+Bankumsätze; Standardfarben wie `primary`, `success` und `danger` bleiben
+unverändert. Eigene Werte für diese beiden Accounting-Farben nach der
+Plugin-Registrierung über `$panel->colors([...])` setzen.
+
+### Funktionsschalter
+
+Eine Funktion wird registriert, wenn sowohl ihr Konfigurationswert unter
+`filament-accounting.features` als auch ihr Plugin-Schalter aktiv sind.
+Die Fluent-Methoden können eine deaktivierte Konfiguration nicht überstimmen.
+Alle Methoden akzeptieren `bool`, standardmäßig `true`.
+
+| Konfiguration | Fluent-Methode | Oberfläche |
+| --- | --- | --- |
+| `dashboard` | `dashboard()` | Accounting-Übersichtswidget |
+| `customers` | `customers()` | Kunden |
+| `suppliers` | `suppliers()` | Lieferanten |
+| `catalog` | `catalog()` | Katalog |
+| `sales_invoices` | `salesInvoices()` | Ausgangsrechnungen |
+| `purchase_invoices` | `purchaseInvoices()` | Eingangsrechnungen |
+| `bank_reconciliation` | `bankReconciliation()` | Konten, Umsätze, Zahlungen, Zuordnung, SCA, Lernregeln und Banksaldenwidget |
+| `journal` | `journal()` | Journal |
+| `chart_of_accounts` | `chartOfAccounts()` | Kontenplan (Konfiguration standardmäßig `false`) |
+| `tax_and_posting_rules` | `taxAndPostingRules()` | Steuersätze und Steuerfälle |
+| `settings` | `settings()` | Firma, Bankverbindungen, Gläubiger und Mandate |
+| `audit` | `audit()` | Prüfprotokoll (Konfiguration standardmäßig `false`) |
+
+`reports` wurde als wirkungsloser Konfigurationsschlüssel entfernt.
+„Auswertungen“ ist eine Navigationsgruppe für Journal, Kontenplan und Audit;
+ein eigenständiges Berichtsmodul ist nicht enthalten. Schalter steuern die
+Panel-Registrierung, nicht die Berechtigungen von Services oder HTTP-Routen.
+Gates müssen weiterhin eingerichtet werden. Änderungen für vorhandene Hosts
+stehen in der [Schema- und Release-Policy](upgrading.md).
 
 Für die paketinternen Tailwind-Klassen ein [Filament-Theme](https://filamentphp.com/docs/5.x/styling/overview#creating-a-custom-theme) verwenden. Falls noch keines existiert:
 

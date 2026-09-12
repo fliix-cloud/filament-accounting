@@ -2,6 +2,9 @@
 
 ## Goal
 
+Archived development specification. For current integration instructions, see
+[Catalog import/export](../../docs/catalog-import-export.md).
+
 Implement a strict, simple and maintainable catalog import/export workflow directly in the Filament catalog item area of `filament-fints-accounting`.
 
 The package owns one canonical catalog schema. The same schema must be used for import, export and downloadable examples/templates.

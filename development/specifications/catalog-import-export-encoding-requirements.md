@@ -1,6 +1,8 @@
 # Mandatory Encoding Requirements — Catalog Import / Export
 
-This document is a mandatory addendum to `docs/catalog-import-export-codex-prompt.md` on branch `feature/catalog-import-export-spec`.
+This archived development specification supplements
+[the implementation prompt](catalog-import-export-codex-prompt.md).
+Integrator documentation is maintained in [the catalog guide](../../docs/catalog-import-export.md).
 
 Codex must treat the requirements below as part of the implementation specification.
 
