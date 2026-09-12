@@ -20,6 +20,7 @@ use FilamentAccounting\Banking\FinTs\Ownership\LegalEntityBankScope as OwnerScop
 use FilamentAccounting\Banking\FinTs\Support\ErrorMapper;
 use FilamentAccounting\Banking\FinTs\Support\Iban;
 use FilamentAccounting\Banking\FinTs\Support\Money;
+use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
 use Illuminate\Database\Eloquent\Model;
 
@@ -31,10 +32,12 @@ class TransferService
         private readonly SepaXmlService $xml,
         private readonly CapabilityService $capabilities,
         private readonly OwnerScope $owners,
+        private readonly AccountingAuthorizer $authorizer,
     ) {}
 
     public function submit(BankTransfer $transfer, ?Model $actor = null, ?string $returnUrl = null): ScaOutcome
     {
+        $this->authorizer->authorize('create_bank_transfer', $transfer);
         $claimed = $transfer->getConnection()->transaction(function () use ($transfer): array|ScaOutcome {
             /** @var BankTransfer $locked */
             $locked = BankTransfer::query()->whereKey($transfer->getKey())->lockForUpdate()->firstOrFail();

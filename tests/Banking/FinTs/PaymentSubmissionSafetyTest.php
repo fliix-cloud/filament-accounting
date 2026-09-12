@@ -60,6 +60,7 @@ class PaymentSubmissionSafetyTest extends TestCase
 
     private function transfer(PaymentStatus $status): BankTransfer
     {
+        $this->actingAs($this->makeUser());
         $entity = $this->makeEntity();
         $connection = $this->connection($entity);
         $account = AccountingBankAccount::query()->create([

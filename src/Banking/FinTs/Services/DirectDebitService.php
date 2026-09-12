@@ -22,6 +22,7 @@ use FilamentAccounting\Banking\FinTs\Support\ErrorMapper;
 use FilamentAccounting\Banking\FinTs\Support\Iban;
 use FilamentAccounting\Banking\FinTs\Support\Money;
 use FilamentAccounting\Banking\FinTs\Support\SepaIdentifier;
+use FilamentAccounting\Contracts\AccountingAuthorizer;
 use FilamentAccounting\Models\AccountingBankAccount as BankAccount;
 use Illuminate\Database\Eloquent\Model;
 
@@ -33,10 +34,12 @@ class DirectDebitService
         private readonly SepaXmlService $xml,
         private readonly CapabilityService $capabilities,
         private readonly OwnerScope $owners,
+        private readonly AccountingAuthorizer $authorizer,
     ) {}
 
     public function submit(BankDirectDebit $debit, ?Model $actor = null, ?string $returnUrl = null): ScaOutcome
     {
+        $this->authorizer->authorize('create_bank_direct_debit', $debit);
         $claimed = $debit->getConnection()->transaction(function () use ($debit): array|ScaOutcome {
             $locked = BankDirectDebit::query()->whereKey($debit->getKey())->lockForUpdate()->firstOrFail();
 
