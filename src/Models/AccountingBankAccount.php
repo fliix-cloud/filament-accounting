@@ -44,6 +44,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $balance_at
  * @property Carbon|null $last_balance_sync_at
  * @property Carbon|null $last_transaction_sync_at
+ * @property Carbon|null $catch_up_from
  * @property-read BankConnection|null $connection
  * @property-read LedgerAccount $ledgerAccount
  */
@@ -79,6 +80,7 @@ class AccountingBankAccount extends AccountingModel
         'balance_at',
         'last_balance_sync_at',
         'last_transaction_sync_at',
+        'catch_up_from',
         'is_active',
     ];
 
@@ -128,6 +130,7 @@ class AccountingBankAccount extends AccountingModel
             'balance_at' => 'datetime',
             'last_balance_sync_at' => 'datetime',
             'last_transaction_sync_at' => 'datetime',
+            'catch_up_from' => 'date',
         ];
     }
 

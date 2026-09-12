@@ -523,6 +523,31 @@ Concrete gaps to address next:
   writes, process interruption, and backup/restore on the database and storage
   selected for the first supported deployment.
 
+### Transaction sync catch-up after long interruptions — 12 September 2026 (F12)
+
+[TransactionSyncService](../src/Banking/FinTs/Services/TransactionSyncService.php) now
+persists a coverage gap marker (`catch_up_from` on `AccountingBankAccount`) when
+`boundedRange` clips the requested date range. The next sync automatically
+resumes from the earliest uncovered date instead of silently dropping the gap.
+
+When the catch-up gap closes (the remaining range fits within `max_range_days`),
+the marker is cleared and `last_transaction_sync_at` advances to `now()`. While
+the gap persists, the sync watermark advances to each completed chunk's `to_date`
+so subsequent syncs slide forward naturally. The [SyncCommand](../src/Banking/FinTs/Commands/SyncCommand.php)
+now reports the remaining gap and estimated chunk count.
+
+This covers the sequential case: repeated sync calls eventually cover the full
+range. It does not yet prove concurrent catch-up with SCA interruptions or
+automatically queue subsequent chunks. F12 remains open for those production
+behaviors and the remaining requirements (pending/booked transitions, bank
+statement/balance reconciliation evidence, intake/posting backlog controls).
+
+The base DEV migration adds `catch_up_from` to `accounting_bank_accounts`.
+Rebuild disposable DEV databases; no production backfill is supplied.
+
+Validation: the full local suite passed on Herd PHP 8.4.25 with **476 tests,
+3,516 assertions** (27 MySQL skips). PHPStan reported zero errors; Pint passed.
+
 ### Next slices
 
 1. **Extend concurrency and interruption evidence (F9).** The MySQL slice below

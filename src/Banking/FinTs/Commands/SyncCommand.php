@@ -88,9 +88,19 @@ class SyncCommand extends Command
      * A sync that silently drops the requested range would look successful while
      * omitting bookings. Surface the recorded gap so operators do not infer
      * completeness from a green run.
+     *
+     * The service now persists the gap as {@see AccountingBankAccount::$catch_up_from}
+     * and resumes automatically on the next sync. This warning confirms the
+     * chunked progress and the remaining gap.
      */
     private function warnIfTruncated(int $accountId): void
     {
+        $account = BankAccount::query()->find($accountId);
+
+        if (! $account instanceof BankAccount) {
+            return;
+        }
+
         $run = BankSyncRun::query()
             ->where('accounting_bank_account_id', $accountId)
             ->latest('id')
@@ -98,11 +108,23 @@ class SyncCommand extends Command
 
         if ($run instanceof BankSyncRun && $run->requested_from_date !== null) {
             $this->warn(sprintf(
-                'Account %d: requested coverage from %s but synchronized only from %s. Balance the omitted range with further syncs.',
+                'Account %d: requested coverage from %s but synchronized only from %s to %s.',
                 $accountId,
                 $run->requested_from_date->toDateString(),
                 $run->from_date?->toDateString() ?? 'unknown',
+                $run->to_date?->toDateString() ?? 'unknown',
             ));
+
+            if ($account->catch_up_from instanceof \DateTimeInterface) {
+                $remainingDays = $account->catch_up_from->diffInDays(Carbon::today());
+                $chunks = (int) ceil($remainingDays / (int) config('filament-accounting.banking.fints.sync.max_range_days', 90));
+                $this->warn(sprintf(
+                    '  Catch-up gap: %s → today (%d days). Approximately %d chunk(s) remaining.',
+                    $account->catch_up_from->toDateString(),
+                    $remainingDays,
+                    max(1, $chunks),
+                ));
+            }
         }
     }
 }

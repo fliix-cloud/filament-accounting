@@ -58,6 +58,7 @@ class UnifiedInstallationTest extends TestCase
             '2026_09_10_000002_add_invoice_versions.php',
             '2026_09_10_000003_add_invoice_payment_and_layout_fields.php',
             '2026_09_11_000001_add_requested_from_date_to_fints_sync_runs.php',
+            '2026_09_12_000001_add_catch_up_from_to_accounting_bank_accounts.php',
         ], array_map('basename', $paths));
 
         foreach ($paths as $path) {

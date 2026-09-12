@@ -45,10 +45,22 @@ class TransactionSyncService
             throw new UnsupportedCapabilityException(__('filament-accounting::banking/fints/errors.account_not_usable'));
         }
         $to ??= Carbon::today();
-        $from ??= $account->last_transaction_sync_at
-            ? Carbon::parse($account->last_transaction_sync_at)->subDays((int) config('filament-accounting.banking.fints.sync.incremental_overlap_days', 3))
-            : Carbon::today()->subDays((int) config('filament-accounting.banking.fints.sync.initial_lookback_days', 90));
+
+        // When a previous catch-up was interrupted, resume from the earliest uncovered date.
+        if ($from === null && $account->catch_up_from instanceof \DateTimeInterface) {
+            $from = Carbon::parse($account->catch_up_from);
+        } elseif ($from === null) {
+            $from = $account->last_transaction_sync_at
+                ? Carbon::parse($account->last_transaction_sync_at)->subDays((int) config('filament-accounting.banking.fints.sync.incremental_overlap_days', 3))
+                : Carbon::today()->subDays((int) config('filament-accounting.banking.fints.sync.initial_lookback_days', 90));
+        }
         [$from, $requestedFrom] = $this->boundedRange(Carbon::parse($from), Carbon::parse($to));
+
+        // Record the coverage gap when the requested range is truncated.
+        if ($requestedFrom instanceof Carbon && $requestedFrom->lt($from)) {
+            $account->catch_up_from = $requestedFrom;
+            $account->save();
+        }
 
         $run = BankSyncRun::query()->create([
             'bank_connection_id' => $connection->id,
@@ -133,8 +145,29 @@ class TransactionSyncService
         $run->item_count = $result['imported'] + $result['updated'];
         $run->finished_at = now();
         $run->save();
-        $account->last_transaction_sync_at = now();
+
+        // When a catch-up gap exists and this chunk did not fully close it,
+        // advance the watermark to the chunk boundary but keep the gap marker.
+        if ($account->catch_up_from instanceof \DateTimeInterface) {
+            $chunkTo = Carbon::parse($run->to_date);
+
+            // If the gap is now within a single max_range_days window of today,
+            // the next sync can cover the remainder without truncation.
+            $maxDays = (int) config('filament-accounting.banking.fints.sync.max_range_days', 90);
+            if ($account->catch_up_from->diffInDays(Carbon::today()) <= $maxDays) {
+                $account->catch_up_from = null;
+                $account->last_transaction_sync_at = now();
+            } else {
+                // Advance the sync watermark to the chunk's end so the next
+                // sync naturally slides forward. The catch_up_from marker
+                // persists until the full range is covered.
+                $account->last_transaction_sync_at = $chunkTo;
+            }
+        } else {
+            $account->last_transaction_sync_at = now();
+        }
         $account->save();
+
         $connection->last_transaction_sync_at = now();
         $connection->save();
 
